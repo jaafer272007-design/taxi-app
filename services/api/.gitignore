@@ -22,3 +22,6 @@ npm-debug.log*
 coverage/
 .idea/
 .vscode/
+
+# uploaded driver documents (dev)
+uploads/
