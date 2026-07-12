@@ -49,7 +49,7 @@ auto-activate the skill · **Don't fire when** = to avoid false positives.
 
 | Skill | Fire when | Don't fire when |
 |---|---|---|
-| **marketing-ideas** | Open-ended brainstorming / stuck: "how do I market the taxi app," "ideas to grow driver signups," "what else can I try," "I don't know how to market this." *Entry point when the user has no specific channel in mind.* | The user wants a full structured plan (→ marketing-plan), a specific channel executed, or design/code work. |
+| **marketing-ideas** | **Last resort only** (user preference): a purely open-ended "I'm totally stuck, just throw ideas at me" ask with no discernible angle. If *any* more specific skill fits (marketing-plan, content-strategy, marketing-psychology, or a channel skill), use that **instead**. | Any request that maps to a more specific skill — always prefer the specific one over marketing-ideas. |
 | **marketing-plan** | A comprehensive deliverable: "marketing plan," "growth plan," "GTM / go-to-market," "AARRR plan," "90-day plan," "12-month roadmap," "fractional CMO plan," "how to spend our budget to grow." Produces a 13-section AARRR plan tied to budget/team/stage. | A loose brainstorm (→ marketing-ideas) or a single narrow channel/stage. |
 | **marketing-psychology** | A behavioral lever is named or implied: anchoring, social proof, scarcity/urgency, loss aversion, framing, nudge, "why do riders drop off," "what makes them complete a booking." | Optimizing one specific page/funnel (→ cro*), setting actual prices (→ pricing*), or wording copy (→ copywriting*). |
 | **content-strategy** | Deciding *what* content to make: "what should we blog about," content pillars, topic clusters, editorial calendar, content roadmap for a city launch. | Writing the actual piece (→ copywriting*), SEO/keyword audit (→ seo-audit*), or social scheduling (→ social*). |
@@ -116,9 +116,14 @@ Most overlaps are **compose** relationships (chain them, don't choose). A few ar
 - **analytics + ab-testing** → `analytics` instruments the events; `ab-testing` designs the experiment that reads them.
 
 **Fork (pick one by the rule):**
-- **marketing-ideas vs marketing-plan** → loose brainstorm of tactics → `marketing-ideas`; structured budgeted AARRR/GTM roadmap deliverable → `marketing-plan`.
-- **marketing-ideas vs content-strategy** → broad cross-channel tactics → `marketing-ideas`; deciding blog topics/pillars/calendar → `content-strategy`.
-- **marketing-ideas vs marketing-psychology** → menu of "what to try" → `marketing-ideas`; a named behavioral lever (nudge, loss aversion, social proof) → `marketing-psychology`.
+
+> **Global rule (user preference):** always prefer the more **specific** skill.
+> `marketing-ideas` is a fallback used *only* when no specific strategy or channel
+> skill fits the request.
+
+- **marketing-ideas vs marketing-plan** → default to `marketing-plan` for any real growth/plan/strategy ask; use `marketing-ideas` only for a pure "just brainstorm, no structure" request.
+- **marketing-ideas vs content-strategy** → any content-planning angle (topics, pillars, calendar) → `content-strategy`; `marketing-ideas` only if it's not about content at all and no other skill fits.
+- **marketing-ideas vs marketing-psychology** → any behavioral/persuasion angle (nudge, loss aversion, social proof, "why do riders drop off") → `marketing-psychology`; `marketing-ideas` only as last resort.
 - **marketing-plan vs content-strategy** → whole-funnel plan → `marketing-plan`; content-only editorial roadmap → `content-strategy`.
 - **content-strategy vs ai-seo** → choosing topics/calendar → `content-strategy`; optimizing content to be cited by LLMs → `ai-seo`.
 - **community-marketing vs co-marketing** → your own rider/driver community & advocates → `community-marketing`; cross-promo with an outside brand → `co-marketing`.
