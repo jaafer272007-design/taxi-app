@@ -1,0 +1,45 @@
+# Local development infra for the Taxi API (Phase 1).
+# Usage: docker compose up -d   (from services/api/)
+#
+# PostGIS is available on the DB image but UNUSED in Phase 1 — the schema
+# stores plain lat/lng floats. It is here so Phase 2 geo-queries need no
+# infra change.
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: taxi_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: taxi
+      POSTGRES_PASSWORD: taxi
+      POSTGRES_DB: taxi_dev
+      TZ: Asia/Baghdad
+      PGTZ: Asia/Baghdad
+    ports:
+      - "5432:5432"
+    volumes:
+      - taxi_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taxi -d taxi_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: taxi_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - taxi_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  taxi_db_data:
+  taxi_redis_data:
