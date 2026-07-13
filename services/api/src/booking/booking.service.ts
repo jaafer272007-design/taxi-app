@@ -204,4 +204,43 @@ export class BookingService {
       return tx.seatBooking.findUniqueOrThrow({ where: { id: bookingId } });
     });
   }
+
+  /** Driver marks a rider onboard: CONFIRMED → ONBOARD (trip must be EN_ROUTE). */
+  onboard(userId: string, bookingId: string): Promise<SeatBooking> {
+    return this.driverBookingTransition(userId, bookingId, BookingStatus.ONBOARD);
+  }
+
+  /**
+   * Driver marks a rider no-show: CONFIRMED → NO_SHOW (trip must be EN_ROUTE).
+   * The seat is NOT returned (held; no cash refund in the MVP) and the fare is
+   * excluded from earnings at completion. Recorded for rider reputation.
+   */
+  noShow(userId: string, bookingId: string): Promise<SeatBooking> {
+    return this.driverBookingTransition(userId, bookingId, BookingStatus.NO_SHOW);
+  }
+
+  private async driverBookingTransition(
+    userId: string,
+    bookingId: string,
+    target: BookingStatus,
+  ): Promise<SeatBooking> {
+    const booking = await this.prisma.seatBooking.findUnique({
+      where: { id: bookingId },
+      include: { trip: true },
+    });
+    if (!booking) {
+      throw new NotFoundException('الحجز غير موجود.');
+    }
+    const profile = await this.drivers.findProfileByUserId(userId);
+    if (!profile || profile.id !== booking.trip.driverId) {
+      throw new ForbiddenException('هذه ليست رحلتك.');
+    }
+    if (booking.trip.status !== TripStatus.EN_ROUTE) {
+      throw new ConflictException('يجب أن تكون الرحلة جارية (EN_ROUTE).');
+    }
+    if (booking.status !== BookingStatus.CONFIRMED) {
+      throw new ConflictException('لا يمكن تغيير حالة هذا الحجز.');
+    }
+    return this.prisma.seatBooking.update({ where: { id: bookingId }, data: { status: target } });
+  }
 }

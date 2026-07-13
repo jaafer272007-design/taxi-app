@@ -24,4 +24,16 @@ export class BookingController {
   cancel(@CurrentUser('id') userId: string, @Param('id') id: string) {
     return this.bookings.cancel(userId, id);
   }
+
+  @Post(':id/onboard')
+  @HttpCode(HttpStatus.OK)
+  onboard(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    return this.bookings.onboard(userId, id);
+  }
+
+  @Post(':id/no-show')
+  @HttpCode(HttpStatus.OK)
+  noShow(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    return this.bookings.noShow(userId, id);
+  }
 }

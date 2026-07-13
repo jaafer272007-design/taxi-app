@@ -184,3 +184,68 @@ describe('BookingService.cancel', () => {
     await expect(service.cancel('u1', 'bk1')).rejects.toBeInstanceOf(ConflictException);
   });
 });
+
+describe('BookingService driver transitions (onboard / no-show)', () => {
+  let prisma: any;
+  let drivers: any;
+  let service: BookingService;
+
+  const enRouteBooking = (over: any = {}) => ({
+    id: 'bk1',
+    status: BookingStatus.CONFIRMED,
+    seatCount: 1,
+    trip: { id: 't1', status: TripStatus.EN_ROUTE, driverId: 'drv1' },
+    ...over,
+  });
+
+  beforeEach(() => {
+    prisma = {
+      seatBooking: {
+        findUnique: jest.fn(),
+        update: jest.fn((a: any) => Promise.resolve({ id: 'bk1', ...a.data })),
+      },
+    };
+    drivers = { findProfileByUserId: jest.fn().mockResolvedValue({ id: 'drv1' }) };
+    service = new BookingService(prisma as PrismaService, drivers as DriverService);
+  });
+
+  it('onboard: CONFIRMED → ONBOARD while EN_ROUTE', async () => {
+    prisma.seatBooking.findUnique.mockResolvedValue(enRouteBooking());
+    await service.onboard('u1', 'bk1');
+    expect(prisma.seatBooking.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'bk1' }, data: { status: BookingStatus.ONBOARD } }),
+    );
+  });
+
+  it('no-show: CONFIRMED → NO_SHOW while EN_ROUTE (seat not returned)', async () => {
+    prisma.seatBooking.findUnique.mockResolvedValue(enRouteBooking());
+    await service.noShow('u1', 'bk1');
+    expect(prisma.seatBooking.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: BookingStatus.NO_SHOW } }),
+    );
+  });
+
+  it('403 when the caller is not the trip owner', async () => {
+    prisma.seatBooking.findUnique.mockResolvedValue(
+      enRouteBooking({ trip: { id: 't1', status: TripStatus.EN_ROUTE, driverId: 'other' } }),
+    );
+    await expect(service.onboard('u1', 'bk1')).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('409 when the trip is not EN_ROUTE', async () => {
+    prisma.seatBooking.findUnique.mockResolvedValue(
+      enRouteBooking({ trip: { id: 't1', status: TripStatus.OPEN, driverId: 'drv1' } }),
+    );
+    await expect(service.onboard('u1', 'bk1')).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('409 when the booking is not CONFIRMED', async () => {
+    prisma.seatBooking.findUnique.mockResolvedValue(enRouteBooking({ status: BookingStatus.ONBOARD }));
+    await expect(service.onboard('u1', 'bk1')).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('404 when the booking is missing', async () => {
+    prisma.seatBooking.findUnique.mockResolvedValue(null);
+    await expect(service.onboard('u1', 'bk1')).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
