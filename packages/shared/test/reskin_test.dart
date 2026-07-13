@@ -63,6 +63,12 @@ void main() {
   });
 
   testWidgets('the Theme Preview builds in light and dark, RTL', (tester) async {
+    // Give the two-panel preview a roomy surface so neither panel is cramped.
+    tester.view.physicalSize = const Size(1400, 2200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     await tester.pumpWidget(const ThemePreviewApp());
     await tester.pump();
 

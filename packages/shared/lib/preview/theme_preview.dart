@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import '../theme/app_theme.dart';
 import '../widgets/app_avatar.dart';
@@ -30,6 +31,14 @@ class ThemePreviewApp extends StatelessWidget {
       darkTheme: AppTheme.dark(),
       locale: const Locale('ar'),
       supportedLocales: const [Locale('ar'), Locale('en')],
+      // Required so Material widgets (AppBar, TextField) resolve Arabic
+      // localizations — without these, the default only supports 'en' and the
+      // widgets throw "No MaterialLocalizations found" under locale 'ar'.
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       // Default the whole tree to RTL, Arabic-first.
       builder: (context, child) => Directionality(
         textDirection: TextDirection.rtl,
