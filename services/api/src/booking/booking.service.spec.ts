@@ -44,6 +44,7 @@ const dto = {
 describe('BookingService.book', () => {
   let prisma: any;
   let drivers: any;
+  let notifications: any;
   let tx: ReturnType<typeof makeTx>;
   let service: BookingService;
 
@@ -51,10 +52,12 @@ describe('BookingService.book', () => {
     tx = makeTx();
     prisma = {
       trip: { findUnique: jest.fn().mockResolvedValue(futureTrip) },
+      driverProfile: { findUnique: jest.fn().mockResolvedValue({ userId: 'driverU' }) },
       $transaction: jest.fn((cb: any) => cb(tx)),
     };
     drivers = { findProfileByUserId: jest.fn().mockResolvedValue(null) };
-    service = new BookingService(prisma as PrismaService, drivers as DriverService);
+    notifications = { send: jest.fn() };
+    service = new BookingService(prisma as PrismaService, drivers as DriverService, notifications);
   });
 
   it('404 when the trip is missing', async () => {
@@ -101,6 +104,11 @@ describe('BookingService.book', () => {
     );
     expect(bk.fare).toBe(12000);
     expect(bk.status).toBe(BookingStatus.CONFIRMED);
+    // booking.created → the driver is notified after commit
+    expect(notifications.send).toHaveBeenCalledWith(
+      'driverU',
+      expect.objectContaining({ data: expect.objectContaining({ type: 'booking.created' }) }),
+    );
     expect(tx.trip.update).not.toHaveBeenCalled(); // still seats left → not locked
   });
 
@@ -118,11 +126,13 @@ describe('BookingService.book', () => {
 
 describe('BookingService.cancel', () => {
   let prisma: any;
+  let notifications: any;
   let tx: ReturnType<typeof makeTx>;
   let service: BookingService;
 
   const soonTrip = (over: any = {}) => ({
     id: 't1',
+    driverId: 'drv1',
     status: TripStatus.OPEN,
     departureTime: new Date(Date.now() + 3_600_000),
     ...over,
@@ -140,9 +150,11 @@ describe('BookingService.cancel', () => {
     tx = makeTx();
     prisma = {
       seatBooking: { findUnique: jest.fn() },
+      driverProfile: { findUnique: jest.fn().mockResolvedValue({ userId: 'driverU' }) },
       $transaction: jest.fn((cb: any) => cb(tx)),
     };
-    service = new BookingService(prisma as PrismaService, {} as DriverService);
+    notifications = { send: jest.fn() };
+    service = new BookingService(prisma as PrismaService, {} as DriverService, notifications);
   });
 
   it('404 when the booking is missing', async () => {
@@ -176,6 +188,11 @@ describe('BookingService.cancel', () => {
     expect(tx.trip.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: { status: TripStatus.OPEN } }),
     );
+    // booking.cancelled → the driver is notified after commit
+    expect(notifications.send).toHaveBeenCalledWith(
+      'driverU',
+      expect.objectContaining({ data: expect.objectContaining({ type: 'booking.cancelled' }) }),
+    );
   });
 
   it('409 on a double-cancel race (updateMany count 0)', async () => {
@@ -206,7 +223,7 @@ describe('BookingService driver transitions (onboard / no-show)', () => {
       },
     };
     drivers = { findProfileByUserId: jest.fn().mockResolvedValue({ id: 'drv1' }) };
-    service = new BookingService(prisma as PrismaService, drivers as DriverService);
+    service = new BookingService(prisma as PrismaService, drivers as DriverService, { send: jest.fn() } as any);
   });
 
   it('onboard: CONFIRMED → ONBOARD while EN_ROUTE', async () => {

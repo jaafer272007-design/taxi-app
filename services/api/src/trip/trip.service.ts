@@ -18,6 +18,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { DriverService } from '../driver/driver.service';
 import { CorridorService } from '../corridor/corridor.service';
+import { NotificationService, NotificationPayload } from '../notification/notification.service';
 import { CreateTripDto } from './dto/create-trip.dto';
 import { UpdateTripDto } from './dto/update-trip.dto';
 
@@ -37,6 +38,7 @@ export class TripService {
     private readonly prisma: PrismaService,
     private readonly drivers: DriverService,
     private readonly corridors: CorridorService,
+    private readonly notifications: NotificationService,
   ) {}
 
   /** Driver posts a trip. Only an APPROVED driver may create one. */
@@ -147,10 +149,38 @@ export class TripService {
     if (trip.status !== TripStatus.OPEN && trip.status !== TripStatus.LOCKED) {
       throw new ConflictException('لا يمكن إلغاء الرحلة بحالتها الحالية.');
     }
-    return this.prisma.trip.update({
-      where: { id: tripId },
-      data: { status: TripStatus.CANCELLED },
+
+    // Riders to notify (captured before cancelling).
+    const affected = await this.prisma.seatBooking.findMany({
+      where: { tripId, status: BookingStatus.CONFIRMED },
+      select: { riderId: true },
     });
+
+    // Cancelling a trip cancels its confirmed bookings too (brief §6).
+    const cancelled = await this.prisma.$transaction(async (tx) => {
+      await tx.seatBooking.updateMany({
+        where: { tripId, status: BookingStatus.CONFIRMED },
+        data: { status: BookingStatus.CANCELLED },
+      });
+      return tx.trip.update({ where: { id: tripId }, data: { status: TripStatus.CANCELLED } });
+    });
+
+    // AFTER commit: notify the riders whose bookings were cancelled.
+    await this.notifyRiders(affected, {
+      title: 'إلغاء الرحلة',
+      body: 'أُلغيت الرحلة من قبل السائق.',
+      data: { type: 'trip.cancelled', tripId },
+    });
+    return cancelled;
+  }
+
+  /** Push a notification to each distinct rider (after commit). */
+  private async notifyRiders(
+    rows: Array<{ riderId: string }>,
+    payload: NotificationPayload,
+  ): Promise<void> {
+    const riderIds = [...new Set(rows.map((r) => r.riderId))];
+    await Promise.all(riderIds.map((id) => this.notifications.send(id, payload)));
   }
 
   /** Start the trip: OPEN|LOCKED → EN_ROUTE (owning APPROVED driver only). */
@@ -164,7 +194,21 @@ export class TripService {
     }
     // From EN_ROUTE on: booking is blocked (status != OPEN) and rider self-cancel
     // is blocked (booking.cancel rejects EN_ROUTE/COMPLETED trips).
-    return this.prisma.trip.update({ where: { id: tripId }, data: { status: TripStatus.EN_ROUTE } });
+    const updated = await this.prisma.trip.update({
+      where: { id: tripId },
+      data: { status: TripStatus.EN_ROUTE },
+    });
+
+    const riders = await this.prisma.seatBooking.findMany({
+      where: { tripId, status: BookingStatus.CONFIRMED },
+      select: { riderId: true },
+    });
+    await this.notifyRiders(riders, {
+      title: 'انطلقت الرحلة',
+      body: 'انطلقت رحلتك.',
+      data: { type: 'trip.started', tripId },
+    });
+    return updated;
   }
 
   /**
@@ -184,7 +228,7 @@ export class TripService {
       throw new ConflictException('لا يمكن إكمال الرحلة إلا وهي جارية (EN_ROUTE).');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const settled = await this.prisma.$transaction(async (tx) => {
       const bookings = await tx.seatBooking.findMany({ where: { tripId } });
 
       let collected = 0;
@@ -209,9 +253,20 @@ export class TripService {
         data: { tripsDone: { increment: 1 } },
       });
 
-      // TODO(Step 6): emit "trip.completed" to notify riders.
       return tx.trip.update({ where: { id: tripId }, data: { status: TripStatus.SETTLED } });
     });
+
+    // AFTER commit: notify riders who completed the trip so they can rate.
+    const riders = await this.prisma.seatBooking.findMany({
+      where: { tripId, status: BookingStatus.COMPLETED },
+      select: { riderId: true },
+    });
+    await this.notifyRiders(riders, {
+      title: 'اكتملت الرحلة',
+      body: 'اكتملت رحلتك، قيّم سائقك.',
+      data: { type: 'trip.completed', tripId },
+    });
+    return settled;
   }
 
   private async getOwnedTrip(
