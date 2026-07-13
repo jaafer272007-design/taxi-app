@@ -49,6 +49,16 @@ consumed via context (e.g. context.colors.primary).
 - كل endpoint يرجع أخطاء واضحة (مقعد غير متاح، سائق غير مُعتمد، إلخ).
 - تعليقات/أسماء إنكليزي بالكود؛ نصوص المستخدم عربي.
 
+## CI
+- كل PR لازم يعبر CI (أخضر) قبل الدمج. الـ workflow: `.github/workflows/ci.yml`
+  يشتغل على كل pull request وعلى push إلى `main`.
+- يشغّل لـ `services/api`: `npm ci` → `prisma generate` → `prisma migrate deploy`
+  → `npm run build` → `npm test` مقابل Postgres (postgis) + Redis كـ service containers.
+- متغيّرات WhatsApp/FCM غائبة عمداً بالـ CI حتى يُختبر مسار dev-fallback.
+- **حماية الفرع (يُفعّلها الأدمن مرة واحدة):** Settings → Branches → Add rule على
+  `main` → فعّل "Require status checks to pass" واختَر فحص
+  `services/api (build, migrate, test)` — بعدها ما ينــدمج أي PR إلا والـ CI أخضر.
+
 ## ترتيب البناء (اختبر بعد كل خطوة)
 1. Scaffold + DB + `auth` → دخول OTP يشتغل.
 2. `driver` + اعتماد أدمن → سائق يُعتمد.
