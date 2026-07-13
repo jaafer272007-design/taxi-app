@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { DriverProfile, DriverStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -8,10 +8,13 @@ const DRIVER_INCLUDE = {
   documents: true,
 } as const;
 
+interface StatusChange {
+  status: DriverStatus;
+  rejectionReason?: string | null;
+}
+
 @Injectable()
 export class AdminService {
-  private readonly logger = new Logger(AdminService.name);
-
   constructor(private readonly prisma: PrismaService) {}
 
   /** List drivers (optionally filtered by status) with their vehicle + documents. */
@@ -23,31 +26,27 @@ export class AdminService {
   }
 
   approve(id: string) {
-    return this.setStatus(id, DriverStatus.APPROVED);
+    // Clear any stale rejection reason when a driver is (re-)approved.
+    return this.setStatus(id, { status: DriverStatus.APPROVED, rejectionReason: null });
   }
 
-  async reject(id: string, reason?: string) {
-    // The Phase 1 schema (brief §2) has no rejection-reason column, so the
-    // reason is logged rather than persisted.
-    // TODO: persist the reason once a column is added to DriverProfile.
-    if (reason) {
-      this.logger.log(`Driver ${id} rejected. Reason: ${reason}`);
-    }
-    return this.setStatus(id, DriverStatus.REJECTED);
+  reject(id: string, reason?: string) {
+    return this.setStatus(id, { status: DriverStatus.REJECTED, rejectionReason: reason ?? null });
   }
 
   suspend(id: string) {
-    return this.setStatus(id, DriverStatus.SUSPENDED);
+    // Suspension is not a rejection — leave rejectionReason untouched.
+    return this.setStatus(id, { status: DriverStatus.SUSPENDED });
   }
 
-  private async setStatus(id: string, status: DriverStatus): Promise<DriverProfile> {
+  private async setStatus(id: string, change: StatusChange): Promise<DriverProfile> {
     const existing = await this.prisma.driverProfile.findUnique({ where: { id } });
     if (!existing) {
       throw new NotFoundException('السائق غير موجود.');
     }
     return this.prisma.driverProfile.update({
       where: { id },
-      data: { status },
+      data: change,
       include: DRIVER_INCLUDE,
     });
   }

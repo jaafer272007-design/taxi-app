@@ -100,6 +100,11 @@ export class DriverService {
     return profile;
   }
 
+  /** Non-throwing lookup used by the trip module (e.g. listing a user's trips). */
+  findProfileByUserId(userId: string): Promise<DriverProfile | null> {
+    return this.prisma.driverProfile.findUnique({ where: { userId } });
+  }
+
   private async getProfileOrThrow(userId: string): Promise<DriverProfile> {
     const profile = await this.prisma.driverProfile.findUnique({ where: { userId } });
     if (!profile) {
