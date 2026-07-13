@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  api:
+    name: services/api (build, migrate, test)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: services/api
+
+    # Required to boot the app / run migrations. WhatsApp & FCM vars are left
+    # absent ON PURPOSE so the DEV-fallback paths (OTP-to-console, push-to-log)
+    # are exercised — that is expected in CI.
+    env:
+      DATABASE_URL: postgresql://taxi:taxi@localhost:5432/taxi_test?schema=public
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-dummy-jwt-secret-not-for-production-0123456789
+      TZ: Asia/Baghdad
+      NODE_ENV: test
+
+    services:
+      # Match local dev (services/api/docker-compose.yml): PostGIS + Redis.
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: taxi
+          POSTGRES_PASSWORD: taxi
+          POSTGRES_DB: taxi_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U taxi -d taxi_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # No engines/.nvmrc in the repo → Node 20 LTS.
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: services/api/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Apply database migrations
+        run: npx prisma migrate deploy
+
+      - name: Lint (if a lint script exists)
+        run: npm run lint --if-present
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
