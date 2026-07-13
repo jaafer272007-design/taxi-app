@@ -86,6 +86,8 @@ void main() {
     test('nameless user → JWT stored, advances to name step', () async {
       api.verifyResult = AuthSession(accessToken: 'jwt', user: fakeUser());
       final c = make();
+      await c.bootstrap(); // onboarding/phone (empty store)
+      await c.requestOtp('+9647701234567'); // reach the otp step
       await c.verifyOtp('123456');
       expect(await store.read(), 'jwt');
       expect(c.step, OnboardingStep.name);
@@ -105,6 +107,8 @@ void main() {
       api.verifyError =
           const ApiException('رمز التحقق غير صحيح.', statusCode: 401);
       final c = make();
+      await c.bootstrap();
+      await c.requestOtp('+9647701234567'); // reach the otp step
       await c.verifyOtp('000000');
       expect(c.error, 'رمز التحقق غير صحيح.');
       expect(await store.read(), isNull);
