@@ -137,6 +137,16 @@ model EarningsRecord {
   amount      Int
   collectedAt DateTime @default(now())
 }
+
+// Phase 1 amendment (Step 6): FCM device tokens for push notifications.
+model DeviceToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  platform  String
+  createdAt DateTime @default(now())
+  @@index([userId])
+}
 // SeatRequest = Phase 2 (لا يُبنى الآن)
 ```
 

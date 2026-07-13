@@ -15,6 +15,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { DriverService } from '../driver/driver.service';
+import { NotificationService, NotificationPayload } from '../notification/notification.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { SearchTripsDto } from './dto/search-trips.dto';
 
@@ -25,6 +26,7 @@ export class BookingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly drivers: DriverService,
+    private readonly notifications: NotificationService,
   ) {}
 
   /** Rider-facing search: only OPEN, future, seats-available trips. */
@@ -103,7 +105,7 @@ export class BookingService {
       throw new ConflictException('المقاعد المطلوبة غير متاحة.');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const booking = await this.prisma.$transaction(async (tx) => {
       // Atomic, race-safe reservation. The WHERE guard (status OPEN AND
       // seatsAvailable >= seatCount) makes concurrent bookings for the last
       // seat safe: exactly one UPDATE affects the row; the loser sees count 0.
@@ -122,7 +124,6 @@ export class BookingService {
         await tx.trip.update({ where: { id: dto.tripId }, data: { status: TripStatus.LOCKED } });
       }
 
-      // TODO(Step 6): emit "booking.created" to notify the driver.
       // TODO(Phase 2): validate pickup within origin city / dropoff within dest city (PostGIS).
       return tx.seatBooking.create({
         data: {
@@ -142,6 +143,14 @@ export class BookingService {
         },
       });
     });
+
+    // Fire AFTER commit — a notification failure must not roll back the booking.
+    await this.notifyDriver(trip.driverId, {
+      title: 'حجز جديد',
+      body: 'حجز جديد على رحلتك.',
+      data: { type: 'booking.created', tripId: trip.id, bookingId: booking.id },
+    });
+    return booking;
   }
 
   /** Rider's bookings with trip info; each flagged upcoming vs past. */
@@ -179,7 +188,7 @@ export class BookingService {
       throw new ConflictException('فات وقت الإلغاء المجاني (قبل 15 دقيقة من المغادرة).');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const cancelledBooking = await this.prisma.$transaction(async (tx) => {
       // Race guard: only one concurrent cancel flips CONFIRMED→CANCELLED, so the
       // seat is returned exactly once (no double refund).
       const cancelled = await tx.seatBooking.updateMany({
@@ -203,6 +212,25 @@ export class BookingService {
 
       return tx.seatBooking.findUniqueOrThrow({ where: { id: bookingId } });
     });
+
+    // AFTER commit: tell the driver a seat opened up.
+    await this.notifyDriver(trip.driverId, {
+      title: 'إلغاء حجز',
+      body: 'أُلغي حجز على رحلتك.',
+      data: { type: 'booking.cancelled', tripId: trip.id, bookingId },
+    });
+    return cancelledBooking;
+  }
+
+  /** Resolve a trip's driver userId and push a notification (after commit). */
+  private async notifyDriver(driverProfileId: string, payload: NotificationPayload): Promise<void> {
+    const driver = await this.prisma.driverProfile.findUnique({
+      where: { id: driverProfileId },
+      select: { userId: true },
+    });
+    if (driver) {
+      await this.notifications.send(driver.userId, payload);
+    }
   }
 
   /** Driver marks a rider onboard: CONFIRMED → ONBOARD (trip must be EN_ROUTE). */

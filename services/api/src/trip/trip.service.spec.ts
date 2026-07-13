@@ -38,6 +38,7 @@ describe('TripService.createTrip', () => {
       prisma as unknown as PrismaService,
       drivers as unknown as DriverService,
       corridors as unknown as CorridorService,
+      { send: jest.fn() } as any,
     );
   });
 
@@ -134,6 +135,7 @@ describe('TripService.updateTrip (booking-aware seat guard)', () => {
       prisma as PrismaService,
       drivers as DriverService,
       {} as CorridorService,
+      { send: jest.fn() } as any,
     );
   });
 
@@ -165,6 +167,7 @@ describe('TripService.updateTrip (booking-aware seat guard)', () => {
 describe('TripService lifecycle (start / complete)', () => {
   let prisma: any;
   let drivers: any;
+  let notifications: any;
   let service: TripService;
   const approved = { id: 'drv1', status: DriverStatus.APPROVED };
 
@@ -174,22 +177,33 @@ describe('TripService lifecycle (start / complete)', () => {
         findUnique: jest.fn(),
         update: jest.fn((a) => Promise.resolve({ id: 't1', ...a.data })),
       },
-      seatBooking: { findMany: jest.fn(), update: jest.fn() },
+      seatBooking: { findMany: jest.fn().mockResolvedValue([]), update: jest.fn() },
       earningsRecord: { create: jest.fn() },
       driverProfile: { update: jest.fn() },
       // tx uses the same mock object
       $transaction: jest.fn((cb: any) => cb(prisma)),
     };
     drivers = { findProfileByUserId: jest.fn().mockResolvedValue(approved) };
-    service = new TripService(prisma as PrismaService, drivers as DriverService, {} as CorridorService);
+    notifications = { send: jest.fn() };
+    service = new TripService(
+      prisma as PrismaService,
+      drivers as DriverService,
+      {} as CorridorService,
+      notifications,
+    );
   });
 
   describe('start', () => {
-    it('moves OPEN → EN_ROUTE', async () => {
+    it('moves OPEN → EN_ROUTE and notifies confirmed riders (trip.started)', async () => {
       prisma.trip.findUnique.mockResolvedValue({ id: 't1', status: TripStatus.OPEN, driverId: 'drv1' });
+      prisma.seatBooking.findMany.mockResolvedValue([{ riderId: 'r1' }]);
       await service.start('u1', 't1');
       expect(prisma.trip.update).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: 't1' }, data: { status: TripStatus.EN_ROUTE } }),
+      );
+      expect(notifications.send).toHaveBeenCalledWith(
+        'r1',
+        expect.objectContaining({ data: expect.objectContaining({ type: 'trip.started' }) }),
       );
     });
 
@@ -227,10 +241,10 @@ describe('TripService lifecycle (start / complete)', () => {
     it('settles riders, excludes NO_SHOW from earnings, bumps tripsDone, ends SETTLED', async () => {
       prisma.trip.findUnique.mockResolvedValue({ id: 't1', status: TripStatus.EN_ROUTE, driverId: 'drv1' });
       prisma.seatBooking.findMany.mockResolvedValue([
-        { id: 'b1', status: BookingStatus.ONBOARD, fare: 6000 },
-        { id: 'b2', status: BookingStatus.CONFIRMED, fare: 12000 }, // default rode
-        { id: 'b3', status: BookingStatus.NO_SHOW, fare: 6000 }, // excluded
-        { id: 'b4', status: BookingStatus.CANCELLED, fare: 6000 }, // untouched
+        { id: 'b1', riderId: 'r1', status: BookingStatus.ONBOARD, fare: 6000 },
+        { id: 'b2', riderId: 'r2', status: BookingStatus.CONFIRMED, fare: 12000 }, // default rode
+        { id: 'b3', riderId: 'r3', status: BookingStatus.NO_SHOW, fare: 6000 }, // excluded
+        { id: 'b4', riderId: 'r4', status: BookingStatus.CANCELLED, fare: 6000 }, // untouched
       ]);
 
       await service.complete('u1', 't1');
@@ -256,6 +270,11 @@ describe('TripService lifecycle (start / complete)', () => {
       );
       expect(prisma.trip.update).toHaveBeenCalledWith(
         expect.objectContaining({ data: { status: TripStatus.SETTLED } }),
+      );
+      // trip.completed → riders notified after commit
+      expect(notifications.send).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ data: expect.objectContaining({ type: 'trip.completed' }) }),
       );
     });
 
