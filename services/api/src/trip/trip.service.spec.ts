@@ -90,4 +90,14 @@ describe('TripService.createTrip', () => {
       service.createTrip('u1', { corridorId: 'c1', departureTime: past, seatsTotal: 2 }),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
+
+  it('rejects sending BOTH departNow and departureTime (EITHER/OR contract)', async () => {
+    prisma.vehicle.findUnique.mockResolvedValue({ id: 'v1', seats: 4 });
+    corridors.findById.mockResolvedValue({ id: 'c1', active: true, pricePerSeat: 5000 });
+    const future = new Date(Date.now() + 3_600_000).toISOString();
+    await expect(
+      service.createTrip('u1', { corridorId: 'c1', departNow: true, departureTime: future, seatsTotal: 2 }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.trip.create).not.toHaveBeenCalled();
+  });
 });

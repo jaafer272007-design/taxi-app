@@ -54,6 +54,12 @@ export class TripService {
       throw new BadRequestException('هذا الممر غير مفعّل حالياً.');
     }
 
+    // Enforce the DTO's EITHER/OR contract: don't silently discard a scheduled
+    // time when departNow is also set.
+    if (dto.departNow === true && dto.departureTime !== undefined) {
+      throw new BadRequestException('حدّد وقت المغادرة أو فعّل "الآن"، وليس الاثنين معاً.');
+    }
+
     const departNow = dto.departNow === true;
     const departureTime = departNow ? new Date() : this.parseFutureDate(dto.departureTime);
 
