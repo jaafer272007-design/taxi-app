@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -17,6 +18,15 @@ import 'package:shared/shared.dart';
 /// fully deterministic.
 void main() {
   setUpAll(() async {
+    // flutter_test does not auto-load dependency package fonts, so the Lucide
+    // icon glyphs would render as tofu boxes. Load the icon font explicitly;
+    // an IconData with a fontPackage resolves to family
+    // 'packages/<package>/<family>'.
+    await (FontLoader('packages/lucide_icons_flutter/Lucide')
+          ..addFont(
+              rootBundle.load('packages/lucide_icons_flutter/assets/lucide.ttf')))
+        .load();
+
     // Never hit the network in tests: force google_fonts to use the bundled
     // Cairo assets, then warm every weight the theme uses so the first painted
     // frame already has real Cairo (not the fallback font).
