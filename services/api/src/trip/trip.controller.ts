@@ -44,4 +44,16 @@ export class TripController {
   cancelTrip(@CurrentUser('id') userId: string, @Param('id') id: string) {
     return this.trips.cancelTrip(userId, id);
   }
+
+  @Post(':id/start')
+  @HttpCode(HttpStatus.OK)
+  start(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    return this.trips.start(userId, id);
+  }
+
+  @Post(':id/complete')
+  @HttpCode(HttpStatus.OK)
+  complete(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    return this.trips.complete(userId, id);
+  }
 }

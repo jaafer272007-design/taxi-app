@@ -4,7 +4,13 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { DriverStatus, TripCreatedBy, TripStatus } from '@prisma/client';
+import {
+  BookingStatus,
+  DriverStatus,
+  PaymentStatus,
+  TripCreatedBy,
+  TripStatus,
+} from '@prisma/client';
 import { TripService } from './trip.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DriverService } from '../driver/driver.service';
@@ -153,5 +159,118 @@ describe('TripService.updateTrip (booking-aware seat guard)', () => {
     await expect(service.updateTrip('u1', 't1', { seatsTotal: 3 })).rejects.toBeInstanceOf(
       ConflictException,
     );
+  });
+});
+
+describe('TripService lifecycle (start / complete)', () => {
+  let prisma: any;
+  let drivers: any;
+  let service: TripService;
+  const approved = { id: 'drv1', status: DriverStatus.APPROVED };
+
+  beforeEach(() => {
+    prisma = {
+      trip: {
+        findUnique: jest.fn(),
+        update: jest.fn((a) => Promise.resolve({ id: 't1', ...a.data })),
+      },
+      seatBooking: { findMany: jest.fn(), update: jest.fn() },
+      earningsRecord: { create: jest.fn() },
+      driverProfile: { update: jest.fn() },
+      // tx uses the same mock object
+      $transaction: jest.fn((cb: any) => cb(prisma)),
+    };
+    drivers = { findProfileByUserId: jest.fn().mockResolvedValue(approved) };
+    service = new TripService(prisma as PrismaService, drivers as DriverService, {} as CorridorService);
+  });
+
+  describe('start', () => {
+    it('moves OPEN → EN_ROUTE', async () => {
+      prisma.trip.findUnique.mockResolvedValue({ id: 't1', status: TripStatus.OPEN, driverId: 'drv1' });
+      await service.start('u1', 't1');
+      expect(prisma.trip.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 't1' }, data: { status: TripStatus.EN_ROUTE } }),
+      );
+    });
+
+    it('moves LOCKED → EN_ROUTE', async () => {
+      prisma.trip.findUnique.mockResolvedValue({ id: 't1', status: TripStatus.LOCKED, driverId: 'drv1' });
+      await service.start('u1', 't1');
+      expect(prisma.trip.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { status: TripStatus.EN_ROUTE } }),
+      );
+    });
+
+    it('409 from a wrong status (e.g. COMPLETED)', async () => {
+      prisma.trip.findUnique.mockResolvedValue({ id: 't1', status: TripStatus.COMPLETED, driverId: 'drv1' });
+      await expect(service.start('u1', 't1')).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('403 when the caller is not the trip owner', async () => {
+      prisma.trip.findUnique.mockResolvedValue({ id: 't1', status: TripStatus.OPEN, driverId: 'other' });
+      await expect(service.start('u1', 't1')).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('403 when the driver is not APPROVED', async () => {
+      drivers.findProfileByUserId.mockResolvedValue({ id: 'drv1', status: DriverStatus.SUSPENDED });
+      prisma.trip.findUnique.mockResolvedValue({ id: 't1', status: TripStatus.OPEN, driverId: 'drv1' });
+      await expect(service.start('u1', 't1')).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
+
+  describe('complete', () => {
+    it('409 when the trip is not EN_ROUTE', async () => {
+      prisma.trip.findUnique.mockResolvedValue({ id: 't1', status: TripStatus.OPEN, driverId: 'drv1' });
+      await expect(service.complete('u1', 't1')).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('settles riders, excludes NO_SHOW from earnings, bumps tripsDone, ends SETTLED', async () => {
+      prisma.trip.findUnique.mockResolvedValue({ id: 't1', status: TripStatus.EN_ROUTE, driverId: 'drv1' });
+      prisma.seatBooking.findMany.mockResolvedValue([
+        { id: 'b1', status: BookingStatus.ONBOARD, fare: 6000 },
+        { id: 'b2', status: BookingStatus.CONFIRMED, fare: 12000 }, // default rode
+        { id: 'b3', status: BookingStatus.NO_SHOW, fare: 6000 }, // excluded
+        { id: 'b4', status: BookingStatus.CANCELLED, fare: 6000 }, // untouched
+      ]);
+
+      await service.complete('u1', 't1');
+
+      expect(prisma.seatBooking.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'b1' },
+          data: { status: BookingStatus.COMPLETED, paymentStatus: PaymentStatus.COLLECTED },
+        }),
+      );
+      expect(prisma.seatBooking.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'b2' } }),
+      );
+      const settledIds = prisma.seatBooking.update.mock.calls.map((c: any) => c[0].where.id);
+      expect(settledIds).not.toContain('b3');
+      expect(settledIds).not.toContain('b4');
+
+      expect(prisma.earningsRecord.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ driverId: 'drv1', tripId: 't1', amount: 18000 }) }),
+      );
+      expect(prisma.driverProfile.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { tripsDone: { increment: 1 } } }),
+      );
+      expect(prisma.trip.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { status: TripStatus.SETTLED } }),
+      );
+    });
+
+    it('records no earnings when nobody rode (all NO_SHOW) but still SETTLES', async () => {
+      prisma.trip.findUnique.mockResolvedValue({ id: 't1', status: TripStatus.EN_ROUTE, driverId: 'drv1' });
+      prisma.seatBooking.findMany.mockResolvedValue([
+        { id: 'b1', status: BookingStatus.NO_SHOW, fare: 6000 },
+      ]);
+
+      await service.complete('u1', 't1');
+
+      expect(prisma.earningsRecord.create).not.toHaveBeenCalled();
+      expect(prisma.trip.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { status: TripStatus.SETTLED } }),
+      );
+    });
   });
 });

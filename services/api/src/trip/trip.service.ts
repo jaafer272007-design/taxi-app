@@ -6,7 +6,15 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { DriverProfile, Trip, TripCreatedBy, TripStatus } from '@prisma/client';
+import {
+  BookingStatus,
+  DriverProfile,
+  DriverStatus,
+  PaymentStatus,
+  Trip,
+  TripCreatedBy,
+  TripStatus,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { DriverService } from '../driver/driver.service';
 import { CorridorService } from '../corridor/corridor.service';
@@ -142,6 +150,67 @@ export class TripService {
     return this.prisma.trip.update({
       where: { id: tripId },
       data: { status: TripStatus.CANCELLED },
+    });
+  }
+
+  /** Start the trip: OPEN|LOCKED → EN_ROUTE (owning APPROVED driver only). */
+  async start(userId: string, tripId: string): Promise<Trip> {
+    const { trip, profile } = await this.getOwnedTrip(userId, tripId);
+    if (profile.status !== DriverStatus.APPROVED) {
+      throw new ForbiddenException('يجب أن يكون حسابك معتمداً.');
+    }
+    if (trip.status !== TripStatus.OPEN && trip.status !== TripStatus.LOCKED) {
+      throw new ConflictException('لا يمكن بدء الرحلة بحالتها الحالية.');
+    }
+    // From EN_ROUTE on: booking is blocked (status != OPEN) and rider self-cancel
+    // is blocked (booking.cancel rejects EN_ROUTE/COMPLETED trips).
+    return this.prisma.trip.update({ where: { id: tripId }, data: { status: TripStatus.EN_ROUTE } });
+  }
+
+  /**
+   * Complete the trip (owning driver, EN_ROUTE only). In ONE transaction:
+   * settle every riding booking to COMPLETED + COLLECTED (cash), record one
+   * EarningsRecord for the collected sum, bump tripsDone, and move the trip
+   * EN_ROUTE → COMPLETED → SETTLED.
+   *
+   * Settlement policy (documented): ONBOARD and still-CONFIRMED bookings both
+   * default to "rode" → COMPLETED + COLLECTED (keeps cash accounting simple).
+   * NO_SHOW stays NO_SHOW / PENDING and is excluded from earnings. CANCELLED is
+   * left untouched.
+   */
+  async complete(userId: string, tripId: string): Promise<Trip> {
+    const { trip, profile } = await this.getOwnedTrip(userId, tripId);
+    if (trip.status !== TripStatus.EN_ROUTE) {
+      throw new ConflictException('لا يمكن إكمال الرحلة إلا وهي جارية (EN_ROUTE).');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const bookings = await tx.seatBooking.findMany({ where: { tripId } });
+
+      let collected = 0;
+      for (const b of bookings) {
+        if (b.status === BookingStatus.ONBOARD || b.status === BookingStatus.CONFIRMED) {
+          await tx.seatBooking.update({
+            where: { id: b.id },
+            data: { status: BookingStatus.COMPLETED, paymentStatus: PaymentStatus.COLLECTED },
+          });
+          collected += b.fare;
+        }
+        // NO_SHOW (excluded, stays PENDING) and CANCELLED are left untouched.
+      }
+
+      await tx.trip.update({ where: { id: tripId }, data: { status: TripStatus.COMPLETED } });
+
+      if (collected > 0) {
+        await tx.earningsRecord.create({ data: { driverId: profile.id, tripId, amount: collected } });
+      }
+      await tx.driverProfile.update({
+        where: { id: profile.id },
+        data: { tripsDone: { increment: 1 } },
+      });
+
+      // TODO(Step 6): emit "trip.completed" to notify riders.
+      return tx.trip.update({ where: { id: tripId }, data: { status: TripStatus.SETTLED } });
     });
   }
 
