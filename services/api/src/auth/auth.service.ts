@@ -78,4 +78,17 @@ export class AuthService {
     }
     return this.toPublicUser(user);
   }
+
+  /** PATCH /auth/me — set the authenticated user's display name. */
+  async updateMe(userId: string, name: string): Promise<PublicUser> {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      throw new BadRequestException('الاسم مطلوب.');
+    }
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { name: trimmed },
+    });
+    return this.toPublicUser(user);
+  }
 }
