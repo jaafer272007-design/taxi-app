@@ -43,6 +43,36 @@ consumed via context (e.g. context.colors.primary).
   files ONLY, never the screens.
 - Arabic-first, RTL. Support multiple themes (light/dark) where feasible.
 
+### Theme mode (light / dark / system)
+- Apps ship **light + dark** (both built in `/packages/shared/theme`).
+- **Default = `ThemeMode.system`** — follows the phone's setting.
+- The user can override to **Light / Dark / System** via a Settings toggle
+  (screen TBD). No time-of-day auto-switching.
+- The choice **persists across restarts** (`shared_preferences`) and is loaded
+  **before the first frame**.
+- Plumbing (single source of truth, in `/packages/shared/theme`):
+  `ThemeController` (a `ChangeNotifier`, exposed via `provider` — see **State
+  management** below) + `ThemeModeStore` (`SharedPrefsThemeModeStore` in prod,
+  `InMemoryThemeModeStore` in tests).
+- Each app wires it through the shared **`TaxiApp`** shell, which provides the
+  controller (`ChangeNotifierProvider`) and drives `MaterialApp.themeMode` from
+  it (plus locale `ar` + RTL). Startup:
+  `final c = await ThemeController.create(); runApp(TaxiApp(themeController: c, home: ...));`
+  **rider is wired first.**
+
+## State management
+- **Standard: `ChangeNotifier` + `provider`.** Lightweight, a natural extension
+  of the controllers already in place, right-sized for this app.
+- **Every feature's state** (auth, user, trips, bookings, …) follows this
+  pattern: a `ChangeNotifier` controller holding the logic, exposed with
+  `ChangeNotifierProvider` (`.value` for a pre-built instance owned elsewhere,
+  `create:` when the widget owns the lifecycle), consumed via `context.watch` /
+  `context.read` / `Consumer`.
+- Business logic stays in the controller/service, never in the widget.
+- **No riverpod / bloc / getx** unless we explicitly revisit this decision.
+- Reference: `ThemeController` is provided at the app shell by `TaxiApp` and
+  drives `MaterialApp.themeMode`.
+
 ## اصطلاحات
 - حدود modules واضحة؛ منطق الأعمال بالـ services لا بالـ controllers.
 - معالجة أخطاء موحّدة + رسائل عربية للمستخدم.

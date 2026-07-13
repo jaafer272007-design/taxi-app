@@ -9,6 +9,11 @@ library shared;
 // Theme tokens + ThemeData assembly + `context.*` extensions.
 export 'theme/app_theme.dart';
 
+// Theme mode: controller + persistence + the shared MaterialApp shell.
+export 'theme/theme_controller.dart';
+export 'theme/theme_mode_store.dart';
+export 'theme/app_root.dart';
+
 // Base widget library.
 export 'widgets/app_icons.dart';
 export 'widgets/app_button.dart';
