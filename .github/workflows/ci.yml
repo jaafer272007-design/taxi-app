@@ -78,3 +78,93 @@ jobs:
 
       - name: Test
         run: npm test
+
+  # Renders the design system to PNG "golden" screenshots so the UI can be
+  # reviewed with zero local install, and guards against unintended visual
+  # changes. Independent of the services/api job above.
+  ui-goldens:
+    name: packages/shared (flutter golden UI)
+    runs-on: ubuntu-latest
+
+    # Needed to commit the generated screenshots back to the PR branch.
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout (PR branch head, so screenshots can be pushed back)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+
+      # Pin the Flutter stable version — goldens are renderer/font sensitive, so
+      # the version that GENERATES baselines must match the one that COMPARES.
+      - name: Set up Flutter (pinned stable)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.29.0
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Install dependencies
+        working-directory: packages/shared
+        run: flutter pub get
+
+      - name: Decide golden mode
+        id: mode
+        working-directory: packages/shared
+        run: |
+          # Compare (regression guard) when baselines already exist; otherwise
+          # generate them. A commit message containing [update-goldens] forces
+          # regeneration (use it to bless an intended UI change).
+          if ls test/goldens/*.png >/dev/null 2>&1 \
+             && ! git log -1 --pretty=%B | grep -qF '[update-goldens]'; then
+            echo "update=false" >> "$GITHUB_OUTPUT"
+            echo "Baselines present -> comparison (visual regression guard)."
+          else
+            echo "update=true" >> "$GITHUB_OUTPUT"
+            echo "Missing baselines or [update-goldens] -> generating."
+          fi
+
+      - name: Test + golden regression check
+        if: steps.mode.outputs.update == 'false'
+        working-directory: packages/shared
+        run: flutter test
+
+      - name: Test + generate golden baselines
+        if: steps.mode.outputs.update == 'true'
+        working-directory: packages/shared
+        run: flutter test --update-goldens
+
+      - name: Mirror screenshots into docs/ui-screenshots (for inline PR viewing)
+        if: steps.mode.outputs.update == 'true'
+        run: |
+          mkdir -p docs/ui-screenshots
+          cp packages/shared/test/goldens/*.png docs/ui-screenshots/
+
+      - name: Commit screenshots back to the PR branch
+        if: steps.mode.outputs.update == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/shared/test/goldens docs/ui-screenshots
+          if git diff --cached --quiet; then
+            echo "No screenshot changes to commit."
+          else
+            git commit -m "chore(ci): generate UI golden screenshots [skip ci]"
+            git push origin HEAD:${{ github.head_ref || github.ref_name }}
+          fi
+
+      # Always publish the screenshots + any failure/diff images, even on
+      # success, so they can be downloaded from the run.
+      - name: Upload UI screenshots + diffs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-screenshots
+          path: |
+            packages/shared/test/goldens/**
+            packages/shared/test/failures/**
+          if-no-files-found: warn
