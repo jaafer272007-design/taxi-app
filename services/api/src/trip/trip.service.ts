@@ -117,10 +117,13 @@ export class TripService {
           `عدد المقاعد (${dto.seatsTotal}) يتجاوز سعة سيارتك (${vehicle.seats}).`,
         );
       }
+      // Can't shrink total capacity below seats already booked.
+      const booked = trip.seatsTotal - trip.seatsAvailable;
+      if (dto.seatsTotal < booked) {
+        throw new BadRequestException(`لا يمكن تقليل المقاعد تحت عدد المحجوز (${booked}).`);
+      }
       data.seatsTotal = dto.seatsTotal;
-      // No bookings exist in Step 3, so seatsAvailable == seatsTotal.
-      // TODO(Step 4): once bookings exist, subtract already-booked seats here.
-      data.seatsAvailable = dto.seatsTotal;
+      data.seatsAvailable = dto.seatsTotal - booked;
     }
 
     if (dto.departureTime !== undefined) {

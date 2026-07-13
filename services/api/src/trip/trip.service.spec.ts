@@ -1,4 +1,9 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { DriverStatus, TripCreatedBy, TripStatus } from '@prisma/client';
 import { TripService } from './trip.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -99,5 +104,54 @@ describe('TripService.createTrip', () => {
       service.createTrip('u1', { corridorId: 'c1', departNow: true, departureTime: future, seatsTotal: 2 }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(prisma.trip.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('TripService.updateTrip (booking-aware seat guard)', () => {
+  let prisma: any;
+  let drivers: any;
+  let service: TripService;
+
+  // seatsTotal 4, seatsAvailable 1 → 3 seats already booked.
+  const openTrip = { id: 't1', status: TripStatus.OPEN, driverId: 'drv1', seatsTotal: 4, seatsAvailable: 1 };
+
+  beforeEach(() => {
+    prisma = {
+      trip: {
+        findUnique: jest.fn().mockResolvedValue(openTrip),
+        update: jest.fn((a) => Promise.resolve({ ...openTrip, ...a.data })),
+      },
+      vehicle: { findUnique: jest.fn().mockResolvedValue({ id: 'v1', seats: 4 }) },
+    };
+    drivers = { findProfileByUserId: jest.fn().mockResolvedValue({ id: 'drv1' }) };
+    service = new TripService(
+      prisma as PrismaService,
+      drivers as DriverService,
+      {} as CorridorService,
+    );
+  });
+
+  it('rejects reducing seatsTotal below already-booked seats', async () => {
+    await expect(service.updateTrip('u1', 't1', { seatsTotal: 2 })).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(prisma.trip.update).not.toHaveBeenCalled();
+  });
+
+  it('preserves the booked count when resizing (seatsAvailable = new total - booked)', async () => {
+    await service.updateTrip('u1', 't1', { seatsTotal: 4 });
+    expect(prisma.trip.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 't1' },
+        data: expect.objectContaining({ seatsTotal: 4, seatsAvailable: 1 }),
+      }),
+    );
+  });
+
+  it('rejects PATCH on a non-OPEN trip', async () => {
+    prisma.trip.findUnique.mockResolvedValue({ ...openTrip, status: TripStatus.LOCKED });
+    await expect(service.updateTrip('u1', 't1', { seatsTotal: 3 })).rejects.toBeInstanceOf(
+      ConflictException,
+    );
   });
 });
