@@ -43,6 +43,22 @@ consumed via context (e.g. context.colors.primary).
   files ONLY, never the screens.
 - Arabic-first, RTL. Support multiple themes (light/dark) where feasible.
 
+### Theme mode (light / dark / system)
+- Apps ship **light + dark** (both built in `/packages/shared/theme`).
+- **Default = `ThemeMode.system`** — follows the phone's setting.
+- The user can override to **Light / Dark / System** via a Settings toggle
+  (screen TBD). No time-of-day auto-switching.
+- The choice **persists across restarts** (`shared_preferences`) and is loaded
+  **before the first frame**.
+- Plumbing (single source of truth, in `/packages/shared/theme`):
+  `ThemeController` (a plain `ChangeNotifier` — the project's **initial app-state
+  approach**; wrap it in provider/riverpod later if adopted) + `ThemeModeStore`
+  (`SharedPrefsThemeModeStore` in prod, `InMemoryThemeModeStore` in tests).
+- Each app wires it through the shared **`TaxiApp`** shell, which sets
+  `MaterialApp.themeMode` from the controller (plus locale `ar` + RTL). Startup:
+  `final c = await ThemeController.create(); runApp(TaxiApp(themeController: c, home: ...));`
+  **rider is wired first.**
+
 ## اصطلاحات
 - حدود modules واضحة؛ منطق الأعمال بالـ services لا بالـ controllers.
 - معالجة أخطاء موحّدة + رسائل عربية للمستخدم.

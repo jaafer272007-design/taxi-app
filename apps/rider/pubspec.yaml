@@ -1,0 +1,24 @@
+name: rider
+description: Taxi app — rider (passenger) app. Android, Arabic RTL.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ">=3.6.0 <4.0.0"
+  flutter: ">=3.27.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Design system + theme-mode plumbing (ThemeController, TaxiApp). Everything
+  # visual comes from here; screens never hardcode design values.
+  shared:
+    path: ../../packages/shared
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true

@@ -168,3 +168,36 @@ jobs:
             packages/shared/test/goldens/**
             packages/shared/test/failures/**
           if-no-files-found: warn
+
+  # Compile-checks the rider app (which depends on the shared package) and runs
+  # its smoke test. Keeps the app buildable as we wire it up screen by screen.
+  rider-app:
+    name: apps/rider (flutter analyze + test)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: apps/rider
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter (pinned stable)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.29.0
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test

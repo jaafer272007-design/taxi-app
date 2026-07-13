@@ -20,6 +20,8 @@ dependencies:
   # only. (The older `lucide_icons` package is Dart-2-only, so we use the
   # maintained `lucide_icons_flutter` fork; the class is still `LucideIcons`.)
   lucide_icons_flutter: ^3.1.15
+  # Persists the chosen theme mode (light/dark/system) across restarts.
+  shared_preferences: ^2.5.0
 
 dev_dependencies:
   flutter_test:
