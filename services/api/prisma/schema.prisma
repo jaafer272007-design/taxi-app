@@ -80,14 +80,15 @@ model User {
 }
 
 model DriverProfile {
-  id        String       @id @default(cuid())
-  userId    String       @unique
-  user      User         @relation(fields: [userId], references: [id])
-  status    DriverStatus @default(PENDING)
-  ratingAvg Float        @default(0)
-  tripsDone Int          @default(0)
-  vehicle   Vehicle?
-  documents Document[]
+  id              String       @id @default(cuid())
+  userId          String       @unique
+  user            User         @relation(fields: [userId], references: [id])
+  status          DriverStatus @default(PENDING)
+  rejectionReason String? // set when an admin rejects; cleared on approve (Phase 1 amendment)
+  ratingAvg       Float        @default(0)
+  tripsDone       Int          @default(0)
+  vehicle         Vehicle?
+  documents       Document[]
 }
 
 model Vehicle {

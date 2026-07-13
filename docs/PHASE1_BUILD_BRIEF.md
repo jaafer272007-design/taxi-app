@@ -47,6 +47,7 @@ model DriverProfile {
   userId    String       @unique
   user      User         @relation(fields: [userId], references: [id])
   status    DriverStatus @default(PENDING)
+  rejectionReason String? // Phase 1 amendment (Step 3): reason set by admin on reject, cleared on approve
   ratingAvg Float        @default(0)
   tripsDone Int          @default(0)
   vehicle   Vehicle?

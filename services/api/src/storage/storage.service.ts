@@ -1,8 +1,17 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
+import { createReadStream, existsSync, ReadStream } from 'fs';
 import { promises as fs } from 'fs';
-import { extname, join } from 'path';
+import { basename, extname, join, resolve, sep } from 'path';
+
+const EXT_MIME: Record<string, string> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.pdf': 'application/pdf',
+};
 
 /**
  * Local-disk file storage for dev. Files land under UPLOAD_DIR and the returned
@@ -31,5 +40,23 @@ export class StorageService {
     await fs.writeFile(fullPath, buffer);
     this.logger.debug(`Stored upload at ${fullPath}`);
     return fullPath;
+  }
+
+  /**
+   * Open a stored file for reading. Validates that the path stays inside
+   * UPLOAD_DIR (defence-in-depth against traversal, even though stored paths
+   * come from our own DB) and infers a content type from the extension.
+   */
+  openReadStream(storedPath: string): { stream: ReadStream; contentType: string; filename: string } {
+    const root = resolve(this.uploadDir);
+    const abs = resolve(storedPath);
+    if (abs !== root && !abs.startsWith(root + sep)) {
+      throw new NotFoundException('الملف غير موجود.');
+    }
+    if (!existsSync(abs)) {
+      throw new NotFoundException('الملف غير موجود.');
+    }
+    const contentType = EXT_MIME[extname(abs).toLowerCase()] || 'application/octet-stream';
+    return { stream: createReadStream(abs), contentType, filename: basename(abs) };
   }
 }
