@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 
 /// Spacing scale — a strict 4 / 8 rhythm. Every gap, padding and margin in the
 /// apps must come from one of these steps (via `context.space.md` etc.), never

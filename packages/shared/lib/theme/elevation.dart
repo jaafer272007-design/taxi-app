@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 
 /// Elevation tokens. Phase 1 uses a single soft, low-opacity card shadow —
 /// subtle depth, no heavy Material drop shadows. Widgets read
