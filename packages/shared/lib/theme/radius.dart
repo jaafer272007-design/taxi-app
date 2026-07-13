@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 
 /// Corner-radius scale. Widgets read `context.radii.md` etc.; never a raw
 /// [BorderRadius] literal in a screen.

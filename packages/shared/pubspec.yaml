@@ -15,10 +15,11 @@ dependencies:
     sdk: flutter
   # Arabic-first type scale.
   google_fonts: ^6.2.1
-  # Vector icon set (no emoji). All icon refs are isolated in
-  # lib/widgets/app_icons.dart — if this version needs bumping on the first
-  # `flutter pub get`, that is the only file to touch.
-  lucide_icons: ^0.257.0
+  # Vector icon set (no emoji), Dart-3 compatible. All icon refs are isolated
+  # in lib/widgets/app_icons.dart — swapping the icon pack touches that file
+  # only. (The older `lucide_icons` package is Dart-2-only, so we use the
+  # maintained `lucide_icons_flutter` fork; the class is still `LucideIcons`.)
+  lucide_icons_flutter: ^3.1.15
 
 dev_dependencies:
   flutter_test:
@@ -27,3 +28,9 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  # Cairo is bundled (not fetched at runtime): google_fonts discovers these by
+  # filename, so GoogleFonts.cairo() loads the local asset in the apps (offline,
+  # no network) and in golden tests (deterministic, real Arabic/Latin glyphs).
+  # OFL 1.1 — see assets/fonts/OFL.txt.
+  assets:
+    - assets/fonts/

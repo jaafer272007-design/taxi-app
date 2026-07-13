@@ -21,3 +21,4 @@ export 'widgets/rating_stars.dart';
 
 // Theme preview / gallery (dev + design QA surface).
 export 'preview/theme_preview.dart';
+export 'preview/galleries.dart';

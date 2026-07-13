@@ -70,6 +70,19 @@ only**. Change `primary` in `lib/theme/colors.dart` and every screen, button
 and badge in all three apps updates — no screen edits. `test/reskin_test.dart`
 guards this.
 
-> Note: `lucide_icons` is pinned in `pubspec.yaml`; if the first `flutter pub
-> get` asks for a different version, bump it there — all icon references live in
-> `lib/widgets/app_icons.dart`, so nothing else changes.
+> Note: icons come from `lucide_icons_flutter` (the Dart-3 maintained Lucide
+> fork; class `LucideIcons`). All icon references live in
+> `lib/widgets/app_icons.dart`, so swapping the icon pack touches that file only.
+
+## Golden tests (CI-rendered screenshots)
+
+`test/golden_test.dart` snapshots the design system — color tokens, the type
+scale, and every base widget — in light and dark, RTL, with the real Cairo font.
+Cairo is bundled in `assets/fonts/` (OFL 1.1) and discovered by `google_fonts`,
+so it renders offline both here and in the apps — no runtime font fetch. CI
+(Flutter pinned to stable) generates the baselines under `test/goldens/`,
+mirrors them to `docs/ui-screenshots/`, and uploads them as the `ui-screenshots`
+artifact. Once baselines exist, any change that alters rendering fails the
+golden test and emits a diff image — a visual regression guard. To intentionally
+refresh the baselines, push a commit whose message contains `[update-goldens]`
+(or run `flutter test --update-goldens`).

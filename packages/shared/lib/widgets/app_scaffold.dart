@@ -68,12 +68,13 @@ class AppScaffold extends StatelessWidget {
         top: title == null,
         child: content,
       ),
-      bottomNavigationBar: bottomBar == null
-          ? null
-          : SafeArea(
-              minimum: EdgeInsets.all(space.lg),
-              child: bottomBar,
-            ),
+      bottomNavigationBar: switch (bottomBar) {
+        null => null,
+        final Widget bar => SafeArea(
+            minimum: EdgeInsets.all(space.lg),
+            child: bar,
+          ),
+      },
       floatingActionButton: floatingActionButton,
     );
   }
