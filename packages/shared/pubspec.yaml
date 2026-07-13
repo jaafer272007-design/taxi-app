@@ -1,0 +1,29 @@
+name: shared
+description: Taxi app shared design system — theme tokens + base widget library (rider, driver, admin).
+publish_to: none
+version: 0.1.0
+
+# Color.withValues() (used in the widget tints) needs Flutter 3.27+.
+environment:
+  sdk: ">=3.6.0 <4.0.0"
+  flutter: ">=3.27.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  # Arabic-first type scale.
+  google_fonts: ^6.2.1
+  # Vector icon set (no emoji). All icon refs are isolated in
+  # lib/widgets/app_icons.dart — if this version needs bumping on the first
+  # `flutter pub get`, that is the only file to touch.
+  lucide_icons: ^0.257.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
