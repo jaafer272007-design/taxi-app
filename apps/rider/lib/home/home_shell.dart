@@ -5,11 +5,12 @@ import 'package:shared/shared.dart';
 import '../booking/booking_api.dart';
 import '../booking/my_bookings_controller.dart';
 import '../booking/my_bookings_screen.dart';
+import '../config/app_config.dart';
 import '../trip/search_screen.dart';
 
-/// The authenticated home: a two-tab shell (ابحث · حجوزاتي). Each tab keeps its
-/// own state across switches (an [IndexedStack]); the bookings tab owns its
-/// [MyBookingsController].
+/// The authenticated home: a three-tab shell (ابحث · حجوزاتي · حسابي). Each tab
+/// keeps its own state across switches (an [IndexedStack]); the bookings tab
+/// owns its [MyBookingsController]; the account tab is the shared Settings.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -34,6 +35,10 @@ class _HomeShellState extends State<HomeShell> {
             create: (ctx) => MyBookingsController(api: ctx.read<BookingApi>()),
             child: const MyBookingsScreen(),
           ),
+          SettingsScreen(
+            appVersion: AppConfig.appVersion,
+            onLogout: () => context.read<AuthController>().logout(),
+          ),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -44,6 +49,7 @@ class _HomeShellState extends State<HomeShell> {
         destinations: const [
           NavigationDestination(icon: Icon(AppIcons.search), label: 'ابحث'),
           NavigationDestination(icon: Icon(AppIcons.seat), label: 'حجوزاتي'),
+          NavigationDestination(icon: Icon(AppIcons.user), label: 'حسابي'),
         ],
       ),
     );

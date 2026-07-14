@@ -9,4 +9,7 @@ abstract final class AppConfig {
     'API_BASE_URL',
     defaultValue: 'http://10.0.2.2:3000',
   );
+
+  /// App version shown in Settings → About. Kept in step with `pubspec.yaml`.
+  static const String appVersion = '0.1.0';
 }
