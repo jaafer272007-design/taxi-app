@@ -1,19 +1,29 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rider/auth/auth_controller.dart';
+import 'package:rider/core/token_store.dart';
 import 'package:rider/main.dart';
 import 'package:shared/shared.dart';
 
-/// Compile + smoke check for the rider app shell: it builds, wires the shared
-/// TaxiApp, and shows the placeholder home. (Theme persistence itself is
-/// covered by packages/shared/test/theme_controller_test.dart.)
-void main() {
-  testWidgets('RiderApp builds and shows the placeholder home', (tester) async {
-    final controller =
-        await ThemeController.create(store: InMemoryThemeModeStore());
+import 'support/fakes.dart';
 
-    await tester.pumpWidget(RiderApp(themeController: controller));
+void main() {
+  testWidgets('RiderApp builds and shows the splash before bootstrap resolves',
+      (tester) async {
+    final themeController =
+        await ThemeController.create(store: InMemoryThemeModeStore());
+    final auth =
+        AuthController(api: FakeAuthApi(), tokenStore: InMemoryTokenStore());
+    addTearDown(auth.dispose);
+
+    await tester.pumpWidget(RiderApp(
+      themeController: themeController,
+      authController: auth,
+    ));
     await tester.pump();
 
     expect(find.byType(TaxiApp), findsOneWidget);
-    expect(find.text('تطبيق الراكب'), findsOneWidget);
+    // status starts as unknown → splash spinner (bootstrap not called here).
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
 }
