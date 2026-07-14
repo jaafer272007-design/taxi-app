@@ -6,6 +6,7 @@ import 'package:rider/main.dart';
 import 'package:rider/trip/trip_search_controller.dart';
 import 'package:shared/shared.dart';
 
+import 'support/booking_fakes.dart';
 import 'support/fakes.dart';
 import 'support/trip_fakes.dart';
 
@@ -23,6 +24,7 @@ void main() {
       themeController: themeController,
       authController: auth,
       tripSearchController: trips,
+      bookingApi: FakeBookingApi(),
     ));
     await tester.pump();
 

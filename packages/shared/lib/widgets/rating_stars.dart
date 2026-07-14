@@ -1,11 +1,25 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
-import 'app_icons.dart';
+
+/// The per-star fill fractions for a rating [value] over [count] stars.
+///
+/// Star _i_ (0-based) is filled `1.0` when `value >= i + 1`, `0.0` when
+/// `value <= i`, and the fractional remainder in between. So `4.9` over 5 stars
+/// yields `[1, 1, 1, 1, 0.9]` — four full stars and a nearly-full fifth, never
+/// four empties. Pure and side-effect-free so the fill logic can be unit-tested
+/// directly.
+List<double> ratingStarFills(double value, {int count = 5}) {
+  final v = value.clamp(0.0, count.toDouble());
+  return List<double>.generate(count, (i) => (v - i).clamp(0.0, 1.0).toDouble());
+}
 
 /// Displays a 0–5 star rating. Read-only by default; pass [onRate] to make it
-/// interactive (tap a star to set the value). Fractional values (e.g. 4.5)
-/// render a partially-filled star, direction-aware for RTL.
+/// interactive (tap a star to set the value). Stars are drawn as SOLID shapes,
+/// so a fractional value (e.g. 4.5) renders a partially-filled star — the filled
+/// part grows from the leading (start) edge, so it reads correctly in RTL.
 class RatingStars extends StatelessWidget {
   const RatingStars({
     super.key,
@@ -32,22 +46,23 @@ class RatingStars extends StatelessWidget {
     final space = context.space;
     final active = colors.accent;
     final inactive = colors.borderStrong;
+    final rtl = Directionality.of(context) == TextDirection.rtl;
+    final fills = ratingStarFills(value, count: count);
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: List.generate(count, (i) {
-        // Fill fraction of star i: 1 fully filled, 0 empty, in-between partial.
-        final fill = (value - i).clamp(0.0, 1.0);
-
-        Widget star = Stack(
-          children: [
-            Icon(AppIcons.star, size: size, color: inactive),
-            if (fill > 0)
-              ClipRect(
-                clipper: _FillClipper(fill),
-                child: Icon(AppIcons.star, size: size, color: active),
-              ),
-          ],
+        Widget star = SizedBox(
+          width: size,
+          height: size,
+          child: CustomPaint(
+            painter: _StarPainter(
+              fill: fills[i],
+              active: active,
+              inactive: inactive,
+              rtl: rtl,
+            ),
+          ),
         );
 
         star = Padding(
@@ -70,15 +85,75 @@ class RatingStars extends StatelessWidget {
   }
 }
 
-/// Clips a star to [fraction] of its width from the leading (start) edge.
-class _FillClipper extends CustomClipper<Rect> {
-  const _FillClipper(this.fraction);
-  final double fraction;
+/// Paints one solid five-pointed star: the whole star in [inactive], then the
+/// [fill] fraction re-painted in [active], clipped from the leading edge
+/// ([rtl] flips that edge to the right).
+class _StarPainter extends CustomPainter {
+  const _StarPainter({
+    required this.fill,
+    required this.active,
+    required this.inactive,
+    required this.rtl,
+  });
+
+  final double fill;
+  final Color active;
+  final Color inactive;
+  final bool rtl;
 
   @override
-  Rect getClip(Size size) =>
-      Rect.fromLTWH(0, 0, size.width * fraction, size.height);
+  void paint(Canvas canvas, Size size) {
+    final path = _starPath(size);
+
+    final base = Paint()
+      ..color = inactive
+      ..isAntiAlias = true
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(path, base);
+
+    if (fill <= 0) return;
+
+    canvas.save();
+    final w = size.width * fill.clamp(0.0, 1.0);
+    // The filled portion grows from the start edge: left in LTR, right in RTL.
+    final clip = rtl
+        ? Rect.fromLTWH(size.width - w, 0, w, size.height)
+        : Rect.fromLTWH(0, 0, w, size.height);
+    canvas.clipRect(clip);
+    final fg = Paint()
+      ..color = active
+      ..isAntiAlias = true
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(path, fg);
+    canvas.restore();
+  }
+
+  /// A classic five-pointed star inscribed in [size], starting at the top vertex.
+  Path _starPath(Size size) {
+    const points = 5;
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final outer = math.min(size.width, size.height) / 2;
+    final inner = outer * 0.42; // inner/outer ratio → a standard star silhouette
+    final step = math.pi / points; // angle between successive vertices
+    var angle = -math.pi / 2; // first point at the top
+
+    final path = Path();
+    for (var i = 0; i < points * 2; i++) {
+      final r = i.isEven ? outer : inner;
+      final x = cx + r * math.cos(angle);
+      final y = cy + r * math.sin(angle);
+      i == 0 ? path.moveTo(x, y) : path.lineTo(x, y);
+      angle += step;
+    }
+    path.close();
+    return path;
+  }
 
   @override
-  bool shouldReclip(_FillClipper oldClipper) => oldClipper.fraction != fraction;
+  bool shouldRepaint(_StarPainter old) =>
+      old.fill != fill ||
+      old.active != active ||
+      old.inactive != inactive ||
+      old.rtl != rtl;
 }

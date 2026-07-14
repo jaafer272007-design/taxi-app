@@ -1,20 +1,57 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:shared/shared.dart';
 
+import '../booking/booking_api.dart';
+import '../booking/booking_controller.dart';
+import '../booking/booking_screen.dart';
 import 'trip_format.dart';
 import 'trip_models.dart';
+import 'trip_search_controller.dart';
 
-/// Read-only expanded view of a trip. Booking is the next screen — the
-/// "احجز مقعد" button is a disabled placeholder for now.
+/// Read-only expanded view of a trip. Tapping "احجز مقعد" opens the booking
+/// form (seat count, pickup/dropoff, confirm).
 class TripDetailsScreen extends StatelessWidget {
   const TripDetailsScreen({super.key, required this.trip});
 
   final TripSummary trip;
 
+  /// Resolve the trip's corridor (for endpoint city names) from the already-
+  /// loaded corridors; null when unavailable (booking falls back to generic
+  /// field labels).
+  Corridor? _corridor(BuildContext context) {
+    try {
+      final corridors = context.read<TripSearchController>().corridors;
+      for (final c in corridors) {
+        if (c.id == trip.corridorId) return c;
+      }
+    } catch (_) {
+      // No search controller in scope (e.g. isolated preview) — generic labels.
+    }
+    return null;
+  }
+
+  void _openBooking(BuildContext context) {
+    final api = context.read<BookingApi>();
+    final corridor = _corridor(context);
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ChangeNotifierProvider<BookingController>(
+          create: (_) => BookingController(
+            api: api,
+            trip: trip,
+            originCity: corridor?.originCity,
+            destCity: corridor?.destCity,
+          ),
+          child: const BookingScreen(),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final space = context.space;
-    final colors = context.colors;
     final name = (trip.driverName?.trim().isNotEmpty ?? false)
         ? trip.driverName!.trim()
         : 'سائق';
@@ -22,16 +59,10 @@ class TripDetailsScreen extends StatelessWidget {
     return AppScaffold(
       title: 'تفاصيل الرحلة',
       scrollable: true,
-      bottomBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'الحجز غير متاح بعد',
-            style: context.text.caption.copyWith(color: colors.textMuted),
-          ),
-          SizedBox(height: space.sm),
-          const AppButton(label: 'احجز مقعد', onPressed: null),
-        ],
+      bottomBar: AppButton(
+        label: 'احجز مقعد',
+        icon: AppIcons.seat,
+        onPressed: () => _openBooking(context),
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

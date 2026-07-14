@@ -6,10 +6,11 @@ import 'auth/auth_api.dart';
 import 'auth/auth_controller.dart';
 import 'auth/onboarding_flow.dart';
 import 'auth/splash_screen.dart';
+import 'booking/booking_api.dart';
 import 'config/app_config.dart';
 import 'core/api_client.dart';
 import 'core/token_store.dart';
-import 'trip/search_screen.dart';
+import 'home/home_shell.dart';
 import 'trip/trip_api.dart';
 import 'trip/trip_search_controller.dart';
 
@@ -28,6 +29,7 @@ Future<void> main() async {
   );
   final tripSearchController =
       TripSearchController(api: DioTripApi(apiClient.dio));
+  final bookingApi = DioBookingApi(apiClient.dio);
 
   // Restore any existing session; the UI shows a splash until this resolves.
   authController.bootstrap();
@@ -36,6 +38,7 @@ Future<void> main() async {
     themeController: themeController,
     authController: authController,
     tripSearchController: tripSearchController,
+    bookingApi: bookingApi,
   ));
 }
 
@@ -47,11 +50,13 @@ class RiderApp extends StatelessWidget {
     required this.themeController,
     required this.authController,
     required this.tripSearchController,
+    required this.bookingApi,
   });
 
   final ThemeController themeController;
   final AuthController authController;
   final TripSearchController tripSearchController;
+  final BookingApi bookingApi;
 
   @override
   Widget build(BuildContext context) {
@@ -61,6 +66,7 @@ class RiderApp extends StatelessWidget {
         ChangeNotifierProvider<TripSearchController>.value(
           value: tripSearchController,
         ),
+        Provider<BookingApi>.value(value: bookingApi),
       ],
       child: TaxiApp(
         title: 'تكسي مشترك — الراكب',
@@ -81,7 +87,7 @@ class _RiderRouter extends StatelessWidget {
     return switch (status) {
       AuthStatus.unknown => const SplashScreen(),
       AuthStatus.onboarding => const OnboardingFlow(),
-      AuthStatus.authenticated => const SearchScreen(),
+      AuthStatus.authenticated => const HomeShell(),
     };
   }
 }
