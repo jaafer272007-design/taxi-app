@@ -17,6 +17,8 @@ abstract final class AppIcons {
   static const IconData check = LucideIcons.check;
   static const IconData chevronLeft = LucideIcons.chevronLeft;
   static const IconData chevronRight = LucideIcons.chevronRight;
+  static const IconData plus = LucideIcons.plus;
+  static const IconData minus = LucideIcons.minus;
 
   // Domain
   static const IconData car = LucideIcons.car;
