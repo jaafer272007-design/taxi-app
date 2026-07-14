@@ -19,7 +19,7 @@ class ResultsScreen extends StatelessWidget {
     final corridor = c.corridor;
     final title = corridor == null
         ? 'الرحلات المتاحة'
-        : '${cityAr(corridor.originCity)} ← ${cityAr(corridor.destCity)}';
+        : '${cityAr(corridor.originCity)} إلى ${cityAr(corridor.destCity)}';
 
     return AppScaffold(
       title: title,
