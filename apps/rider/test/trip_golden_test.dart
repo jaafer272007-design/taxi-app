@@ -34,7 +34,6 @@ void main() {
       await _golden(t,
           name: 'search_light',
           brightness: Brightness.light,
-          height: 880,
           controller: await _searchController(),
           child: const SearchScreen());
     });
@@ -42,7 +41,6 @@ void main() {
       await _golden(t,
           name: 'search_dark',
           brightness: Brightness.dark,
-          height: 880,
           controller: await _searchController(),
           child: const SearchScreen());
     });
@@ -53,7 +51,6 @@ void main() {
       await _golden(t,
           name: 'results_light',
           brightness: Brightness.light,
-          height: 1240,
           controller: await _resultsController(),
           child: const ResultsScreen());
     });
@@ -61,7 +58,6 @@ void main() {
       await _golden(t,
           name: 'results_dark',
           brightness: Brightness.dark,
-          height: 1240,
           controller: await _resultsController(),
           child: const ResultsScreen());
     });
@@ -72,7 +68,6 @@ void main() {
       await _golden(t,
           name: 'empty_light',
           brightness: Brightness.light,
-          height: 760,
           controller: await _emptyController(),
           child: const ResultsScreen());
     });
@@ -80,7 +75,6 @@ void main() {
       await _golden(t,
           name: 'empty_dark',
           brightness: Brightness.dark,
-          height: 760,
           controller: await _emptyController(),
           child: const ResultsScreen());
     });
@@ -91,14 +85,12 @@ void main() {
       await _golden(t,
           name: 'details_light',
           brightness: Brightness.light,
-          height: 980,
           child: TripDetailsScreen(trip: tripFixture()));
     });
     testWidgets('dark', (t) async {
       await _golden(t,
           name: 'details_dark',
           brightness: Brightness.dark,
-          height: 980,
           child: TripDetailsScreen(trip: tripFixture()));
     });
   });
@@ -149,10 +141,12 @@ Future<void> _golden(
   required String name,
   required Brightness brightness,
   required Widget child,
-  required double height,
   TripSearchController? controller,
 }) async {
-  const width = 400.0;
+  // Render at a real phone size (logical 390×844) so screens render at true
+  // proportions with the bottom button pinned at its natural size/position.
+  const width = 390.0;
+  const height = 844.0;
   const dpr = 2.0;
   tester.view.physicalSize = Size(width * dpr, height * dpr);
   tester.view.devicePixelRatio = dpr;
