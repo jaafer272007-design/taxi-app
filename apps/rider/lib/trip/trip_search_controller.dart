@@ -118,11 +118,15 @@ class TripSearchController extends ChangeNotifier {
         to = DateTime(day.year, day.month, day.day, _toTime!.hour, _toTime!.minute);
       }
 
-      final results = await _api.searchTrips(
-        corridorId: corridor.id,
-        date: day,
-        fromTime: from,
-        toTime: to,
+      // Copy before sorting — never mutate the list the API handed us (it may
+      // be unmodifiable).
+      final results = List<TripSummary>.of(
+        await _api.searchTrips(
+          corridorId: corridor.id,
+          date: day,
+          fromTime: from,
+          toTime: to,
+        ),
       );
       results.sort((a, b) => a.departureTime.compareTo(b.departureTime));
 
