@@ -6,10 +6,11 @@ import '../trip/trip_format.dart';
 import 'booking_confirmation_screen.dart';
 import 'booking_controller.dart';
 import 'booking_error.dart';
+import 'booking_models.dart';
 
-/// Reserve-a-seat form: seat count + live fare, door-to-door pickup/dropoff, a
-/// cash note, and a confirm button. Reads/writes a [BookingController] provided
-/// by the route that opened this screen.
+/// Reserve-a-seat form: seat count + live fare, door-to-door pickup/dropoff
+/// (chosen on a map), a cash note, and a confirm button. Reads/writes a
+/// [BookingController] provided by the route that opened this screen.
 class BookingScreen extends StatefulWidget {
   const BookingScreen({super.key});
 
@@ -18,22 +19,40 @@ class BookingScreen extends StatefulWidget {
 }
 
 class _BookingScreenState extends State<BookingScreen> {
-  late final TextEditingController _pickupCtrl;
-  late final TextEditingController _dropoffCtrl;
-
-  @override
-  void initState() {
-    super.initState();
+  /// Open the map picker for the pickup or dropoff point, defaulting to the
+  /// corridor city centre, and store the chosen point on the controller.
+  Future<void> _pickPoint({required bool isPickup}) async {
     final c = context.read<BookingController>();
-    _pickupCtrl = TextEditingController(text: c.pickup.label);
-    _dropoffCtrl = TextEditingController(text: c.dropoff.label);
-  }
+    final locationService = context.read<LocationService>();
+    final geocoder = context.read<ReverseGeocoder>();
 
-  @override
-  void dispose() {
-    _pickupCtrl.dispose();
-    _dropoffCtrl.dispose();
-    super.dispose();
+    final city = isPickup ? c.originCity : c.destCity;
+    final cityName = city == null ? null : cityAr(city);
+    final current = isPickup ? c.pickup : c.dropoff;
+    final isSet = isPickup ? c.pickupSet : c.dropoffSet;
+
+    final result = await showMapPicker(
+      context,
+      initialCenter: LocationPoint(
+        lat: current.lat,
+        lng: current.lng,
+        label: isSet ? current.label : '',
+      ),
+      locationService: locationService,
+      reverseGeocoder: geocoder,
+      title: isPickup ? 'نقطة الانطلاق' : 'نقطة النزول',
+      fallbackLabel:
+          cityName == null ? 'النقطة المحددة' : '$cityName - النقطة المحددة',
+    );
+    if (result == null || !mounted) return;
+
+    final point =
+        GeoPoint(lat: result.lat, lng: result.lng, label: result.label);
+    if (isPickup) {
+      c.setPickupPoint(point);
+    } else {
+      c.setDropoffPoint(point);
+    }
   }
 
   Future<void> _confirm() async {
@@ -84,22 +103,18 @@ class _BookingScreenState extends State<BookingScreen> {
           SizedBox(height: space.lg),
           _FareRow(fare: c.fare),
           SizedBox(height: space.xl),
-          AppTextField(
-            label: _pointLabel('نقطة الانطلاق', c.originCity),
-            hint: 'مثال: حي السلام، قرب الجامع',
-            prefixIcon: AppIcons.mapPin,
-            controller: _pickupCtrl,
-            textInputAction: TextInputAction.next,
-            onChanged: c.setPickupLabel,
+          _PointEntry(
+            title: _pointLabel('نقطة الانطلاق', c.originCity),
+            point: c.pickup,
+            isSet: c.pickupSet,
+            onTap: () => _pickPoint(isPickup: true),
           ),
           SizedBox(height: space.lg),
-          AppTextField(
-            label: _pointLabel('نقطة النزول', c.destCity),
-            hint: 'مثال: قرب المستشفى التعليمي',
-            prefixIcon: AppIcons.mapPin,
-            controller: _dropoffCtrl,
-            textInputAction: TextInputAction.done,
-            onChanged: c.setDropoffLabel,
+          _PointEntry(
+            title: _pointLabel('نقطة النزول', c.destCity),
+            point: c.dropoff,
+            isSet: c.dropoffSet,
+            onTap: () => _pickPoint(isPickup: false),
           ),
           SizedBox(height: space.lg),
           const _CashNote(),
@@ -298,6 +313,61 @@ class _FareRow extends StatelessWidget {
               style: context.text.h2.tabular.copyWith(color: colors.primary)),
         ],
       ),
+    );
+  }
+}
+
+/// A tappable pickup/dropoff row: shows the chosen label (or a prompt) and opens
+/// the map picker. Coordinates come from the map, not typed text.
+class _PointEntry extends StatelessWidget {
+  const _PointEntry({
+    required this.title,
+    required this.point,
+    required this.isSet,
+    required this.onTap,
+  });
+
+  final String title;
+  final GeoPoint point;
+  final bool isSet;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final space = context.space;
+    final hasLabel = isSet && point.label.trim().isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title,
+            style: context.text.label.copyWith(color: colors.textSecondary)),
+        SizedBox(height: space.sm),
+        AppCard(
+          onTap: onTap,
+          child: Row(
+            children: [
+              Icon(AppIcons.mapPin,
+                  size: space.xl,
+                  color: isSet ? colors.primary : colors.textMuted),
+              SizedBox(width: space.md),
+              Expanded(
+                child: Text(
+                  hasLabel ? point.label.trim() : 'حدّد النقطة على الخريطة',
+                  style: hasLabel
+                      ? context.text.bodyStrong
+                          .copyWith(color: colors.textPrimary)
+                      : context.text.body.copyWith(color: colors.textMuted),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              SizedBox(width: space.sm),
+              Icon(AppIcons.chevronLeft, size: space.lg, color: colors.textMuted),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

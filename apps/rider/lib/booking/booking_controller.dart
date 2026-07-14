@@ -34,6 +34,8 @@ class BookingController extends ChangeNotifier {
   int _seatCount = 1;
   GeoPoint _pickup;
   GeoPoint _dropoff;
+  bool _pickupSet = false;
+  bool _dropoffSet = false;
   bool _submitting = false;
   BookingError? _error;
   Booking? _result;
@@ -41,6 +43,11 @@ class BookingController extends ChangeNotifier {
   int get seatCount => _seatCount;
   GeoPoint get pickup => _pickup;
   GeoPoint get dropoff => _dropoff;
+
+  /// Whether the rider has explicitly chosen each point on the map. Both are
+  /// required before the booking can be submitted.
+  bool get pickupSet => _pickupSet;
+  bool get dropoffSet => _dropoffSet;
   bool get submitting => _submitting;
   BookingError? get error => _error;
   Booking? get result => _result;
@@ -54,11 +61,8 @@ class BookingController extends ChangeNotifier {
   bool get canDecrement => _seatCount > 1;
   bool get canIncrement => _seatCount < maxSeats;
 
-  /// Ready to submit: labels filled and a booking not already in flight.
-  bool get canSubmit =>
-      !_submitting &&
-      _pickup.label.trim().isNotEmpty &&
-      _dropoff.label.trim().isNotEmpty;
+  /// Ready to submit: both points chosen on the map and no booking in flight.
+  bool get canSubmit => !_submitting && _pickupSet && _dropoffSet;
 
   void setSeatCount(int value) {
     // `maxSeats` is >= 1 for any bookable trip; guard the upper bound anyway so
@@ -73,15 +77,18 @@ class BookingController extends ChangeNotifier {
   void incrementSeat() => setSeatCount(_seatCount + 1);
   void decrementSeat() => setSeatCount(_seatCount - 1);
 
-  void setPickupLabel(String label) {
-    _pickup = _pickup.copyWith(label: label);
-    // Clear a stale "fill the fields" state as the rider types.
+  /// The rider picked the pickup point on the map (coords + label).
+  void setPickupPoint(GeoPoint point) {
+    _pickup = point;
+    _pickupSet = true;
     if (_error?.kind == BookingErrorKind.invalid) _error = null;
     notifyListeners();
   }
 
-  void setDropoffLabel(String label) {
-    _dropoff = _dropoff.copyWith(label: label);
+  /// The rider picked the dropoff point on the map (coords + label).
+  void setDropoffPoint(GeoPoint point) {
+    _dropoff = point;
+    _dropoffSet = true;
     if (_error?.kind == BookingErrorKind.invalid) _error = null;
     notifyListeners();
   }

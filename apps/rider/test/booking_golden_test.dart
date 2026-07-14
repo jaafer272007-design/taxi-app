@@ -97,8 +97,10 @@ Widget _bookingForm() {
     originCity: 'Najaf',
     destCity: 'Karbala',
   )
-    ..setPickupLabel('حي السلام، قرب الجامع')
-    ..setDropoffLabel('قرب المستشفى التعليمي')
+    ..setPickupPoint(const GeoPoint(
+        lat: 31.99, lng: 44.31, label: 'حي السلام، قرب الجامع'))
+    ..setDropoffPoint(const GeoPoint(
+        lat: 32.61, lng: 44.02, label: 'قرب المستشفى التعليمي'))
     ..setSeatCount(2);
   return ChangeNotifierProvider<BookingController>.value(
     value: c,
@@ -115,8 +117,9 @@ Future<Widget> _bookingErrorForm() async {
     originCity: 'Najaf',
     destCity: 'Karbala',
   )
-    ..setPickupLabel('حي السلام')
-    ..setDropoffLabel('قرب المستشفى');
+    ..setPickupPoint(const GeoPoint(lat: 31.99, lng: 44.31, label: 'حي السلام'))
+    ..setDropoffPoint(
+        const GeoPoint(lat: 32.61, lng: 44.02, label: 'قرب المستشفى'));
   await c.submit(); // → seatGone error state
   return ChangeNotifierProvider<BookingController>.value(
     value: c,

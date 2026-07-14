@@ -31,6 +31,15 @@ export 'widgets/otp_input.dart';
 // Shared screens (reused across apps).
 export 'settings/settings_screen.dart';
 
+// Map location picker. flutter_map/latlong2 live ONLY inside app_map_picker.dart
+// and geolocator ONLY inside geolocator_location_service.dart, so the map/GPS
+// providers stay swappable — the rest of the app depends on these types only.
+export 'map/location_point.dart';
+export 'map/location_service.dart';
+export 'map/geolocator_location_service.dart';
+export 'map/reverse_geocoder.dart';
+export 'map/app_map_picker.dart';
+
 // Networking layer (base URL + JWT interceptor + Arabic error mapping) and the
 // Iraqi-phone helper — shared by the rider & driver apps.
 export 'net/api_exception.dart';

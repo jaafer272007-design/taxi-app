@@ -29,6 +29,14 @@ dependencies:
   dio: ^5.7.0
   # Secure JWT storage (Keychain / Keystore) for the shared TokenStore.
   flutter_secure_storage: ^10.0.0
+  # Map picker (free OpenStreetMap tiles). Kept behind AppMapPicker — flutter_map
+  # + latlong2 are imported ONLY in lib/map/app_map_picker.dart, so swapping the
+  # map provider (e.g. to Google) is a change to that one file.
+  flutter_map: ^8.1.1
+  latlong2: ^0.9.1
+  # Device location for "use my location". Imported ONLY in
+  # lib/map/geolocator_location_service.dart, behind the LocationService interface.
+  geolocator: ^14.0.0
 
 dev_dependencies:
   flutter_test:

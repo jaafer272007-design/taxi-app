@@ -3,10 +3,14 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rider/booking/booking_controller.dart';
 import 'package:rider/booking/booking_error.dart';
+import 'package:rider/booking/booking_models.dart';
 
 import 'support/booking_fakes.dart';
 import 'support/trip_fakes.dart';
 import 'package:shared/shared.dart';
+
+/// A picked point (coords are the Najaf centre; only the label varies in tests).
+GeoPoint _geo(String label) => GeoPoint(lat: 31.999, lng: 44.315, label: label);
 
 BookingController _controller(
   FakeBookingApi api, {
@@ -51,20 +55,21 @@ void main() {
       expect(c.seatCount, 4);
     });
 
-    test('canSubmit requires both pickup and dropoff labels', () {
+    test('canSubmit requires both pickup and dropoff points', () {
       final c = _controller(FakeBookingApi());
       expect(c.canSubmit, isFalse);
-      c.setPickupLabel('حي السلام');
-      expect(c.canSubmit, isFalse);
-      c.setDropoffLabel('قرب المستشفى');
+      c.setPickupPoint(_geo('حي السلام'));
+      expect(c.pickupSet, isTrue);
+      expect(c.canSubmit, isFalse); // dropoff still unset
+      c.setDropoffPoint(_geo('قرب المستشفى'));
       expect(c.canSubmit, isTrue);
     });
 
     test('submit posts the booking and stores the result', () async {
       final api = FakeBookingApi();
       final c = _controller(api)
-        ..setPickupLabel('حي السلام')
-        ..setDropoffLabel('قرب المستشفى')
+        ..setPickupPoint(_geo('حي السلام'))
+        ..setDropoffPoint(_geo('قرب المستشفى'))
         ..setSeatCount(2);
 
       final ok = await c.submit();
@@ -81,8 +86,8 @@ void main() {
       final gate = Completer<void>();
       final api = FakeBookingApi()..createGate = gate;
       final c = _controller(api)
-        ..setPickupLabel('حي السلام')
-        ..setDropoffLabel('قرب المستشفى');
+        ..setPickupPoint(_geo('حي السلام'))
+        ..setDropoffPoint(_geo('قرب المستشفى'));
 
       final first = c.submit(); // reaches the awaited create and parks there
       expect(c.submitting, isTrue);
@@ -99,8 +104,8 @@ void main() {
       final api = FakeBookingApi()
         ..createError = const ApiException('لم يعد المقعد متاحاً.', statusCode: 409);
       final c = _controller(api, seatsAvailable: 1)
-        ..setPickupLabel('حي السلام')
-        ..setDropoffLabel('قرب المستشفى');
+        ..setPickupPoint(_geo('حي السلام'))
+        ..setDropoffPoint(_geo('قرب المستشفى'));
 
       final ok = await c.submit();
 
