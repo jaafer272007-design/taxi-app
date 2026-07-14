@@ -1,4 +1,4 @@
-/// Pure formatting helpers for trip data (no design values here).
+// Pure formatting helpers for trip data (no design values here).
 
 /// Iraq is UTC+3 year-round (no DST); show departure in Baghdad wall-clock.
 const Duration _baghdadOffset = Duration(hours: 3);
