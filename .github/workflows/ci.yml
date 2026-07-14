@@ -117,8 +117,16 @@ jobs:
         working-directory: apps/rider
         run: flutter pub get
 
+      - name: Install dependencies (driver)
+        working-directory: apps/driver
+        run: flutter pub get
+
       - name: Analyze rider
         working-directory: apps/rider
+        run: flutter analyze
+
+      - name: Analyze driver
+        working-directory: apps/driver
         run: flutter analyze
 
       - name: Decide golden mode
@@ -129,6 +137,7 @@ jobs:
           # forces regeneration (use it to bless an intended UI change).
           if ls packages/shared/test/goldens/*.png >/dev/null 2>&1 \
              && ls apps/rider/test/goldens/*.png >/dev/null 2>&1 \
+             && ls apps/driver/test/goldens/*.png >/dev/null 2>&1 \
              && ! git log -1 --pretty=%B | grep -qF '[update-goldens]'; then
             echo "update=false" >> "$GITHUB_OUTPUT"
             echo "All baselines present -> comparison (visual regression guard)."
@@ -157,19 +166,30 @@ jobs:
         working-directory: apps/rider
         run: flutter test --update-goldens
 
+      - name: Test — driver (compare goldens)
+        if: steps.mode.outputs.update == 'false'
+        working-directory: apps/driver
+        run: flutter test
+
+      - name: Test — driver (generate goldens)
+        if: steps.mode.outputs.update == 'true'
+        working-directory: apps/driver
+        run: flutter test --update-goldens
+
       - name: Mirror screenshots into docs/ui-screenshots (for inline PR viewing)
         if: steps.mode.outputs.update == 'true'
         run: |
           mkdir -p docs/ui-screenshots
           cp packages/shared/test/goldens/*.png docs/ui-screenshots/
           cp apps/rider/test/goldens/*.png docs/ui-screenshots/
+          cp apps/driver/test/goldens/*.png docs/ui-screenshots/
 
       - name: Commit screenshots back to the PR branch
         if: steps.mode.outputs.update == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add packages/shared/test/goldens apps/rider/test/goldens docs/ui-screenshots
+          git add packages/shared/test/goldens apps/rider/test/goldens apps/driver/test/goldens docs/ui-screenshots
           if git diff --cached --quiet; then
             echo "No screenshot changes to commit."
           else
@@ -189,4 +209,6 @@ jobs:
             packages/shared/test/failures/**
             apps/rider/test/goldens/**
             apps/rider/test/failures/**
+            apps/driver/test/goldens/**
+            apps/driver/test/failures/**
           if-no-files-found: warn

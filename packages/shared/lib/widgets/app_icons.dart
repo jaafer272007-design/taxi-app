@@ -34,6 +34,9 @@ abstract final class AppIcons {
   static const IconData wallet = LucideIcons.wallet;
   static const IconData cash = LucideIcons.banknote;
   static const IconData star = LucideIcons.star;
+  static const IconData document = LucideIcons.fileText;
+  static const IconData upload = LucideIcons.upload;
+  static const IconData plusCircle = LucideIcons.plusCircle;
 
   // Status / feedback
   static const IconData success = LucideIcons.checkCircle2;

@@ -2,9 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared/shared.dart';
 
-import '../widgets/onboarding_header.dart';
-import '../widgets/otp_input.dart';
-import 'auth_controller.dart';
 
 /// Step 2 — OTP verification.
 class OtpScreen extends StatefulWidget {

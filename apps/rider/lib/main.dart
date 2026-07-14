@@ -2,14 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared/shared.dart';
 
-import 'auth/auth_api.dart';
-import 'auth/auth_controller.dart';
 import 'auth/onboarding_flow.dart';
 import 'auth/splash_screen.dart';
 import 'booking/booking_api.dart';
 import 'config/app_config.dart';
-import 'core/api_client.dart';
-import 'core/token_store.dart';
 import 'home/home_shell.dart';
 import 'trip/trip_api.dart';
 import 'trip/trip_search_controller.dart';

@@ -1,7 +1,7 @@
 import 'package:dio/dio.dart';
 
-import '../core/api_client.dart';
 import 'trip_models.dart';
+import 'package:shared/shared.dart';
 
 /// Corridor + trip-search endpoints. Abstracted so the controller can be tested
 /// against a fake.

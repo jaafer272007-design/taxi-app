@@ -3,9 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared/shared.dart';
 
-import '../core/iraqi_phone.dart';
-import '../widgets/onboarding_header.dart';
-import 'auth_controller.dart';
 
 /// Step 1 — phone entry.
 class PhoneScreen extends StatefulWidget {

@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
 
-import '../core/api_exception.dart';
 import 'booking_api.dart';
 import 'booking_models.dart';
+import 'package:shared/shared.dart';
 
 enum MyBookingsStatus { loading, error, loaded }
 

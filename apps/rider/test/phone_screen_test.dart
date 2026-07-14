@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rider/auth/auth_controller.dart';
 import 'package:rider/auth/phone_screen.dart';
-import 'package:rider/core/token_store.dart';
 
 import 'support/fakes.dart';
+import 'package:shared/shared.dart';
 
 void main() {
   testWidgets('invalid phone shows an Arabic error and does not call the API',

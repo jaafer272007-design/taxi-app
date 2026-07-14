@@ -1,0 +1,37 @@
+name: driver
+description: Taxi app — driver app (post trips). Android, Arabic RTL.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ">=3.6.0 <4.0.0"
+  flutter: ">=3.27.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Design system + theme-mode plumbing + shared auth/net (ThemeController,
+  # TaxiApp, AuthController, ApiClient, IraqiPhone). Nothing visual/behavioural
+  # is duplicated — it lives in the shared package.
+  shared:
+    path: ../../packages/shared
+  # State management standard (see CLAUDE.md).
+  provider: ^6.1.0
+  # HTTP client for the API (with a JWT interceptor via the shared ApiClient).
+  dio: ^5.7.0
+  # Secure JWT storage (Keychain / Keystore) — shared SecureTokenStore.
+  flutter_secure_storage: ^10.0.0
+  # Pick document images for driver verification (abstracted behind
+  # DocumentPicker so controllers/tests don't touch the plugin directly).
+  image_picker: ^1.1.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  # Golden tests load the real Cairo font (bundled in the shared package) the
+  # same way the shared + rider goldens do.
+  google_fonts: ^6.2.1
+
+flutter:
+  uses-material-design: true

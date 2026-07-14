@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../core/api_exception.dart';
 import 'trip_api.dart';
 import 'trip_models.dart';
+import 'package:shared/shared.dart';
 
 enum TripSearchStatus { initial, loading, results, empty, error }
 

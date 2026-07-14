@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'auth_controller.dart';
 import 'name_screen.dart';
 import 'otp_screen.dart';
 import 'phone_screen.dart';
+import 'package:shared/shared.dart';
 
 /// Shows the current onboarding screen based on the controller's step, with a
 /// gentle cross-fade between steps.
