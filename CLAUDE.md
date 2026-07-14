@@ -60,6 +60,24 @@ consumed via context (e.g. context.colors.primary).
   `final c = await ThemeController.create(); runApp(TaxiApp(themeController: c, home: ...));`
   **rider is wired first.**
 
+### UI changes — golden screenshots (STANDING RULE, applies automatically)
+For **every PR that adds or changes any Flutter screen or UI widget** — do this
+without being asked:
+- **Add/update golden tests** that render the new/changed screens (or their
+  reusable galleries) in **BOTH light and dark**, **RTL**, **Arabic**, with the
+  **Cairo font loaded** (see `packages/shared/test/golden_test.dart` for the font
+  bootstrap; regenerate with a `[update-goldens]` commit — CI generates the PNGs).
+- **Commit the generated PNGs into `docs/ui-screenshots/`** AND **embed them
+  inline in the PR description** (markdown images), grouped **by screen** and by
+  **light/dark**, so they can be reviewed on a phone with **no download and no
+  local run**.
+- The CI **`ui-goldens`** job must **upload these images as an artifact on every
+  run** (even on success). Keep that behavior in `.github/workflows/ci.yml`.
+- In the PR description, **state what is verified vs. not**: which behaviors are
+  covered by golden / widget / unit tests, and which still need a **live device
+  run** (e.g. real API round-trips, secure storage, push) — so we always know
+  what is visually verified vs. behaviorally unverified.
+
 ## State management
 - **Standard: `ChangeNotifier` + `provider`.** Lightweight, a natural extension
   of the controllers already in place, right-sized for this app.
