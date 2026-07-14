@@ -22,9 +22,14 @@ export 'widgets/app_text_field.dart';
 export 'widgets/app_badge.dart';
 export 'widgets/app_avatar.dart';
 export 'widgets/app_scaffold.dart';
+export 'widgets/app_segmented_control.dart';
+export 'widgets/app_confirm_dialog.dart';
 export 'widgets/rating_stars.dart';
 export 'widgets/onboarding_header.dart';
 export 'widgets/otp_input.dart';
+
+// Shared screens (reused across apps).
+export 'settings/settings_screen.dart';
 
 // Networking layer (base URL + JWT interceptor + Arabic error mapping) and the
 // Iraqi-phone helper — shared by the rider & driver apps.

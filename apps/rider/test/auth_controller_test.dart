@@ -130,4 +130,52 @@ void main() {
     expect(c.step, OnboardingStep.phone);
     expect(c.error, isNull);
   });
+
+  group('logout', () {
+    test('clears the JWT and returns to onboarding at phone step', () async {
+      store = InMemoryTokenStore('jwt');
+      api.meResult = fakeUser(name: 'علي');
+      final c = make();
+      await c.bootstrap();
+      expect(c.status, AuthStatus.authenticated);
+
+      await c.logout();
+
+      expect(await store.read(), isNull);
+      expect(c.status, AuthStatus.onboarding);
+      expect(c.step, OnboardingStep.phone);
+      expect(c.user, isNull);
+    });
+  });
+
+  group('editName (settings)', () {
+    test('updates the user via PATCH /auth/me and stays authenticated',
+        () async {
+      store = InMemoryTokenStore('jwt');
+      api.meResult = fakeUser(name: 'علي');
+      final c = make();
+      await c.bootstrap();
+
+      final err = await c.editName('علي حسن');
+
+      expect(err, isNull);
+      expect(api.lastName, 'علي حسن');
+      expect(c.user?.name, 'علي حسن');
+      expect(c.status, AuthStatus.authenticated);
+    });
+
+    test('returns the Arabic error and keeps the old name on failure', () async {
+      store = InMemoryTokenStore('jwt');
+      api.meResult = fakeUser(name: 'علي');
+      final c = make();
+      await c.bootstrap();
+      api.updateNameError = const ApiException('تعذّر الحفظ.', statusCode: 400);
+
+      final err = await c.editName('اسم جديد');
+
+      expect(err, 'تعذّر الحفظ.');
+      expect(c.user?.name, 'علي'); // unchanged
+      expect(c.status, AuthStatus.authenticated);
+    });
+  });
 }

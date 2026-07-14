@@ -115,6 +115,37 @@ class AuthController extends ChangeNotifier {
     });
   }
 
+  /// Settings → change the signed-in user's display name (PATCH /auth/me).
+  /// Returns `null` on success or a ready-to-show Arabic error. Leaves the
+  /// session status untouched (unlike onboarding's [submitName]) and manages no
+  /// global busy/error state, so the settings dialog owns its own inline state.
+  Future<String?> editName(String name) async {
+    try {
+      _user = await _api.updateName(name);
+      notifyListeners();
+      return null;
+    } on ApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'تعذّر تحديث الاسم. حاول مرة أخرى.';
+    }
+  }
+
+  /// Sign out: clear the stored JWT and return to onboarding (phone step). Each
+  /// app's root router reacts to the status change and shows its own login flow;
+  /// a relaunch finds no token and starts onboarding fresh.
+  Future<void> logout() async {
+    await _tokenStore.clear();
+    _stopResendTimer();
+    _resendSeconds = 0;
+    _user = null;
+    _phone = '';
+    _error = null;
+    _step = OnboardingStep.phone;
+    _status = AuthStatus.onboarding;
+    notifyListeners();
+  }
+
   /// "تغيير الرقم" — back to phone entry.
   void changePhone() {
     _stopResendTimer();

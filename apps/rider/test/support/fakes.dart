@@ -16,6 +16,7 @@ class FakeAuthApi implements AuthApi {
 
   String? lastName;
   AuthUser? updateNameResult;
+  ApiException? updateNameError;
 
   @override
   Future<void> requestOtp(String phone) async {
@@ -39,6 +40,7 @@ class FakeAuthApi implements AuthApi {
   @override
   Future<AuthUser> updateName(String name) async {
     lastName = name;
+    if (updateNameError != null) throw updateNameError!;
     return updateNameResult ?? fakeUser(name: name);
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared/shared.dart';
 
+import '../config/app_config.dart';
 import '../earnings/earnings_controller.dart';
 import '../earnings/earnings_screen.dart';
 import '../trip/driver_trip_api.dart';
@@ -10,9 +11,9 @@ import '../trip/my_trips_screen.dart';
 import '../trip/post_trip_controller.dart';
 import '../trip/post_trip_screen.dart';
 
-/// The APPROVED driver's home: a three-tab shell (انشر رحلة · رحلاتي · أرباحي).
-/// Owns the post-trip, my-trips and earnings controllers; seat count is capped
-/// at [vehicleSeats].
+/// The APPROVED driver's home: a four-tab shell (انشر رحلة · رحلاتي · أرباحي ·
+/// حسابي). Owns the post-trip, my-trips and earnings controllers; the account
+/// tab is the shared Settings. Seat count is capped at [vehicleSeats].
 class DriverHomeShell extends StatefulWidget {
   const DriverHomeShell({super.key, required this.vehicleSeats});
 
@@ -52,6 +53,10 @@ class _DriverHomeShellState extends State<DriverHomeShell> {
             PostTripScreen(onPosted: () => setState(() => _index = 1)),
             const MyTripsScreen(),
             const EarningsScreen(),
+            SettingsScreen(
+              appVersion: AppConfig.appVersion,
+              onLogout: () => context.read<AuthController>().logout(),
+            ),
           ],
         ),
         bottomNavigationBar: NavigationBar(
@@ -63,6 +68,7 @@ class _DriverHomeShellState extends State<DriverHomeShell> {
             NavigationDestination(icon: Icon(AppIcons.plusCircle), label: 'انشر رحلة'),
             NavigationDestination(icon: Icon(AppIcons.route), label: 'رحلاتي'),
             NavigationDestination(icon: Icon(AppIcons.wallet), label: 'أرباحي'),
+            NavigationDestination(icon: Icon(AppIcons.user), label: 'حسابي'),
           ],
         ),
       ),
