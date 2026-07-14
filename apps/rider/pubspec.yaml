@@ -25,6 +25,9 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  # Golden tests load the real Cairo font (bundled in the shared package) the
+  # same way the shared design-system goldens do.
+  google_fonts: ^6.2.1
 
 flutter:
   uses-material-design: true

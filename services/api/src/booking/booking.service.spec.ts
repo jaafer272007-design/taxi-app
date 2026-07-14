@@ -266,3 +266,114 @@ describe('BookingService driver transitions (onboard / no-show)', () => {
     await expect(service.onboard('u1', 'bk1')).rejects.toBeInstanceOf(NotFoundException);
   });
 });
+
+describe('BookingService.search', () => {
+  const notifications: any = { send: jest.fn() };
+  function makeService(prisma: any): BookingService {
+    return new BookingService(prisma as PrismaService, {} as DriverService, notifications);
+  }
+
+  it('enriches OPEN future trips with driverName, rating, vehicle and seatsTotal', async () => {
+    const departureTime = new Date(Date.now() + 3_600_000);
+    const prisma = {
+      trip: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 't1',
+            corridorId: 'c1',
+            driverId: 'd1',
+            vehicleId: 'v1',
+            departureTime,
+            pricePerSeat: 6000,
+            seatsAvailable: 1,
+            seatsTotal: 4,
+          },
+        ]),
+      },
+      driverProfile: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'd1', ratingAvg: 4.5, user: { name: 'علي حسن' } },
+        ]),
+      },
+      vehicle: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'v1', make: 'Toyota', model: 'Corolla', color: 'أبيض', seats: 4 },
+        ]),
+      },
+    };
+    const service = makeService(prisma);
+
+    const res = await service.search({ corridorId: 'c1' });
+
+    expect(res).toEqual([
+      {
+        id: 't1',
+        corridorId: 'c1',
+        departureTime,
+        pricePerSeat: 6000,
+        seatsAvailable: 1,
+        seatsTotal: 4,
+        driverName: 'علي حسن',
+        driverRatingAvg: 4.5,
+        vehicle: { make: 'Toyota', model: 'Corolla', color: 'أبيض', seats: 4 },
+      },
+    ]);
+    expect(prisma.trip.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          status: TripStatus.OPEN,
+          seatsAvailable: { gt: 0 },
+          corridorId: 'c1',
+        }),
+        orderBy: { departureTime: 'asc' },
+      }),
+    );
+  });
+
+  it('returns [] and skips enrichment when nothing matches', async () => {
+    const prisma = {
+      trip: { findMany: jest.fn().mockResolvedValue([]) },
+      driverProfile: { findMany: jest.fn() },
+      vehicle: { findMany: jest.fn() },
+    };
+    const service = makeService(prisma);
+
+    expect(await service.search({})).toEqual([]);
+    expect(prisma.driverProfile.findMany).not.toHaveBeenCalled();
+  });
+
+  it('degrades gracefully when the name is null and the vehicle is missing', async () => {
+    const departureTime = new Date(Date.now() + 3_600_000);
+    const prisma = {
+      trip: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 't2',
+            corridorId: 'c1',
+            driverId: 'd2',
+            vehicleId: 'v2',
+            departureTime,
+            pricePerSeat: 5000,
+            seatsAvailable: 3,
+            seatsTotal: 3,
+          },
+        ]),
+      },
+      driverProfile: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'd2', ratingAvg: 0, user: { name: null } }]),
+      },
+      vehicle: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const service = makeService(prisma);
+
+    const [trip] = await service.search({});
+    expect(trip).toEqual(
+      expect.objectContaining({
+        driverName: null,
+        driverRatingAvg: 0,
+        vehicle: null,
+        seatsTotal: 3,
+      }),
+    );
+  });
+});

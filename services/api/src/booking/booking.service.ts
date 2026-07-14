@@ -59,7 +59,7 @@ export class BookingService {
     const [drivers, vehicles] = await Promise.all([
       this.prisma.driverProfile.findMany({
         where: { id: { in: driverIds } },
-        select: { id: true, ratingAvg: true },
+        select: { id: true, ratingAvg: true, user: { select: { name: true } } },
       }),
       this.prisma.vehicle.findMany({
         where: { id: { in: vehicleIds } },
@@ -71,13 +71,16 @@ export class BookingService {
 
     return trips.map((t) => {
       const vehicle = vehicleMap.get(t.vehicleId);
+      const driver = driverMap.get(t.driverId);
       return {
         id: t.id,
         corridorId: t.corridorId,
         departureTime: t.departureTime,
         pricePerSeat: t.pricePerSeat,
         seatsAvailable: t.seatsAvailable,
-        driverRatingAvg: driverMap.get(t.driverId)?.ratingAvg ?? 0,
+        seatsTotal: t.seatsTotal,
+        driverName: driver?.user?.name ?? null,
+        driverRatingAvg: driver?.ratingAvg ?? 0,
         vehicle: vehicle
           ? { make: vehicle.make, model: vehicle.model, color: vehicle.color, seats: vehicle.seats }
           : null,
