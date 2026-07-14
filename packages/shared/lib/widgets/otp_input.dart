@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared/shared.dart';
+
+import '../theme/app_theme.dart';
 
 /// A row of single-digit boxes for entering an OTP. Token-styled (mirrors the
 /// design system's input styling), auto-advances on entry, and steps back on

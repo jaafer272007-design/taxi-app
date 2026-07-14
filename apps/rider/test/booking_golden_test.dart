@@ -9,7 +9,6 @@ import 'package:rider/booking/booking_models.dart';
 import 'package:rider/booking/booking_screen.dart';
 import 'package:rider/booking/my_bookings_controller.dart';
 import 'package:rider/booking/my_bookings_screen.dart';
-import 'package:rider/core/api_exception.dart';
 import 'package:shared/shared.dart';
 
 import 'support/booking_fakes.dart';

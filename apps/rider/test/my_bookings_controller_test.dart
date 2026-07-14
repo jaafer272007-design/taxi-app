@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rider/booking/booking_models.dart';
 import 'package:rider/booking/my_bookings_controller.dart';
-import 'package:rider/core/api_exception.dart';
 
 import 'support/booking_fakes.dart';
+import 'package:shared/shared.dart';
 
 void main() {
   group('MyBookingsController', () {

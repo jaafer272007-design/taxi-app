@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rider/booking/booking_controller.dart';
 import 'package:rider/booking/booking_error.dart';
-import 'package:rider/core/api_exception.dart';
 
 import 'support/booking_fakes.dart';
 import 'support/trip_fakes.dart';
+import 'package:shared/shared.dart';
 
 BookingController _controller(
   FakeBookingApi api, {

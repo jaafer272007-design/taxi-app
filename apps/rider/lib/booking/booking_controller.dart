@@ -2,11 +2,11 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
-import '../core/api_exception.dart';
 import '../trip/trip_models.dart';
 import 'booking_api.dart';
 import 'booking_error.dart';
 import 'booking_models.dart';
+import 'package:shared/shared.dart';
 
 /// Drives the reserve-a-seat flow for one [trip]: seat count, pickup/dropoff
 /// points, the live fare, and submitting the booking. Owns a single booking

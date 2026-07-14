@@ -1,6 +1,6 @@
 import 'package:dio/dio.dart';
 
-import '../core/api_client.dart';
+import '../net/api_client.dart';
 import 'auth_user.dart';
 
 /// The auth endpoints the app talks to. Abstracted so the AuthController can be

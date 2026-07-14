@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rider/booking/booking_error.dart';
-import 'package:rider/core/api_exception.dart';
+import 'package:shared/shared.dart';
 
 void main() {
   group('classifyBookingError', () {

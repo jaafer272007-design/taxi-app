@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rider/auth/auth_controller.dart';
-import 'package:rider/core/token_store.dart';
 import 'package:rider/main.dart';
 import 'package:rider/trip/trip_search_controller.dart';
 import 'package:shared/shared.dart';

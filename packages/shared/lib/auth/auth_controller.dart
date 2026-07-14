@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import '../core/api_exception.dart';
-import '../core/token_store.dart';
+import '../net/api_exception.dart';
+import '../net/token_store.dart';
 import 'auth_api.dart';
 import 'auth_user.dart';
 
@@ -14,7 +14,8 @@ enum AuthStatus { unknown, onboarding, authenticated }
 enum OnboardingStep { phone, otp, name }
 
 /// Owns authentication + the onboarding flow. Business logic lives here; screens
-/// only read state (`context.watch`) and call methods (`context.read`).
+/// only read state (`context.watch`) and call methods (`context.read`). Shared
+/// by the rider and driver apps.
 class AuthController extends ChangeNotifier {
   AuthController({required AuthApi api, required TokenStore tokenStore})
       : _api = api,

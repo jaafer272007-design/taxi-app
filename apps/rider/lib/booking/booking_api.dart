@@ -1,7 +1,7 @@
 import 'package:dio/dio.dart';
 
-import '../core/api_client.dart';
 import 'booking_models.dart';
+import 'package:shared/shared.dart';
 
 /// Rider-facing booking endpoints. Abstracted so the controller can be tested
 /// against a fake.

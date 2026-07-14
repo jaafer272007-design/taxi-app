@@ -25,6 +25,10 @@ dependencies:
   # App-wide state management standard (ChangeNotifier + provider). TaxiApp
   # exposes controllers to the tree; see CLAUDE.md → State management.
   provider: ^6.1.0
+  # Shared networking (HTTP client + JWT interceptor) — rider & driver auth/API.
+  dio: ^5.7.0
+  # Secure JWT storage (Keychain / Keystore) for the shared TokenStore.
+  flutter_secure_storage: ^10.0.0
 
 dev_dependencies:
   flutter_test:

@@ -1,10 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rider/auth/auth_controller.dart';
-import 'package:rider/auth/auth_user.dart';
-import 'package:rider/core/api_exception.dart';
-import 'package:rider/core/token_store.dart';
 
 import 'support/fakes.dart';
+import 'package:shared/shared.dart';
 
 void main() {
   late FakeAuthApi api;

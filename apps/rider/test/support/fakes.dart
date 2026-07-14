@@ -1,9 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:rider/auth/auth_api.dart';
-import 'package:rider/auth/auth_controller.dart';
-import 'package:rider/auth/auth_user.dart';
-import 'package:rider/core/api_exception.dart';
 import 'package:shared/shared.dart';
 
 /// A scriptable fake of [AuthApi] for tests — no real network.

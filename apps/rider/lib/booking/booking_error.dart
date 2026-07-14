@@ -1,4 +1,4 @@
-import '../core/api_exception.dart';
+import 'package:shared/shared.dart';
 
 /// How a failed booking should be presented, so the UI can offer the right
 /// recovery (go back and refresh vs. retry vs. just show the message).

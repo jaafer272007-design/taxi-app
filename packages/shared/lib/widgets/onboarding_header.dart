@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:shared/shared.dart';
+
+import '../theme/app_theme.dart';
 
 /// Consistent header for the onboarding screens: an optional logo/icon badge,
-/// a title and one supporting line. Token-based.
+/// a title and one supporting line. Token-based. Shared by rider & driver — each
+/// app supplies its own copy (title/subtitle/icon).
 class OnboardingHeader extends StatelessWidget {
   const OnboardingHeader({
     super.key,
