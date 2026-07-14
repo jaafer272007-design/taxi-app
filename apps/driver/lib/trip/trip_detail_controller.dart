@@ -209,8 +209,10 @@ class TripDetailController extends ChangeNotifier {
     }
   }
 
-  /// Rate a rider who rode. One per rider per trip: a server 409 (already rated)
-  /// is treated as success from the UI's view — the action hides either way.
+  /// Rate a rider who rode. One per rider per trip. A server 409 (already rated,
+  /// e.g. in a previous session) is idempotent from the UI's view: mark the
+  /// rider rated and report success so the sheet closes cleanly instead of
+  /// flashing an error for something that is effectively already done.
   Future<String?> rateRider({
     required String riderId,
     required int score,
@@ -231,6 +233,7 @@ class TripDetailController extends ChangeNotifier {
       if (e.statusCode == 409) {
         _ratedRiderIds.add(riderId);
         notifyListeners();
+        return null;
       }
       return e.message;
     } catch (_) {

@@ -208,7 +208,8 @@ void main() {
       expect(c.isRated('r1'), isTrue);
     });
 
-    test('a 409 (already rated) still marks the rider rated', () async {
+    test('a 409 (already rated) is idempotent: no error, rider marked rated',
+        () async {
       final api = FakeDriverTripApi()
         ..rateError = const ApiException(
             'قيّمت هذا الشخص مسبقاً لهذه الرحلة.',
@@ -217,7 +218,7 @@ void main() {
 
       final err = await c.rateRider(riderId: 'r1', score: 4);
 
-      expect(err, 'قيّمت هذا الشخص مسبقاً لهذه الرحلة.');
+      expect(err, isNull); // treated as success so the sheet closes cleanly
       expect(c.isRated('r1'), isTrue);
     });
 
