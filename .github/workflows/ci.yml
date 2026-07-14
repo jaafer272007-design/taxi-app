@@ -79,11 +79,12 @@ jobs:
       - name: Test
         run: npm test
 
-  # Renders the design system to PNG "golden" screenshots so the UI can be
-  # reviewed with zero local install, and guards against unintended visual
-  # changes. Independent of the services/api job above.
+  # One Flutter job: analyze the rider app, run all Flutter tests, and
+  # generate/compare the UI golden screenshots for BOTH packages/shared and
+  # apps/rider. Committing goldens from a single job avoids two jobs racing to
+  # push the branch. Independent of the services/api job above.
   ui-goldens:
-    name: packages/shared (flutter golden UI)
+    name: flutter (analyze, tests, UI goldens)
     runs-on: ubuntu-latest
 
     # Needed to commit the generated screenshots back to the PR branch.
@@ -108,34 +109,52 @@ jobs:
       - name: Flutter version
         run: flutter --version
 
-      - name: Install dependencies
+      - name: Install dependencies (shared)
         working-directory: packages/shared
         run: flutter pub get
 
+      - name: Install dependencies (rider)
+        working-directory: apps/rider
+        run: flutter pub get
+
+      - name: Analyze rider
+        working-directory: apps/rider
+        run: flutter analyze
+
       - name: Decide golden mode
         id: mode
-        working-directory: packages/shared
         run: |
-          # Compare (regression guard) when baselines already exist; otherwise
-          # generate them. A commit message containing [update-goldens] forces
-          # regeneration (use it to bless an intended UI change).
-          if ls test/goldens/*.png >/dev/null 2>&1 \
+          # Compare (regression guard) when ALL baselines already exist;
+          # otherwise generate them. A commit message containing [update-goldens]
+          # forces regeneration (use it to bless an intended UI change).
+          if ls packages/shared/test/goldens/*.png >/dev/null 2>&1 \
+             && ls apps/rider/test/goldens/*.png >/dev/null 2>&1 \
              && ! git log -1 --pretty=%B | grep -qF '[update-goldens]'; then
             echo "update=false" >> "$GITHUB_OUTPUT"
-            echo "Baselines present -> comparison (visual regression guard)."
+            echo "All baselines present -> comparison (visual regression guard)."
           else
             echo "update=true" >> "$GITHUB_OUTPUT"
             echo "Missing baselines or [update-goldens] -> generating."
           fi
 
-      - name: Test + golden regression check
+      - name: Test — shared (compare goldens)
         if: steps.mode.outputs.update == 'false'
         working-directory: packages/shared
         run: flutter test
 
-      - name: Test + generate golden baselines
+      - name: Test — shared (generate goldens)
         if: steps.mode.outputs.update == 'true'
         working-directory: packages/shared
+        run: flutter test --update-goldens
+
+      - name: Test — rider (compare goldens)
+        if: steps.mode.outputs.update == 'false'
+        working-directory: apps/rider
+        run: flutter test
+
+      - name: Test — rider (generate goldens)
+        if: steps.mode.outputs.update == 'true'
+        working-directory: apps/rider
         run: flutter test --update-goldens
 
       - name: Mirror screenshots into docs/ui-screenshots (for inline PR viewing)
@@ -143,13 +162,14 @@ jobs:
         run: |
           mkdir -p docs/ui-screenshots
           cp packages/shared/test/goldens/*.png docs/ui-screenshots/
+          cp apps/rider/test/goldens/*.png docs/ui-screenshots/
 
       - name: Commit screenshots back to the PR branch
         if: steps.mode.outputs.update == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add packages/shared/test/goldens docs/ui-screenshots
+          git add packages/shared/test/goldens apps/rider/test/goldens docs/ui-screenshots
           if git diff --cached --quiet; then
             echo "No screenshot changes to commit."
           else
@@ -167,37 +187,6 @@ jobs:
           path: |
             packages/shared/test/goldens/**
             packages/shared/test/failures/**
+            apps/rider/test/goldens/**
+            apps/rider/test/failures/**
           if-no-files-found: warn
-
-  # Compile-checks the rider app (which depends on the shared package) and runs
-  # its smoke test. Keeps the app buildable as we wire it up screen by screen.
-  rider-app:
-    name: apps/rider (flutter analyze + test)
-    runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: apps/rider
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Flutter (pinned stable)
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          flutter-version: 3.29.0
-          cache: true
-
-      - name: Flutter version
-        run: flutter --version
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Analyze
-        run: flutter analyze
-
-      - name: Test
-        run: flutter test

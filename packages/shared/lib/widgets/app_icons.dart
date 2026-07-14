@@ -23,6 +23,7 @@ abstract final class AppIcons {
   static const IconData seat = LucideIcons.armchair;
   static const IconData mapPin = LucideIcons.mapPin;
   static const IconData route = LucideIcons.route;
+  static const IconData swap = LucideIcons.arrowRightLeft;
   static const IconData clock = LucideIcons.clock;
   static const IconData calendar = LucideIcons.calendar;
   static const IconData phone = LucideIcons.phone;
