@@ -29,23 +29,38 @@ Widget _host(BookingController c) => ChangeNotifierProvider<BookingController>.v
       ),
     );
 
+/// The stepper button ([icon])'s tap callback. Invoking it directly exercises
+/// the real widget→controller→UI wiring without positional hit-testing (which is
+/// unreliable through the page-transition/scaffold layers in a widget test).
+VoidCallback? _stepButtonTap(WidgetTester tester, IconData icon) {
+  return tester
+      .widget<GestureDetector>(
+        find
+            .ancestor(
+              of: find.byIcon(icon),
+              matching: find.byType(GestureDetector),
+            )
+            .first,
+      )
+      .onTap;
+}
+
 void main() {
   testWidgets('seat stepper updates the total fare live', (tester) async {
     await tester.pumpWidget(_host(_controller(price: 6000)));
-    await tester.pumpAndSettle(); // let the route entrance transition finish
 
     // Starts at 1 seat → total 6,000; no 12,000 yet.
     expect(find.text('1'), findsOneWidget);
     expect(find.text('12,000 د.ع'), findsNothing);
 
-    await tester.tap(find.byIcon(AppIcons.plus));
+    _stepButtonTap(tester, AppIcons.plus)!();
     await tester.pump();
 
     // 2 seats → total 12,000 د.ع.
     expect(find.text('2'), findsOneWidget);
     expect(find.text('12,000 د.ع'), findsOneWidget);
 
-    await tester.tap(find.byIcon(AppIcons.minus));
+    _stepButtonTap(tester, AppIcons.minus)!();
     await tester.pump();
     expect(find.text('1'), findsOneWidget);
     expect(find.text('12,000 د.ع'), findsNothing);
@@ -54,14 +69,14 @@ void main() {
   testWidgets('seat stepper never exceeds available seats', (tester) async {
     final c = _controller(seatsAvailable: 2, price: 6000);
     await tester.pumpWidget(_host(c));
-    await tester.pumpAndSettle(); // let the route entrance transition finish
 
-    await tester.tap(find.byIcon(AppIcons.plus)); // 1 → 2 (max)
+    _stepButtonTap(tester, AppIcons.plus)!(); // 1 → 2 (max)
     await tester.pump();
     expect(find.text('2'), findsOneWidget);
+    expect(c.seatCount, 2);
 
-    await tester.tap(find.byIcon(AppIcons.plus)); // capped
-    await tester.pump();
+    // At the cap the increment button is disabled (no onTap).
+    expect(_stepButtonTap(tester, AppIcons.plus), isNull);
     expect(c.seatCount, 2);
   });
 

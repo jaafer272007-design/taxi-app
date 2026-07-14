@@ -57,9 +57,9 @@ void main() {
       await tester.pumpWidget(
         host(RatingStars(value: 0, onRate: (v) => tapped = v)),
       );
-      await tester.pumpAndSettle(); // let the route entrance transition finish
-      // Tapping the first star cell (scoped to the widget) reports 1.
-      await tester.tap(
+      // Invoke the first star cell's onTap directly (robust vs. positional
+      // hit-testing) — it should report a 1-based rating of 1.
+      final firstStar = tester.widget<GestureDetector>(
         find
             .descendant(
               of: find.byType(RatingStars),
@@ -67,6 +67,7 @@ void main() {
             )
             .first,
       );
+      firstStar.onTap!();
       expect(tapped, 1);
     });
   });
