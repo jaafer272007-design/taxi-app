@@ -268,7 +268,7 @@ describe('BookingService driver transitions (onboard / no-show)', () => {
 });
 
 describe('BookingService.search', () => {
-  const notifications = { send: jest.fn() };
+  const notifications: any = { send: jest.fn() };
   function makeService(prisma: any): BookingService {
     return new BookingService(prisma as PrismaService, {} as DriverService, notifications);
   }
