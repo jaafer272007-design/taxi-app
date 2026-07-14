@@ -91,6 +91,23 @@ without being asked:
 - Reference: `ThemeController` is provided at the app shell by `TaxiApp` and
   drives `MaterialApp.themeMode`.
 
+## Map picker (خرائط — swappable provider)
+- The location picker uses **free OpenStreetMap** tiles via `flutter_map`, but the
+  map library is **isolated behind one widget** so the provider can be swapped
+  later (e.g. to Google) with a contained change.
+- **Single source of truth:** the app depends only on `LocationPoint`
+  ({lat,lng,label}) + `AppMapPicker` (interface: `initialCenter`,
+  `onPointSelected(LocationPoint)`), both in `/packages/shared/lib/map`.
+- **Containment rule:** `flutter_map` + `latlong2` are imported **only** in
+  `map/app_map_picker.dart`; `geolocator` **only** in
+  `map/geolocator_location_service.dart` (behind the `LocationService`
+  interface). Reverse geocoding is behind `ReverseGeocoder` (Nominatim impl).
+  **Nothing else in the codebase imports a map/GPS package.**
+- To change map provider: rewrite the internals of `app_map_picker.dart` only —
+  the booking flow and all callers stay unchanged.
+- Tests/goldens pass `usePlaceholderTiles: true` (no network tiles) and inject
+  fake `LocationService` / `NullReverseGeocoder`.
+
 ## اصطلاحات
 - حدود modules واضحة؛ منطق الأعمال بالـ services لا بالـ controllers.
 - معالجة أخطاء موحّدة + رسائل عربية للمستخدم.

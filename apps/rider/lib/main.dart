@@ -63,6 +63,12 @@ class RiderApp extends StatelessWidget {
           value: tripSearchController,
         ),
         Provider<BookingApi>.value(value: bookingApi),
+        // Map picker services (concrete impls live here; the booking screen
+        // depends only on the LocationService / ReverseGeocoder interfaces).
+        Provider<LocationService>(
+          create: (_) => const GeolocatorLocationService(),
+        ),
+        Provider<ReverseGeocoder>(create: (_) => NominatimReverseGeocoder()),
       ],
       child: TaxiApp(
         title: 'تكسي مشترك — الراكب',

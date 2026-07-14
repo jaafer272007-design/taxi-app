@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:rider/booking/booking_controller.dart';
+import 'package:rider/booking/booking_models.dart';
 import 'package:rider/booking/booking_screen.dart';
 import 'package:shared/shared.dart';
 
@@ -80,16 +81,26 @@ void main() {
     expect(c.seatCount, 2);
   });
 
-  testWidgets('confirm is disabled until both points are filled',
+  testWidgets('confirm is disabled until both map points are set',
       (tester) async {
     final c = _controller();
     await tester.pumpWidget(_host(c));
     expect(c.canSubmit, isFalse);
+    // Prompts show before any point is chosen.
+    expect(find.text('حدّد النقطة على الخريطة'), findsNWidgets(2));
 
-    await tester.enterText(find.byType(TextField).at(0), 'حي السلام');
-    await tester.enterText(find.byType(TextField).at(1), 'قرب المستشفى');
+    c.setPickupPoint(
+        const GeoPoint(lat: 31.99, lng: 44.31, label: 'حي السلام'));
+    await tester.pump();
+    expect(c.canSubmit, isFalse); // dropoff still unset
+
+    c.setDropoffPoint(
+        const GeoPoint(lat: 32.61, lng: 44.02, label: 'قرب المستشفى'));
     await tester.pump();
 
     expect(c.canSubmit, isTrue);
+    // Chosen labels replace the prompts.
+    expect(find.text('حي السلام'), findsOneWidget);
+    expect(find.text('قرب المستشفى'), findsOneWidget);
   });
 }
