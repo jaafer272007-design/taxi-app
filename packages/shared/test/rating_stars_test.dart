@@ -57,6 +57,7 @@ void main() {
       await tester.pumpWidget(
         host(RatingStars(value: 0, onRate: (v) => tapped = v)),
       );
+      await tester.pumpAndSettle(); // let the route entrance transition finish
       // Tapping the first star cell (scoped to the widget) reports 1.
       await tester.tap(
         find

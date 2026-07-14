@@ -32,6 +32,7 @@ Widget _host(BookingController c) => ChangeNotifierProvider<BookingController>.v
 void main() {
   testWidgets('seat stepper updates the total fare live', (tester) async {
     await tester.pumpWidget(_host(_controller(price: 6000)));
+    await tester.pumpAndSettle(); // let the route entrance transition finish
 
     // Starts at 1 seat → total 6,000; no 12,000 yet.
     expect(find.text('1'), findsOneWidget);
@@ -53,6 +54,7 @@ void main() {
   testWidgets('seat stepper never exceeds available seats', (tester) async {
     final c = _controller(seatsAvailable: 2, price: 6000);
     await tester.pumpWidget(_host(c));
+    await tester.pumpAndSettle(); // let the route entrance transition finish
 
     await tester.tap(find.byIcon(AppIcons.plus)); // 1 → 2 (max)
     await tester.pump();
