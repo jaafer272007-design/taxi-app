@@ -47,8 +47,7 @@ void main() {
     test('caps at 4 even when more seats are available', () {
       final c = _controller(FakeBookingApi(), seatsAvailable: 6);
       expect(c.maxSeats, 4);
-      c
-        ..setSeatCount(10);
+      c.setSeatCount(10);
       expect(c.seatCount, 4);
     });
 
