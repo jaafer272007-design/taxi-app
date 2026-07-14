@@ -148,7 +148,7 @@ Future<void> _golden(
   const width = 390.0;
   const height = 844.0;
   const dpr = 2.0;
-  tester.view.physicalSize = Size(width * dpr, height * dpr);
+  tester.view.physicalSize = const Size(width * dpr, height * dpr);
   tester.view.devicePixelRatio = dpr;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
