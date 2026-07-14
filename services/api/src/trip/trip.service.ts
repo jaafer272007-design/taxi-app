@@ -30,6 +30,19 @@ import { UpdateTripDto } from './dto/update-trip.dto';
  */
 const DEPART_NOW_WINDOW_MINUTES = 30;
 
+/** A trip's booking as seen by the OWNING driver (rider name resolved). */
+export interface TripBookingView {
+  id: string;
+  riderId: string;
+  riderName: string | null;
+  seatCount: number;
+  pickupLabel: string;
+  dropoffLabel: string;
+  fare: number;
+  status: BookingStatus;
+  paymentStatus: PaymentStatus;
+}
+
 @Injectable()
 export class TripService {
   private readonly logger = new Logger(TripService.name);
@@ -106,6 +119,44 @@ export class TripService {
       where: { driverId: profile.id },
       orderBy: { departureTime: 'desc' },
     });
+  }
+
+  /**
+   * The bookings on one of the driver's own trips, enriched with each rider's
+   * name (SeatBooking stores only a scalar riderId, so we bulk-join User like
+   * trip search does). Owner-only — reuses the ownership gate (403/404). Used by
+   * the driver app to show who booked, to run onboard/no-show, to compute the
+   * completion summary (seats ridden + cash), and to know which riders to rate.
+   */
+  async listBookings(userId: string, tripId: string): Promise<TripBookingView[]> {
+    await this.getOwnedTrip(userId, tripId);
+
+    const bookings = await this.prisma.seatBooking.findMany({
+      where: { tripId },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (bookings.length === 0) {
+      return [];
+    }
+
+    const riderIds = [...new Set(bookings.map((b) => b.riderId))];
+    const riders = await this.prisma.user.findMany({
+      where: { id: { in: riderIds } },
+      select: { id: true, name: true },
+    });
+    const nameById = new Map(riders.map((r) => [r.id, r.name]));
+
+    return bookings.map((b) => ({
+      id: b.id,
+      riderId: b.riderId,
+      riderName: nameById.get(b.riderId) ?? null,
+      seatCount: b.seatCount,
+      pickupLabel: b.pickupLabel,
+      dropoffLabel: b.dropoffLabel,
+      fare: b.fare,
+      status: b.status,
+      paymentStatus: b.paymentStatus,
+    }));
   }
 
   /** Edit a trip — allowed only while it is OPEN, by the owning driver. */

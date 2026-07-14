@@ -30,6 +30,11 @@ export class TripController {
     return this.trips.listMine(userId);
   }
 
+  @Get(':id/bookings')
+  listBookings(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    return this.trips.listBookings(userId, id);
+  }
+
   @Patch(':id')
   updateTrip(
     @CurrentUser('id') userId: string,

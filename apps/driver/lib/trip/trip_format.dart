@@ -50,3 +50,6 @@ const List<String> _arMonths = [
 
 /// Short Arabic day label, e.g. "20 تموز".
 String formatDayShort(DateTime date) => '${date.day} ${_arMonths[date.month - 1]}';
+
+/// Short Arabic day label in Baghdad wall-clock, from a UTC/any-zone [DateTime].
+String formatDayBaghdad(DateTime dt) => formatDayShort(dt.toUtc().add(_baghdadOffset));

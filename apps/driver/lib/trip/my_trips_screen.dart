@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared/shared.dart';
 
+import 'driver_trip_api.dart';
 import 'driver_trip_models.dart';
 import 'my_trips_controller.dart';
+import 'trip_detail_controller.dart';
+import 'trip_detail_screen.dart';
 import 'trip_format.dart';
 
 /// "رحلاتي": the driver's posted trips (GET /trips/mine), newest first, each with
@@ -78,6 +81,21 @@ class _TripCard extends StatelessWidget {
   final DriverTrip trip;
   final Corridor? corridor;
 
+  /// Open the trip detail (bookings + lifecycle). Refreshes the list on return
+  /// so any status change (started/completed/cancelled) shows immediately.
+  Future<void> _open(BuildContext context) async {
+    final api = context.read<DriverTripApi>();
+    final myTrips = context.read<MyTripsController>();
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => ChangeNotifierProvider<TripDetailController>(
+        create: (_) =>
+            TripDetailController(api: api, trip: trip, corridor: corridor),
+        child: const TripDetailScreen(),
+      ),
+    ));
+    await myTrips.load();
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
@@ -87,6 +105,7 @@ class _TripCard extends StatelessWidget {
         : '${cityAr(corridor!.originCity)} إلى ${cityAr(corridor!.destCity)}';
 
     return AppCard(
+      onTap: () => _open(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -100,7 +119,7 @@ class _TripCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis),
               ),
               SizedBox(width: space.sm),
-              _statusPill(trip.status),
+              tripStatusPill(trip.status),
             ],
           ),
           SizedBox(height: space.md),
@@ -134,18 +153,6 @@ class _TripCard extends StatelessWidget {
       ),
     );
   }
-}
-
-Widget _statusPill(TripStatus status) {
-  final (String label, AppBadgeTone tone) = switch (status) {
-    TripStatus.open => ('مفتوحة', AppBadgeTone.success),
-    TripStatus.locked => ('مكتملة الحجز', AppBadgeTone.warning),
-    TripStatus.enRoute => ('جارية', AppBadgeTone.info),
-    TripStatus.completed || TripStatus.settled => ('منتهية', AppBadgeTone.neutral),
-    TripStatus.cancelled => ('ملغاة', AppBadgeTone.danger),
-    TripStatus.unknown => ('—', AppBadgeTone.neutral),
-  };
-  return AppPill(label: label, tone: tone);
 }
 
 class _EmptyView extends StatelessWidget {

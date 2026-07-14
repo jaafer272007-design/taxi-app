@@ -183,6 +183,12 @@ class WidgetShowcaseGallery extends StatelessWidget {
                   icon: AppIcons.close,
                   onPressed: () {}),
               SizedBox(height: space.sm),
+              AppButton(
+                  label: 'إلغاء الرحلة (لطيف)',
+                  variant: AppButtonVariant.dangerTonal,
+                  icon: AppIcons.close,
+                  onPressed: () {}),
+              SizedBox(height: space.sm),
               Row(
                 children: [
                   Expanded(
