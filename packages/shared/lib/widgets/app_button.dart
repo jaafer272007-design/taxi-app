@@ -3,7 +3,11 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
 /// Visual variants for [AppButton].
-enum AppButtonVariant { primary, secondary, ghost, danger }
+///
+/// [danger] is the loud, solid-red destructive action; [dangerTonal] is a
+/// softer, bordered/tinted destructive treatment for actions that are
+/// reversible-ish or not the primary CTA (e.g. "cancel this trip").
+enum AppButtonVariant { primary, secondary, ghost, danger, dangerTonal }
 
 /// Size variants — both keep a touch target >= 48dp.
 enum AppButtonSize { regular, small }
@@ -152,6 +156,13 @@ class _AppButtonState extends State<AppButton> {
           background: c.danger,
           pressedBackground: Color.lerp(c.danger, Colors.black, 0.14)!,
           foreground: c.onDanger,
+        );
+      case AppButtonVariant.dangerTonal:
+        return _ButtonStyle(
+          background: c.danger.withValues(alpha: 0.10),
+          pressedBackground: c.danger.withValues(alpha: 0.18),
+          foreground: c.danger,
+          border: c.danger.withValues(alpha: 0.45),
         );
       case AppButtonVariant.secondary:
         return _ButtonStyle(

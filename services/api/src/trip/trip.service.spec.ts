@@ -293,3 +293,124 @@ describe('TripService lifecycle (start / complete)', () => {
     });
   });
 });
+
+describe('TripService.listBookings (driver view of its bookings)', () => {
+  let prisma: any;
+  let drivers: any;
+  let service: TripService;
+
+  beforeEach(() => {
+    prisma = {
+      trip: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ id: 't1', driverId: 'drv1', status: TripStatus.EN_ROUTE }),
+      },
+      seatBooking: { findMany: jest.fn() },
+      user: { findMany: jest.fn() },
+    };
+    drivers = {
+      findProfileByUserId: jest.fn().mockResolvedValue({ id: 'drv1', status: DriverStatus.APPROVED }),
+    };
+    service = new TripService(
+      prisma as PrismaService,
+      drivers as DriverService,
+      {} as CorridorService,
+      { send: jest.fn() } as any,
+    );
+  });
+
+  it('403 when the caller does not own the trip (never reads bookings)', async () => {
+    prisma.trip.findUnique.mockResolvedValue({ id: 't1', driverId: 'other' });
+    await expect(service.listBookings('u1', 't1')).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.seatBooking.findMany).not.toHaveBeenCalled();
+  });
+
+  it('404 when the trip does not exist', async () => {
+    prisma.trip.findUnique.mockResolvedValue(null);
+    await expect(service.listBookings('u1', 't1')).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('returns [] for a trip with no bookings and skips the rider lookup', async () => {
+    prisma.seatBooking.findMany.mockResolvedValue([]);
+    await expect(service.listBookings('u1', 't1')).resolves.toEqual([]);
+    expect(prisma.user.findMany).not.toHaveBeenCalled();
+  });
+
+  it('bulk-joins each rider name and surfaces seatCount/pickup/dropoff/status/fare', async () => {
+    prisma.seatBooking.findMany.mockResolvedValue([
+      {
+        id: 'b1',
+        riderId: 'r1',
+        seatCount: 2,
+        pickupLabel: 'كراج النجف',
+        dropoffLabel: 'باب القبلة',
+        fare: 12000,
+        status: BookingStatus.CONFIRMED,
+        paymentStatus: PaymentStatus.PENDING,
+      },
+      {
+        id: 'b2',
+        riderId: 'r2',
+        seatCount: 1,
+        pickupLabel: 'دوار الثورة',
+        dropoffLabel: 'الحرم',
+        fare: 6000,
+        status: BookingStatus.ONBOARD,
+        paymentStatus: PaymentStatus.PENDING,
+      },
+    ]);
+    prisma.user.findMany.mockResolvedValue([
+      { id: 'r1', name: 'علي' },
+      { id: 'r2', name: 'حسن' },
+    ]);
+
+    const rows = await service.listBookings('u1', 't1');
+
+    expect(prisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: { in: ['r1', 'r2'] } } }),
+    );
+    expect(rows).toEqual([
+      {
+        id: 'b1',
+        riderId: 'r1',
+        riderName: 'علي',
+        seatCount: 2,
+        pickupLabel: 'كراج النجف',
+        dropoffLabel: 'باب القبلة',
+        fare: 12000,
+        status: BookingStatus.CONFIRMED,
+        paymentStatus: PaymentStatus.PENDING,
+      },
+      {
+        id: 'b2',
+        riderId: 'r2',
+        riderName: 'حسن',
+        seatCount: 1,
+        pickupLabel: 'دوار الثورة',
+        dropoffLabel: 'الحرم',
+        fare: 6000,
+        status: BookingStatus.ONBOARD,
+        paymentStatus: PaymentStatus.PENDING,
+      },
+    ]);
+  });
+
+  it('falls back to null when a rider has no name set', async () => {
+    prisma.seatBooking.findMany.mockResolvedValue([
+      {
+        id: 'b1',
+        riderId: 'r1',
+        seatCount: 1,
+        pickupLabel: 'A',
+        dropoffLabel: 'B',
+        fare: 6000,
+        status: BookingStatus.CONFIRMED,
+        paymentStatus: PaymentStatus.PENDING,
+      },
+    ]);
+    prisma.user.findMany.mockResolvedValue([{ id: 'r1', name: null }]);
+    const rows = await service.listBookings('u1', 't1');
+    expect(rows[0].riderName).toBeNull();
+  });
+});

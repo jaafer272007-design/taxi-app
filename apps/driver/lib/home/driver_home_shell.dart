@@ -2,14 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared/shared.dart';
 
+import '../earnings/earnings_controller.dart';
+import '../earnings/earnings_screen.dart';
 import '../trip/driver_trip_api.dart';
 import '../trip/my_trips_controller.dart';
 import '../trip/my_trips_screen.dart';
 import '../trip/post_trip_controller.dart';
 import '../trip/post_trip_screen.dart';
 
-/// The APPROVED driver's home: a two-tab shell (انشر رحلة · رحلاتي). Owns the
-/// post-trip + my-trips controllers; seat count is capped at [vehicleSeats].
+/// The APPROVED driver's home: a three-tab shell (انشر رحلة · رحلاتي · أرباحي).
+/// Owns the post-trip, my-trips and earnings controllers; seat count is capped
+/// at [vehicleSeats].
 class DriverHomeShell extends StatefulWidget {
   const DriverHomeShell({super.key, required this.vehicleSeats});
 
@@ -37,6 +40,9 @@ class _DriverHomeShellState extends State<DriverHomeShell> {
         ChangeNotifierProvider<MyTripsController>(
           create: (ctx) => MyTripsController(api: ctx.read<DriverTripApi>()),
         ),
+        ChangeNotifierProvider<EarningsController>(
+          create: (ctx) => EarningsController(api: ctx.read<DriverTripApi>()),
+        ),
       ],
       child: Scaffold(
         backgroundColor: colors.background,
@@ -45,6 +51,7 @@ class _DriverHomeShellState extends State<DriverHomeShell> {
           children: [
             PostTripScreen(onPosted: () => setState(() => _index = 1)),
             const MyTripsScreen(),
+            const EarningsScreen(),
           ],
         ),
         bottomNavigationBar: NavigationBar(
@@ -55,6 +62,7 @@ class _DriverHomeShellState extends State<DriverHomeShell> {
           destinations: const [
             NavigationDestination(icon: Icon(AppIcons.plusCircle), label: 'انشر رحلة'),
             NavigationDestination(icon: Icon(AppIcons.route), label: 'رحلاتي'),
+            NavigationDestination(icon: Icon(AppIcons.wallet), label: 'أرباحي'),
           ],
         ),
       ),

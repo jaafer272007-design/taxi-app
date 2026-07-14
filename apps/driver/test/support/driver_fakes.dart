@@ -112,6 +112,35 @@ class FakeDriverTripApi implements DriverTripApi {
   List<DriverTrip> myTripsResult = const [];
   Object? myTripsError;
 
+  // Trip detail / lifecycle scripting.
+  List<TripBooking> tripBookingsResult = const [];
+
+  /// When set, [completeTrip] swaps [tripBookingsResult] to this — models the
+  /// backend settling ONBOARD/CONFIRMED bookings to COMPLETED on completion.
+  List<TripBooking>? settledBookingsResult;
+  Object? tripBookingsError;
+
+  int startCalls = 0;
+  int completeCalls = 0;
+  int cancelCalls = 0;
+  Object? startError;
+  Object? completeError;
+  Object? cancelError;
+
+  final List<String> onboardCalls = [];
+  final List<String> noShowCalls = [];
+  Object? onboardError;
+  Object? noShowError;
+
+  Map<String, DriverEarnings> earningsByRange = const {};
+  Object? earningsError;
+
+  int rateCalls = 0;
+  String? lastRateRiderId;
+  int? lastRateScore;
+  String? lastRateComment;
+  Object? rateError;
+
   @override
   Future<List<Corridor>> getCorridors() async {
     if (corridorsError != null) throw corridorsError!;
@@ -139,6 +168,66 @@ class FakeDriverTripApi implements DriverTripApi {
   Future<List<DriverTrip>> myTrips() async {
     if (myTripsError != null) throw myTripsError!;
     return myTripsResult;
+  }
+
+  @override
+  Future<List<TripBooking>> tripBookings(String tripId) async {
+    if (tripBookingsError != null) throw tripBookingsError!;
+    return tripBookingsResult;
+  }
+
+  @override
+  Future<void> startTrip(String tripId) async {
+    startCalls++;
+    if (startError != null) throw startError!;
+  }
+
+  @override
+  Future<void> completeTrip(String tripId) async {
+    completeCalls++;
+    if (completeError != null) throw completeError!;
+    if (settledBookingsResult != null) {
+      tripBookingsResult = settledBookingsResult!;
+    }
+  }
+
+  @override
+  Future<void> cancelTrip(String tripId) async {
+    cancelCalls++;
+    if (cancelError != null) throw cancelError!;
+  }
+
+  @override
+  Future<void> onboard(String bookingId) async {
+    onboardCalls.add(bookingId);
+    if (onboardError != null) throw onboardError!;
+  }
+
+  @override
+  Future<void> noShow(String bookingId) async {
+    noShowCalls.add(bookingId);
+    if (noShowError != null) throw noShowError!;
+  }
+
+  @override
+  Future<DriverEarnings> earnings({required String range}) async {
+    if (earningsError != null) throw earningsError!;
+    return earningsByRange[range] ??
+        const DriverEarnings(total: 0, records: []);
+  }
+
+  @override
+  Future<void> rateRider({
+    required String tripId,
+    required String toUserId,
+    required int score,
+    String? comment,
+  }) async {
+    rateCalls++;
+    lastRateRiderId = toUserId;
+    lastRateScore = score;
+    lastRateComment = comment;
+    if (rateError != null) throw rateError!;
   }
 }
 
@@ -251,4 +340,39 @@ DriverTrip tripFixture({
       seatsAvailable: seatsAvailable,
       pricePerSeat: price,
       status: status,
+    );
+
+TripBooking bookingFixture({
+  String id = 'b1',
+  String riderId = 'r1',
+  String? riderName = 'علي حسن',
+  int seatCount = 1,
+  String pickupLabel = 'كراج النجف',
+  String dropoffLabel = 'باب القبلة',
+  int fare = 6000,
+  BookingStatus status = BookingStatus.confirmed,
+}) =>
+    TripBooking(
+      id: id,
+      riderId: riderId,
+      riderName: riderName,
+      seatCount: seatCount,
+      pickupLabel: pickupLabel,
+      dropoffLabel: dropoffLabel,
+      fare: fare,
+      status: status,
+    );
+
+EarningsRecord earningsRecordFixture({
+  String id = 'e1',
+  String tripId = 't1',
+  int amount = 6000,
+  int hourUtc = 5,
+  int minute = 0,
+}) =>
+    EarningsRecord(
+      id: id,
+      tripId: tripId,
+      amount: amount,
+      collectedAt: DateTime.utc(2026, 7, 20, hourUtc, minute),
     );
