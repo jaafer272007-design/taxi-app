@@ -35,14 +35,12 @@ void main() {
       await _golden(t,
           name: 'booking_light',
           brightness: Brightness.light,
-          height: 1240,
           child: _bookingForm());
     });
     testWidgets('dark', (t) async {
       await _golden(t,
           name: 'booking_dark',
           brightness: Brightness.dark,
-          height: 1240,
           child: _bookingForm());
     });
   });
@@ -52,14 +50,12 @@ void main() {
       await _golden(t,
           name: 'booking_confirmation_light',
           brightness: Brightness.light,
-          height: 900,
           child: _confirmation());
     });
     testWidgets('dark', (t) async {
       await _golden(t,
           name: 'booking_confirmation_dark',
           brightness: Brightness.dark,
-          height: 900,
           child: _confirmation());
     });
   });
@@ -69,14 +65,12 @@ void main() {
       await _golden(t,
           name: 'booking_error_light',
           brightness: Brightness.light,
-          height: 1440,
           child: await _bookingErrorForm());
     });
     testWidgets('dark', (t) async {
       await _golden(t,
           name: 'booking_error_dark',
           brightness: Brightness.dark,
-          height: 1440,
           child: await _bookingErrorForm());
     });
   });
@@ -86,14 +80,12 @@ void main() {
       await _golden(t,
           name: 'my_bookings_light',
           brightness: Brightness.light,
-          height: 1040,
           child: await _myBookings());
     });
     testWidgets('dark', (t) async {
       await _golden(t,
           name: 'my_bookings_dark',
           brightness: Brightness.dark,
-          height: 1040,
           child: await _myBookings());
     });
   });
@@ -176,11 +168,13 @@ Future<void> _golden(
   required String name,
   required Brightness brightness,
   required Widget child,
-  required double height,
 }) async {
-  const width = 400.0;
+  // Render at a real phone size (logical 390×844) so screens render at true
+  // proportions with the bottom button pinned at its natural size/position.
+  const width = 390.0;
+  const height = 844.0;
   const dpr = 2.0;
-  tester.view.physicalSize = Size(width * dpr, height * dpr);
+  tester.view.physicalSize = const Size(width * dpr, height * dpr);
   tester.view.devicePixelRatio = dpr;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);

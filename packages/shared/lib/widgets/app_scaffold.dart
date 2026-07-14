@@ -70,9 +70,17 @@ class AppScaffold extends StatelessWidget {
       ),
       bottomNavigationBar: switch (bottomBar) {
         null => null,
+        // Shrink-wrap vertically: the Scaffold hands the bottom slot a maxHeight
+        // of the whole screen, and an expand:true AppButton (whose inner
+        // Container is center-aligned) would otherwise fill that entire height.
+        // MainAxisSize.min gives the bar unbounded height so it takes only its
+        // natural height and sits pinned at the bottom.
         final Widget bar => SafeArea(
             minimum: EdgeInsets.all(space.lg),
-            child: bar,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [bar],
+            ),
           ),
       },
       floatingActionButton: floatingActionButton,
