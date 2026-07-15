@@ -37,6 +37,22 @@ TripStatus tripStatusFrom(String? raw) => switch (raw) {
       _ => TripStatus.unknown,
     };
 
+/// Trip audience (mirrors the backend `TripType` enum). `womenFamily` trips only
+/// accept female riders (a woman may book extra seats for family); any driver
+/// may post either type.
+enum TripType { general, womenFamily }
+
+/// Parse a backend trip-type string; unknown / null → [TripType.general]
+/// (matches the backend default).
+TripType tripTypeFrom(String? raw) =>
+    raw == 'WOMEN_FAMILY' ? TripType.womenFamily : TripType.general;
+
+extension TripTypeApi on TripType {
+  /// The wire value the backend expects (`GENERAL` / `WOMEN_FAMILY`).
+  String get apiValue =>
+      this == TripType.womenFamily ? 'WOMEN_FAMILY' : 'GENERAL';
+}
+
 /// A driver's own posted trip (POST /trips + GET /trips/mine). Carries no nested
 /// corridor — join by [corridorId] against GET /corridors for city names.
 class DriverTrip {
@@ -49,6 +65,7 @@ class DriverTrip {
     required this.seatsAvailable,
     required this.pricePerSeat,
     required this.status,
+    this.tripType = TripType.general,
   });
 
   final String id;
@@ -59,6 +76,7 @@ class DriverTrip {
   final int seatsAvailable;
   final int pricePerSeat;
   final TripStatus status;
+  final TripType tripType;
 
   int get seatsBooked => seatsTotal - seatsAvailable;
 
@@ -71,6 +89,7 @@ class DriverTrip {
         seatsAvailable: seatsAvailable,
         pricePerSeat: pricePerSeat,
         status: status ?? this.status,
+        tripType: tripType,
       );
 
   factory DriverTrip.fromJson(Map<String, dynamic> json) => DriverTrip(
@@ -82,6 +101,7 @@ class DriverTrip {
         seatsAvailable: (json['seatsAvailable'] as num).toInt(),
         pricePerSeat: (json['pricePerSeat'] as num).toInt(),
         status: tripStatusFrom(json['status'] as String?),
+        tripType: tripTypeFrom(json['tripType'] as String?),
       );
 }
 

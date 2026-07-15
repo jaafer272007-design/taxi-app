@@ -1,5 +1,6 @@
 import 'package:rider/trip/trip_api.dart';
 import 'package:rider/trip/trip_models.dart';
+import 'package:shared/shared.dart';
 
 /// A scriptable fake of [TripApi] for tests — no real network.
 class FakeTripApi implements TripApi {
@@ -9,6 +10,11 @@ class FakeTripApi implements TripApi {
   Object? searchError;
   int getCorridorsCalls = 0;
   int searchCalls = 0;
+
+  // Last search arguments (for asserting the filter → query mapping).
+  String? lastCorridorId;
+  TripType? lastTripType;
+  Gender? lastDriverGender;
 
   @override
   Future<List<Corridor>> getCorridors() async {
@@ -23,8 +29,13 @@ class FakeTripApi implements TripApi {
     DateTime? date,
     DateTime? fromTime,
     DateTime? toTime,
+    TripType? tripType,
+    Gender? driverGender,
   }) async {
     searchCalls++;
+    lastCorridorId = corridorId;
+    lastTripType = tripType;
+    lastDriverGender = driverGender;
     if (searchError != null) throw searchError!;
     return searchResults;
   }
@@ -49,6 +60,8 @@ TripSummary tripFixture({
   String? driverName = 'علي حسن',
   double rating = 4.5,
   TripVehicle? vehicle,
+  TripType tripType = TripType.general,
+  Gender? driverGender,
 }) {
   return TripSummary(
     id: id,
@@ -59,7 +72,9 @@ TripSummary tripFixture({
     seatsTotal: seatsTotal,
     driverRatingAvg: rating,
     driverName: driverName,
+    driverGender: driverGender,
     vehicle: vehicle ??
         const TripVehicle(make: 'Toyota', model: 'Corolla', color: 'أبيض', seats: 4),
+    tripType: tripType,
   );
 }

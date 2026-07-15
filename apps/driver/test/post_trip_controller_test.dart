@@ -90,6 +90,29 @@ void main() {
       expect(api.lastDepartureTime, isNotNull);
     });
 
+    test('trip type defaults to general and is sent on submit', () async {
+      final api = FakeDriverTripApi()..corridors = const [najafKarbala];
+      final c = _controller(api);
+      await c.loadCorridors();
+      expect(c.tripType, TripType.general);
+
+      await c.submit();
+      expect(api.lastTripType, TripType.general);
+    });
+
+    test('setTripType(womenFamily) is sent on submit', () async {
+      final api = FakeDriverTripApi()..corridors = const [najafKarbala];
+      final c = _controller(api);
+      await c.loadCorridors();
+
+      c.setTripType(TripType.womenFamily);
+      expect(c.tripType, TripType.womenFamily);
+
+      final ok = await c.submit();
+      expect(ok, isTrue);
+      expect(api.lastTripType, TripType.womenFamily);
+    });
+
     test('submit error surfaces the backend message', () async {
       final api = FakeDriverTripApi()
         ..corridors = const [najafKarbala]

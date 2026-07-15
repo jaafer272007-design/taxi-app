@@ -108,6 +108,7 @@ class FakeDriverTripApi implements DriverTripApi {
   int? lastSeatsTotal;
   bool? lastDepartNow;
   DateTime? lastDepartureTime;
+  TripType? lastTripType;
 
   List<DriverTrip> myTripsResult = const [];
   Object? myTripsError;
@@ -153,15 +154,21 @@ class FakeDriverTripApi implements DriverTripApi {
     required int seatsTotal,
     bool departNow = false,
     DateTime? departureTime,
+    TripType tripType = TripType.general,
   }) async {
     postCalls++;
     lastCorridorId = corridorId;
     lastSeatsTotal = seatsTotal;
     lastDepartNow = departNow;
     lastDepartureTime = departureTime;
+    lastTripType = tripType;
     if (postError != null) throw postError!;
     return postResult ??
-        tripFixture(corridorId: corridorId, seatsTotal: seatsTotal);
+        tripFixture(
+          corridorId: corridorId,
+          seatsTotal: seatsTotal,
+          tripType: tripType,
+        );
   }
 
   @override
@@ -238,6 +245,8 @@ class FakeAuthApi implements AuthApi {
   ApiException? verifyError;
   AuthUser? meResult;
   Object? meError;
+  String? lastName;
+  Gender? lastGender;
 
   @override
   Future<void> requestOtp(String phone) async {}
@@ -256,13 +265,23 @@ class FakeAuthApi implements AuthApi {
 
   @override
   Future<AuthUser> updateName(String name) async => fakeUser(name: name);
+
+  @override
+  Future<AuthUser> updateProfile({String? name, Gender? gender}) async {
+    if (name != null) lastName = name;
+    if (gender != null) lastGender = gender;
+    return fakeUser(name: name ?? lastName, gender: gender ?? lastGender);
+  }
 }
 
-AuthUser fakeUser({String? name}) => AuthUser(
+AuthUser fakeUser({String? name, Gender? gender}) => AuthUser(
       id: 'u1',
       phone: '+9647701234567',
       name: name,
+      gender: gender,
       roles: const ['DRIVER'],
+      profileComplete:
+          (name?.trim().isNotEmpty ?? false) && gender != null,
     );
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
@@ -330,6 +349,7 @@ DriverTrip tripFixture({
   int price = 6000,
   TripStatus status = TripStatus.open,
   bool departNow = false,
+  TripType tripType = TripType.general,
 }) =>
     DriverTrip(
       id: id,
@@ -340,6 +360,7 @@ DriverTrip tripFixture({
       seatsAvailable: seatsAvailable,
       pricePerSeat: price,
       status: status,
+      tripType: tripType,
     );
 
 TripBooking bookingFixture({

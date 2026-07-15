@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rider/trip/trip_models.dart';
 import 'package:rider/trip/trip_search_controller.dart';
 
 import 'support/trip_fakes.dart';
@@ -104,5 +105,59 @@ void main() {
 
     c.clearTimeWindow();
     expect(c.hasTimeWindow, isFalse);
+  });
+
+  group('filters', () {
+    test('default: no active filters, search passes null filters', () async {
+      api.corridors = const [najafKarbala];
+      final c = make();
+      await c.ensureCorridorsLoaded();
+      await c.search();
+
+      expect(c.hasActiveFilters, isFalse);
+      expect(api.lastTripType, isNull);
+      expect(api.lastDriverGender, isNull);
+    });
+
+    test('setTripType / setDriverGender map into the search query', () async {
+      api.corridors = const [najafKarbala];
+      final c = make();
+      await c.ensureCorridorsLoaded();
+
+      c.setTripType(TripType.womenFamily);
+      c.setDriverGender(Gender.female);
+      expect(c.hasActiveFilters, isTrue);
+
+      await c.search();
+      expect(api.lastTripType, TripType.womenFamily);
+      expect(api.lastDriverGender, Gender.female);
+    });
+
+    test('a female-driver filter that yields no rows is empty, not an error',
+        () async {
+      api.corridors = const [najafKarbala];
+      api.searchResults = const []; // female drivers are rare → empty
+      final c = make();
+      await c.ensureCorridorsLoaded();
+      c.setDriverGender(Gender.female);
+      await c.search();
+
+      expect(c.status, TripSearchStatus.empty);
+      expect(c.error, isNull);
+    });
+
+    test('clearFilters resets both filters', () async {
+      api.corridors = const [najafKarbala];
+      final c = make();
+      await c.ensureCorridorsLoaded();
+      c.setTripType(TripType.general);
+      c.setDriverGender(Gender.male);
+      expect(c.hasActiveFilters, isTrue);
+
+      c.clearFilters();
+      expect(c.hasActiveFilters, isFalse);
+      expect(c.tripType, isNull);
+      expect(c.driverGender, isNull);
+    });
   });
 }

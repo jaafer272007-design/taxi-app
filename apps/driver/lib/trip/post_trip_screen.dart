@@ -26,7 +26,8 @@ class PostTripScreen extends StatelessWidget {
     c
       ..setSeatCount(1)
       ..setMode(DepartMode.now)
-      ..setScheduledAt(null);
+      ..setScheduledAt(null)
+      ..setTripType(TripType.general);
     context.read<MyTripsController>().load();
     onPosted();
   }
@@ -111,6 +112,25 @@ class _Form extends StatelessWidget {
         SizedBox(height: space.md),
         if (corridor != null)
           _CorridorSelector(corridor: corridor, onSwap: c.swapDirection),
+        SizedBox(height: space.xl),
+        Text('نوع الرحلة',
+            style: context.text.label.copyWith(color: context.colors.textSecondary)),
+        SizedBox(height: space.sm),
+        AppSegmentedControl<TripType>(
+          value: c.tripType,
+          segments: const [
+            AppSegment(value: TripType.general, label: 'عامة'),
+            AppSegment(value: TripType.womenFamily, label: 'نسائية-عائلية'),
+          ],
+          onChanged: c.setTripType,
+        ),
+        SizedBox(height: space.xs),
+        Text(
+          c.tripType == TripType.womenFamily
+              ? 'كل الركّاب يجب أن يكنّ نساءً، ويمكن للمرأة حجز مقاعد لعائلتها. يمكن لأي سائق نشر هذا النوع.'
+              : 'متاحة لجميع الركّاب.',
+          style: context.text.caption.copyWith(color: context.colors.textMuted),
+        ),
         SizedBox(height: space.xl),
         Text('متى؟',
             style: context.text.label.copyWith(color: context.colors.textSecondary)),

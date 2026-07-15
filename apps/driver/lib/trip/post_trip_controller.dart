@@ -27,6 +27,7 @@ class PostTripController extends ChangeNotifier {
   DepartMode _mode = DepartMode.now;
   DateTime? _scheduledAt;
   int _seatCount = 1;
+  TripType _tripType = TripType.general;
 
   bool _submitting = false;
   String? _error;
@@ -39,6 +40,7 @@ class PostTripController extends ChangeNotifier {
   DepartMode get mode => _mode;
   DateTime? get scheduledAt => _scheduledAt;
   int get seatCount => _seatCount;
+  TripType get tripType => _tripType;
   int get maxSeats => _maxSeats;
   bool get submitting => _submitting;
   String? get error => _error;
@@ -101,6 +103,12 @@ class PostTripController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setTripType(TripType type) {
+    if (_tripType == type) return;
+    _tripType = type;
+    notifyListeners();
+  }
+
   void setScheduledAt(DateTime? at) {
     _scheduledAt = at;
     notifyListeners();
@@ -128,6 +136,7 @@ class PostTripController extends ChangeNotifier {
         seatsTotal: _seatCount,
         departNow: _mode == DepartMode.now,
         departureTime: _mode == DepartMode.scheduled ? _scheduledAt : null,
+        tripType: _tripType,
       );
       return true;
     } on ApiException catch (e) {

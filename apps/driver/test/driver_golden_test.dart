@@ -1,3 +1,4 @@
+import 'package:driver/auth/name_screen.dart';
 import 'package:driver/driver/become_driver_screen.dart';
 import 'package:driver/driver/documents_screen.dart';
 import 'package:driver/driver/driver_controller.dart';
@@ -38,11 +39,13 @@ void main() {
     await GoogleFonts.pendingFonts();
   });
 
+  _screen('driver_profile', _profile);
   _screen('become_driver', _becomeDriver);
   _screen('vehicle_form', _vehicleForm);
   _screen('documents', _documents);
   _screen('pending_review', _pending);
   _screen('post_trip', _postTrip);
+  _screen('post_trip_women', _postTripWomen);
   _screen('my_trips', _myTrips);
   _screen('trip_detail', _tripDetailOpen);
   _screen('trip_detail_enroute', _tripDetailEnRoute);
@@ -60,6 +63,13 @@ void _screen(String name, Future<Widget> Function() build) {
       await _golden(t, name: '${name}_dark', brightness: Brightness.dark, child: await build());
     });
   });
+}
+
+Future<Widget> _profile() async {
+  final auth =
+      AuthController(api: FakeAuthApi(), tokenStore: InMemoryTokenStore());
+  return ChangeNotifierProvider<AuthController>.value(
+      value: auth, child: const NameScreen());
 }
 
 Future<DriverController> _driver(DriverProfile? profile) async {
@@ -111,6 +121,18 @@ Future<Widget> _postTrip() async {
   );
 }
 
+Future<Widget> _postTripWomen() async {
+  final api = FakeDriverTripApi()..corridors = const [najafKarbala, karbalaNajaf];
+  final c = PostTripController(api: api, maxSeats: 4);
+  await c.loadCorridors();
+  c.setSeatCount(2);
+  c.setTripType(TripType.womenFamily);
+  return ChangeNotifierProvider<PostTripController>.value(
+    value: c,
+    child: PostTripScreen(onPosted: () {}),
+  );
+}
+
 Future<Widget> _myTrips() async {
   final api = FakeDriverTripApi()
     ..corridors = const [najafKarbala, karbalaNajaf]
@@ -122,6 +144,7 @@ Future<Widget> _myTrips() async {
         minute: 30,
         seatsAvailable: 2,
         status: TripStatus.open,
+        tripType: TripType.womenFamily,
       ),
       tripFixture(
         id: 't2',
@@ -158,7 +181,11 @@ Widget _hostDetail(TripDetailController c) =>
 /// OPEN trip with two confirmed bookings → start + (soft) cancel actions.
 Future<Widget> _tripDetailOpen() async {
   final c = await _detail(
-    trip: tripFixture(status: TripStatus.open, seatsTotal: 4, seatsAvailable: 2),
+    trip: tripFixture(
+        status: TripStatus.open,
+        seatsTotal: 4,
+        seatsAvailable: 2,
+        tripType: TripType.womenFamily),
     bookings: [
       bookingFixture(
           id: 'b1', riderId: 'r1', riderName: 'علي حسن', seatCount: 2, fare: 12000),

@@ -56,13 +56,20 @@ class TripDetailsScreen extends StatelessWidget {
         ? trip.driverName!.trim()
         : 'سائق';
 
+    // Eligibility: a women/family trip only accepts female riders. The rider's
+    // gender is always set (profile completion is required to reach this app),
+    // so we can block ineligible riders in the UI before they hit the 403.
+    final riderGender = context.watch<AuthController>().user?.gender;
+    final eligible = trip.tripType != TripType.womenFamily ||
+        riderGender == Gender.female;
+
     return AppScaffold(
       title: 'تفاصيل الرحلة',
       scrollable: true,
       bottomBar: AppButton(
-        label: 'احجز مقعد',
+        label: eligible ? 'احجز مقعد' : 'رحلة نسائية-عائلية',
         icon: AppIcons.seat,
-        onPressed: () => _openBooking(context),
+        onPressed: eligible ? () => _openBooking(context) : null,
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -80,13 +87,40 @@ class TripDetailsScreen extends StatelessWidget {
                     children: [
                       Text(name, style: context.text.h2),
                       SizedBox(height: space.xs),
-                      RatingStars(value: trip.driverRatingAvg, size: space.lg),
+                      Row(
+                        children: [
+                          RatingStars(
+                              value: trip.driverRatingAvg, size: space.lg),
+                          if (trip.driverGender != null) ...[
+                            SizedBox(width: space.sm),
+                            Text(
+                              trip.driverGender == Gender.female
+                                  ? 'سائقة'
+                                  : 'سائق',
+                              style: context.text.caption
+                                  .copyWith(color: context.colors.textMuted),
+                            ),
+                          ],
+                        ],
+                      ),
+                      if (trip.tripType == TripType.womenFamily) ...[
+                        SizedBox(height: space.sm),
+                        const AppPill(
+                          label: 'نسائية/عائلية',
+                          tone: AppBadgeTone.info,
+                          icon: AppIcons.users,
+                        ),
+                      ],
                     ],
                   ),
                 ),
               ],
             ),
           ),
+          if (!eligible) ...[
+            SizedBox(height: space.md),
+            const _EligibilityNote(),
+          ],
           SizedBox(height: space.md),
           AppCard(
             child: Column(
@@ -159,6 +193,38 @@ class _DetailRow extends StatelessWidget {
           SizedBox(height: space.md),
         ],
       ],
+    );
+  }
+}
+
+/// Non-judgmental note shown when a rider can't book a women/family trip.
+class _EligibilityNote extends StatelessWidget {
+  const _EligibilityNote();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final space = context.space;
+    return Container(
+      padding: EdgeInsets.all(space.lg),
+      decoration: BoxDecoration(
+        color: colors.info.withValues(alpha: 0.12),
+        borderRadius: context.radii.mdAll,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(AppIcons.info, size: space.xl, color: colors.info),
+          SizedBox(width: space.md),
+          Expanded(
+            child: Text(
+              'هذه رحلة نسائية-عائلية ومخصّصة للركّاب من النساء، لذلك لا يمكنك '
+              'حجزها. اختر رحلة عامة للمتابعة.',
+              style: context.text.body.copyWith(color: colors.textSecondary),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

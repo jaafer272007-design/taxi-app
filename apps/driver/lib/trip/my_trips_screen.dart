@@ -103,6 +103,7 @@ class _TripCard extends StatelessWidget {
     final route = corridor == null
         ? 'رحلة'
         : '${cityAr(corridor!.originCity)} إلى ${cityAr(corridor!.destCity)}';
+    final typeBadge = tripTypeBadge(trip.tripType);
 
     return AppCard(
       onTap: () => _open(context),
@@ -122,6 +123,13 @@ class _TripCard extends StatelessWidget {
               tripStatusPill(trip.status),
             ],
           ),
+          if (typeBadge != null) ...[
+            SizedBox(height: space.sm),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: typeBadge,
+            ),
+          ],
           SizedBox(height: space.md),
           Row(
             children: [

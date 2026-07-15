@@ -30,7 +30,16 @@ class ResultsScreen extends StatelessWidget {
             message: c.error ?? 'حدث خطأ. حاول مرة أخرى.',
             onRetry: () => c.search(),
           ),
-        TripSearchStatus.empty => const TripEmptyView(),
+        TripSearchStatus.empty => TripEmptyView(
+            tripType: c.tripType,
+            driverGender: c.driverGender,
+            onClearFilters: c.hasActiveFilters
+                ? () {
+                    c.clearFilters();
+                    c.search();
+                  }
+                : null,
+          ),
         TripSearchStatus.results => _ResultsList(trips: c.results),
         TripSearchStatus.initial => const SizedBox.shrink(),
       },

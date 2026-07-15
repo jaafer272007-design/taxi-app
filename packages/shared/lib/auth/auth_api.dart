@@ -10,6 +10,11 @@ abstract interface class AuthApi {
   Future<AuthSession> verifyOtp(String phone, String code);
   Future<AuthUser> me();
   Future<AuthUser> updateName(String name);
+
+  /// Partial profile update (`PATCH /auth/me`). Each provided field is written
+  /// on its own; omitted fields are left untouched. Used by onboarding to set
+  /// name + gender together (completing the profile).
+  Future<AuthUser> updateProfile({String? name, Gender? gender});
 }
 
 /// Dio-backed implementation. Uses the shared [ApiClient] Dio (JWT interceptor
@@ -61,6 +66,22 @@ class DioAuthApi implements AuthApi {
       final res = await _dio.patch<Map<String, dynamic>>(
         '/auth/me',
         data: {'name': name},
+      );
+      return AuthUser.fromJson(res.data!);
+    } on DioException catch (e) {
+      throw mapDioError(e);
+    }
+  }
+
+  @override
+  Future<AuthUser> updateProfile({String? name, Gender? gender}) async {
+    try {
+      final res = await _dio.patch<Map<String, dynamic>>(
+        '/auth/me',
+        data: {
+          if (name != null) 'name': name,
+          if (gender != null) 'gender': gender.apiValue,
+        },
       );
       return AuthUser.fromJson(res.data!);
     } on DioException catch (e) {

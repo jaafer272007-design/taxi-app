@@ -16,7 +16,9 @@ class _GoldenAuthApi implements AuthApi {
     id: 'u1',
     phone: '+9647701234567',
     name: 'علي حسن',
+    gender: Gender.male,
     roles: ['RIDER'],
+    profileComplete: true,
   );
 
   @override
@@ -28,6 +30,8 @@ class _GoldenAuthApi implements AuthApi {
   Future<AuthUser> me() async => _user;
   @override
   Future<AuthUser> updateName(String name) async => _user;
+  @override
+  Future<AuthUser> updateProfile({String? name, Gender? gender}) async => _user;
 }
 
 void main() {

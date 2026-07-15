@@ -35,6 +35,14 @@ void main() {
       expect(e.message, 'لا يمكنك حجز رحلتك الخاصة.');
     });
 
+    test('403 eligibility → notEligible with clear Arabic copy', () {
+      final e = classifyBookingError(
+        const ApiException('غير مؤهل لحجز هذه الرحلة.', statusCode: 403),
+      );
+      expect(e.kind, BookingErrorKind.notEligible);
+      expect(e.message, contains('نسائية-عائلية'));
+    });
+
     test('404 → tripClosed', () {
       final e = classifyBookingError(
         const ApiException('الرحلة غير موجودة.', statusCode: 404),
