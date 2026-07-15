@@ -8,12 +8,14 @@ abstract interface class DriverTripApi {
   Future<List<Corridor>> getCorridors();
 
   /// POST /trips. Provide EITHER [departNow] = true OR a future [departureTime]
-  /// — never both, never neither (the backend rejects both cases).
+  /// — never both, never neither (the backend rejects both cases). [tripType]
+  /// selects the audience (general vs women/family); defaults to general.
   Future<DriverTrip> postTrip({
     required String corridorId,
     required int seatsTotal,
     bool departNow = false,
     DateTime? departureTime,
+    TripType tripType = TripType.general,
   });
 
   Future<List<DriverTrip>> myTrips();
@@ -72,6 +74,7 @@ class DioDriverTripApi implements DriverTripApi {
     required int seatsTotal,
     bool departNow = false,
     DateTime? departureTime,
+    TripType tripType = TripType.general,
   }) async {
     try {
       // Send only the fields the backend expects (forbidNonWhitelisted); exactly
@@ -79,6 +82,7 @@ class DioDriverTripApi implements DriverTripApi {
       final data = <String, dynamic>{
         'corridorId': corridorId,
         'seatsTotal': seatsTotal,
+        'tripType': tripType.apiValue,
       };
       if (departNow) {
         data['departNow'] = true;

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared/shared.dart';
 
+import '../trip_models.dart';
+
 /// Centered message with an icon badge — base for empty/error states.
 class _CenteredMessage extends StatelessWidget {
   const _CenteredMessage({
@@ -64,12 +66,52 @@ class _CenteredMessage extends StatelessWidget {
   }
 }
 
-/// No trips for the chosen corridor.
+/// Empty results. When optional filters ([tripType] / [driverGender]) are active
+/// and [onClearFilters] is provided, the copy is tailored to the active filter
+/// and a one-tap "إزالة الفلاتر" action is offered — female drivers are rare, so
+/// a filtered-empty result is common and should feel intentional, not broken.
 class TripEmptyView extends StatelessWidget {
-  const TripEmptyView({super.key});
+  const TripEmptyView({
+    super.key,
+    this.tripType,
+    this.driverGender,
+    this.onClearFilters,
+  });
+
+  final TripType? tripType;
+  final Gender? driverGender;
+  final VoidCallback? onClearFilters;
+
+  bool get _filtersActive => tripType != null || driverGender != null;
 
   @override
   Widget build(BuildContext context) {
+    if (_filtersActive && onClearFilters != null) {
+      final String title;
+      if (driverGender == Gender.female) {
+        title = 'لا توجد رحلات بسائقة امرأة على هذا المسار حالياً';
+      } else if (driverGender == Gender.male) {
+        title = 'لا توجد رحلات بسائق رجل على هذا المسار حالياً';
+      } else if (tripType == TripType.womenFamily) {
+        title = 'لا توجد رحلات نسائية-عائلية على هذا المسار حالياً';
+      } else if (tripType == TripType.general) {
+        title = 'لا توجد رحلات عامة على هذا المسار حالياً';
+      } else {
+        title = 'لا توجد رحلات مطابقة للفلاتر';
+      }
+      return _CenteredMessage(
+        icon: AppIcons.search,
+        title: title,
+        subtitle: 'جرّب إزالة الفلاتر أو تغيير المسار والتاريخ.',
+        action: AppButton(
+          label: 'إزالة الفلاتر',
+          variant: AppButtonVariant.secondary,
+          icon: AppIcons.close,
+          expand: false,
+          onPressed: onClearFilters,
+        ),
+      );
+    }
     return const _CenteredMessage(
       icon: AppIcons.route,
       title: 'لا توجد رحلات متاحة على هذا المسار',

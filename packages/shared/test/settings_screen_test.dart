@@ -12,7 +12,9 @@ class _FakeAuthApi implements AuthApi {
     id: 'u1',
     phone: '+9647701234567',
     name: 'علي حسن',
+    gender: Gender.male,
     roles: ['RIDER'],
+    profileComplete: true,
   );
 
   @override
@@ -30,7 +32,20 @@ class _FakeAuthApi implements AuthApi {
         id: 'u1',
         phone: '+9647701234567',
         name: name,
+        gender: Gender.male,
         roles: const ['RIDER'],
+        profileComplete: true,
+      );
+
+  @override
+  Future<AuthUser> updateProfile({String? name, Gender? gender}) async =>
+      AuthUser(
+        id: 'u1',
+        phone: '+9647701234567',
+        name: name ?? _user.name,
+        gender: gender ?? _user.gender,
+        roles: const ['RIDER'],
+        profileComplete: true,
       );
 }
 

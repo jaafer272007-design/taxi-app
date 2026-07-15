@@ -1,3 +1,20 @@
+import 'package:shared/shared.dart';
+
+/// Trip audience (mirrors the backend `TripType` enum). `womenFamily` trips only
+/// accept female riders (a woman may book extra seats for family).
+enum TripType { general, womenFamily }
+
+/// Parse a backend trip-type string; unknown / null → [TripType.general]
+/// (matches the backend default).
+TripType tripTypeFrom(String? raw) =>
+    raw == 'WOMEN_FAMILY' ? TripType.womenFamily : TripType.general;
+
+extension TripTypeApi on TripType {
+  /// The wire value the backend expects (`GENERAL` / `WOMEN_FAMILY`).
+  String get apiValue =>
+      this == TripType.womenFamily ? 'WOMEN_FAMILY' : 'GENERAL';
+}
+
 /// A corridor (one direction, e.g. Najaf → Karbala). GET /corridors returns both
 /// directions as separate rows.
 class Corridor {
@@ -57,7 +74,9 @@ class TripSummary {
     required this.seatsTotal,
     required this.driverRatingAvg,
     this.driverName,
+    this.driverGender,
     this.vehicle,
+    this.tripType = TripType.general,
   });
 
   final String id;
@@ -68,7 +87,9 @@ class TripSummary {
   final int seatsTotal;
   final double driverRatingAvg;
   final String? driverName;
+  final Gender? driverGender;
   final TripVehicle? vehicle;
+  final TripType tripType;
 
   /// Warn (not celebrate) when only the last seat remains.
   bool get lastSeat => seatsAvailable == 1;
@@ -82,8 +103,10 @@ class TripSummary {
         seatsTotal: (json['seatsTotal'] as num).toInt(),
         driverRatingAvg: (json['driverRatingAvg'] as num?)?.toDouble() ?? 0,
         driverName: json['driverName'] as String?,
+        driverGender: genderFromApi(json['driverGender'] as String?),
         vehicle: json['vehicle'] == null
             ? null
             : TripVehicle.fromJson(json['vehicle'] as Map<String, dynamic>),
+        tripType: tripTypeFrom(json['tripType'] as String?),
       );
 }

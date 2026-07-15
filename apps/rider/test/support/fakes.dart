@@ -18,6 +18,10 @@ class FakeAuthApi implements AuthApi {
   AuthUser? updateNameResult;
   ApiException? updateNameError;
 
+  Gender? lastGender;
+  AuthUser? updateProfileResult;
+  ApiException? updateProfileError;
+
   @override
   Future<void> requestOtp(String phone) async {
     requestOtpCalls++;
@@ -43,13 +47,25 @@ class FakeAuthApi implements AuthApi {
     if (updateNameError != null) throw updateNameError!;
     return updateNameResult ?? fakeUser(name: name);
   }
+
+  @override
+  Future<AuthUser> updateProfile({String? name, Gender? gender}) async {
+    if (name != null) lastName = name;
+    if (gender != null) lastGender = gender;
+    if (updateProfileError != null) throw updateProfileError!;
+    return updateProfileResult ??
+        fakeUser(name: name ?? lastName, gender: gender ?? lastGender);
+  }
 }
 
-AuthUser fakeUser({String? name}) => AuthUser(
+AuthUser fakeUser({String? name, Gender? gender}) => AuthUser(
       id: 'u1',
       phone: '+9647701234567',
       name: name,
+      gender: gender,
       roles: const ['RIDER'],
+      profileComplete:
+          (name?.trim().isNotEmpty ?? false) && gender != null,
     );
 
 /// Wraps [child] with the design-system theme + RTL so onboarding screens can

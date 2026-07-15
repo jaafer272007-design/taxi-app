@@ -25,6 +25,10 @@ class TripSearchController extends ChangeNotifier {
   TimeOfDay? _fromTime;
   TimeOfDay? _toTime;
 
+  // ── filters (optional; `null` = "الكل") ──
+  TripType? _tripType;
+  Gender? _driverGender;
+
   // ── results ──
   List<TripSummary> _results = const [];
   TripSearchStatus _status = TripSearchStatus.initial;
@@ -39,6 +43,11 @@ class TripSearchController extends ChangeNotifier {
   TimeOfDay? get fromTime => _fromTime;
   TimeOfDay? get toTime => _toTime;
   bool get hasTimeWindow => _fromTime != null && _toTime != null;
+
+  /// Optional filters. `null` means "الكل" (no restriction).
+  TripType? get tripType => _tripType;
+  Gender? get driverGender => _driverGender;
+  bool get hasActiveFilters => _tripType != null || _driverGender != null;
 
   List<TripSummary> get results => _results;
   TripSearchStatus get status => _status;
@@ -98,6 +107,27 @@ class TripSearchController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Filter by trip audience (`null` = all).
+  void setTripType(TripType? type) {
+    _tripType = type;
+    notifyListeners();
+  }
+
+  /// Filter by the driver's gender (`null` = all). Female drivers are rare, so
+  /// this often yields an empty list — a valid, handled result, not an error.
+  void setDriverGender(Gender? gender) {
+    _driverGender = gender;
+    notifyListeners();
+  }
+
+  /// Drop both optional filters (the empty-state "إزالة الفلاتر" action). The
+  /// caller re-runs [search] afterwards.
+  void clearFilters() {
+    _tripType = null;
+    _driverGender = null;
+    notifyListeners();
+  }
+
   /// Run the search for the current form. Results are sorted by departure time.
   Future<void> search() async {
     final corridor = _corridor;
@@ -126,6 +156,8 @@ class TripSearchController extends ChangeNotifier {
           date: day,
           fromTime: from,
           toTime: to,
+          tripType: _tripType,
+          driverGender: _driverGender,
         ),
       );
       results.sort((a, b) => a.departureTime.compareTo(b.departureTime));

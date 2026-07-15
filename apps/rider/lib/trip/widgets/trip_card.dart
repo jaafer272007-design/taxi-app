@@ -45,7 +45,20 @@ class TripCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                     SizedBox(height: space.xs),
-                    RatingStars(value: trip.driverRatingAvg, size: space.lg),
+                    Row(
+                      children: [
+                        RatingStars(value: trip.driverRatingAvg, size: space.lg),
+                        if (trip.driverGender != null) ...[
+                          SizedBox(width: space.sm),
+                          Text(
+                            trip.driverGender == Gender.female
+                                ? 'سائقة'
+                                : 'سائق',
+                            style: text.caption.copyWith(color: colors.textMuted),
+                          ),
+                        ],
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -67,6 +80,17 @@ class TripCard extends StatelessWidget {
               ),
             ],
           ),
+          if (trip.tripType == TripType.womenFamily) ...[
+            SizedBox(height: space.md),
+            const Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: AppPill(
+                label: 'نسائية/عائلية',
+                tone: AppBadgeTone.info,
+                icon: AppIcons.users,
+              ),
+            ),
+          ],
           if (trip.vehicle != null) ...[
             SizedBox(height: space.md),
             Row(

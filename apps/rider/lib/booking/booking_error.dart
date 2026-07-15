@@ -12,6 +12,10 @@ enum BookingErrorKind {
   /// The request itself was rejected (e.g. booking your own trip).
   invalid,
 
+  /// The rider isn't eligible for this trip (e.g. a women/family trip that only
+  /// accepts female riders). Not retryable — the trip simply isn't for them.
+  notEligible,
+
   /// Never reached the server — retryable.
   network,
 
@@ -52,6 +56,13 @@ BookingError classifyBookingError(ApiException e) {
       return BookingError(BookingErrorKind.tripClosed, msg);
     case 400:
       return BookingError(BookingErrorKind.invalid, msg);
+    case 403:
+      // Eligibility gate (a women/family trip only accepts female riders). Use
+      // clear, non-judgmental Arabic copy rather than the raw server message.
+      return const BookingError(
+        BookingErrorKind.notEligible,
+        'هذه رحلة نسائية-عائلية ومخصّصة للركّاب من النساء. اختر رحلة عامة للمتابعة.',
+      );
     case 404:
       return BookingError(BookingErrorKind.tripClosed, msg);
     default:

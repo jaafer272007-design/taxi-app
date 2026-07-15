@@ -83,6 +83,7 @@ class _BookingScreenState extends State<BookingScreen> {
     final space = context.space;
     final error = c.error;
     final seatGone = error?.kind == BookingErrorKind.seatGone;
+    final notEligible = error?.kind == BookingErrorKind.notEligible;
 
     return AppScaffold(
       title: 'حجز مقعد',
@@ -91,7 +92,8 @@ class _BookingScreenState extends State<BookingScreen> {
         label: 'تأكيد الحجز',
         icon: AppIcons.check,
         loading: c.submitting,
-        onPressed: (c.canSubmit && !seatGone) ? _confirm : null,
+        onPressed:
+            (c.canSubmit && !seatGone && !notEligible) ? _confirm : null,
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -122,7 +124,9 @@ class _BookingScreenState extends State<BookingScreen> {
             SizedBox(height: space.lg),
             _ErrorBanner(
               error: error,
-              onBack: seatGone ? () => Navigator.of(context).pop() : null,
+              onBack: (seatGone || notEligible)
+                  ? () => Navigator.of(context).pop()
+                  : null,
             ),
           ],
         ],

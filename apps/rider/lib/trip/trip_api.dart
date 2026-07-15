@@ -12,6 +12,8 @@ abstract interface class TripApi {
     DateTime? date,
     DateTime? fromTime,
     DateTime? toTime,
+    TripType? tripType,
+    Gender? driverGender,
   });
 }
 
@@ -38,6 +40,8 @@ class DioTripApi implements TripApi {
     DateTime? date,
     DateTime? fromTime,
     DateTime? toTime,
+    TripType? tripType,
+    Gender? driverGender,
   }) async {
     try {
       final query = <String, dynamic>{
@@ -45,6 +49,8 @@ class DioTripApi implements TripApi {
         if (date != null) 'date': _dateOnly(date),
         if (fromTime != null) 'fromTime': fromTime.toUtc().toIso8601String(),
         if (toTime != null) 'toTime': toTime.toUtc().toIso8601String(),
+        if (tripType != null) 'tripType': tripType.apiValue,
+        if (driverGender != null) 'driverGender': driverGender.apiValue,
       };
       final res = await _dio.get<List<dynamic>>(
         '/trips/search',

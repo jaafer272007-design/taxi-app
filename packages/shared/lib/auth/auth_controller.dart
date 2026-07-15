@@ -48,8 +48,10 @@ class AuthController extends ChangeNotifier {
   int get resendSeconds => _resendSeconds;
   bool get canResend => _resendSeconds == 0 && !_busy;
 
-  /// Restore a session on launch. A valid JWT with a name skips onboarding
-  /// entirely; a valid JWT without a name resumes at the name step.
+  /// Restore a session on launch. A valid JWT with a complete profile (name +
+  /// gender) skips onboarding entirely; a valid JWT with an incomplete profile
+  /// resumes at the profile step (covers pre-gender users who have a name but
+  /// no gender yet — they must set it before entering the app).
   Future<void> bootstrap() async {
     final token = await _tokenStore.read();
     if (token == null || token.isEmpty) {
@@ -59,7 +61,7 @@ class AuthController extends ChangeNotifier {
     try {
       final user = await _api.me();
       _user = user;
-      if (user.hasName) {
+      if (user.profileComplete) {
         _status = AuthStatus.authenticated;
         notifyListeners();
       } else {
@@ -90,14 +92,14 @@ class AuthController extends ChangeNotifier {
     });
   }
 
-  /// Step 2 → verify [code], store the JWT, then either finish (has name) or
-  /// advance to the name step (new user).
+  /// Step 2 → verify [code], store the JWT, then either finish (complete
+  /// profile) or advance to the profile step (new / incomplete user).
   Future<void> verifyOtp(String code) async {
     await _run(() async {
       final session = await _api.verifyOtp(_phone, code);
       await _tokenStore.write(session.accessToken);
       _user = session.user;
-      if (session.user.hasName) {
+      if (session.user.profileComplete) {
         _stopResendTimer();
         _status = AuthStatus.authenticated;
       } else {
@@ -106,18 +108,25 @@ class AuthController extends ChangeNotifier {
     });
   }
 
-  /// Step 3 (new users) → save the name and enter the app.
-  Future<void> submitName(String name) async {
+  /// Step 3 (new / incomplete users) → save name + gender, then enter the app
+  /// once the backend reports the profile complete. If it somehow reports
+  /// incomplete, the user stays on the profile step rather than slipping in.
+  Future<void> submitProfile({
+    required String name,
+    required Gender gender,
+  }) async {
     await _run(() async {
-      _user = await _api.updateName(name);
-      _stopResendTimer();
-      _status = AuthStatus.authenticated;
+      _user = await _api.updateProfile(name: name, gender: gender);
+      if (_user!.profileComplete) {
+        _stopResendTimer();
+        _status = AuthStatus.authenticated;
+      }
     });
   }
 
   /// Settings → change the signed-in user's display name (PATCH /auth/me).
   /// Returns `null` on success or a ready-to-show Arabic error. Leaves the
-  /// session status untouched (unlike onboarding's [submitName]) and manages no
+  /// session status untouched (unlike onboarding's [submitProfile]) and manages no
   /// global busy/error state, so the settings dialog owns its own inline state.
   Future<String?> editName(String name) async {
     try {

@@ -26,10 +26,10 @@ void main() {
       expect(c.step, OnboardingStep.phone);
     });
 
-    test('valid token + named user → authenticated (skips onboarding)',
+    test('valid token + complete profile → authenticated (skips onboarding)',
         () async {
       store = InMemoryTokenStore('jwt');
-      api.meResult = fakeUser(name: 'علي');
+      api.meResult = fakeUser(name: 'علي', gender: Gender.male);
       final c = make();
       await c.bootstrap();
       expect(c.status, AuthStatus.authenticated);
@@ -41,6 +41,17 @@ void main() {
       api.meResult = fakeUser();
       final c = make();
       await c.bootstrap();
+      expect(c.status, AuthStatus.onboarding);
+      expect(c.step, OnboardingStep.name);
+    });
+
+    test('valid token + name but no gender → onboarding (pre-gender user)',
+        () async {
+      store = InMemoryTokenStore('jwt');
+      api.meResult = fakeUser(name: 'علي'); // has a name, gender still null
+      final c = make();
+      await c.bootstrap();
+      expect(c.user?.profileComplete, isFalse);
       expect(c.status, AuthStatus.onboarding);
       expect(c.step, OnboardingStep.name);
     });
@@ -80,7 +91,7 @@ void main() {
   });
 
   group('verifyOtp', () {
-    test('nameless user → JWT stored, advances to name step', () async {
+    test('incomplete profile → JWT stored, advances to name step', () async {
       api.verifyResult = AuthSession(accessToken: 'jwt', user: fakeUser());
       final c = make();
       await c.bootstrap(); // onboarding/phone (empty store)
@@ -91,9 +102,11 @@ void main() {
       expect(c.status, AuthStatus.onboarding);
     });
 
-    test('named user → JWT stored, authenticated', () async {
-      api.verifyResult =
-          AuthSession(accessToken: 'jwt', user: fakeUser(name: 'سارة'));
+    test('complete profile → JWT stored, authenticated', () async {
+      api.verifyResult = AuthSession(
+        accessToken: 'jwt',
+        user: fakeUser(name: 'سارة', gender: Gender.female),
+      );
       final c = make();
       await c.verifyOtp('123456');
       expect(await store.read(), 'jwt');
@@ -113,12 +126,26 @@ void main() {
     });
   });
 
-  test('submitName → saved and authenticated', () async {
-    final c = make();
-    await c.submitName('علي حسن');
-    expect(api.lastName, 'علي حسن');
-    expect(c.status, AuthStatus.authenticated);
-    expect(c.user?.name, 'علي حسن');
+  group('submitProfile', () {
+    test('saves name + gender → authenticated', () async {
+      final c = make();
+      await c.submitProfile(name: 'علي حسن', gender: Gender.male);
+      expect(api.lastName, 'علي حسن');
+      expect(api.lastGender, Gender.male);
+      expect(c.status, AuthStatus.authenticated);
+      expect(c.user?.name, 'علي حسن');
+      expect(c.user?.gender, Gender.male);
+    });
+
+    test('stays on the profile step when the backend reports incomplete',
+        () async {
+      final c = make();
+      // Server echoes back an incomplete profile (should not slip into the app).
+      api.updateProfileResult = fakeUser(name: 'علي حسن');
+      await c.submitProfile(name: 'علي حسن', gender: Gender.male);
+      expect(c.user?.profileComplete, isFalse);
+      expect(c.status, isNot(AuthStatus.authenticated));
+    });
   });
 
   test('changePhone → back to phone step, error cleared', () async {
@@ -134,7 +161,7 @@ void main() {
   group('logout', () {
     test('clears the JWT and returns to onboarding at phone step', () async {
       store = InMemoryTokenStore('jwt');
-      api.meResult = fakeUser(name: 'علي');
+      api.meResult = fakeUser(name: 'علي', gender: Gender.male);
       final c = make();
       await c.bootstrap();
       expect(c.status, AuthStatus.authenticated);
@@ -152,7 +179,7 @@ void main() {
     test('updates the user via PATCH /auth/me and stays authenticated',
         () async {
       store = InMemoryTokenStore('jwt');
-      api.meResult = fakeUser(name: 'علي');
+      api.meResult = fakeUser(name: 'علي', gender: Gender.male);
       final c = make();
       await c.bootstrap();
 
@@ -166,7 +193,7 @@ void main() {
 
     test('returns the Arabic error and keeps the old name on failure', () async {
       store = InMemoryTokenStore('jwt');
-      api.meResult = fakeUser(name: 'علي');
+      api.meResult = fakeUser(name: 'علي', gender: Gender.male);
       final c = make();
       await c.bootstrap();
       api.updateNameError = const ApiException('تعذّر الحفظ.', statusCode: 400);

@@ -231,6 +231,7 @@ class _TripInfoCard extends StatelessWidget {
     final colors = context.colors;
     final space = context.space;
     final trip = controller.trip;
+    final typeBadge = tripTypeBadge(trip.tripType);
 
     return AppCard(
       child: Column(
@@ -249,6 +250,13 @@ class _TripInfoCard extends StatelessWidget {
               tripStatusPill(trip.status),
             ],
           ),
+          if (typeBadge != null) ...[
+            SizedBox(height: space.sm),
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: typeBadge,
+            ),
+          ],
           SizedBox(height: space.md),
           Row(
             children: [
@@ -576,6 +584,15 @@ Widget tripStatusPill(TripStatus status) {
   };
   return AppPill(label: label, tone: tone);
 }
+
+/// Badge marking a women/family trip; `null` for general trips (no badge).
+Widget? tripTypeBadge(TripType type) => type == TripType.womenFamily
+    ? const AppPill(
+        label: 'نسائية/عائلية',
+        tone: AppBadgeTone.info,
+        icon: AppIcons.users,
+      )
+    : null;
 
 /// Status pill for a single booking.
 Widget bookingStatusPill(BookingStatus status) {
