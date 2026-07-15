@@ -14,6 +14,7 @@ import {
   Trip,
   TripCreatedBy,
   TripStatus,
+  TripType,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { DriverService } from '../driver/driver.service';
@@ -105,6 +106,7 @@ export class TripService {
         pricePerSeat: corridor.pricePerSeat, // snapshot from the corridor
         status: TripStatus.OPEN,
         createdBy: TripCreatedBy.DRIVER,
+        tripType: dto.tripType ?? TripType.GENERAL,
       },
     });
   }

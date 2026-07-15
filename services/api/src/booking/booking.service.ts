@@ -7,11 +7,13 @@ import {
 } from '@nestjs/common';
 import {
   BookingStatus,
+  Gender,
   PaymentMethod,
   PaymentStatus,
   Prisma,
   SeatBooking,
   TripStatus,
+  TripType,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { DriverService } from '../driver/driver.service';
@@ -49,6 +51,7 @@ export class BookingService {
       AND: departureTime.map((filter) => ({ departureTime: filter })),
     };
     if (dto.corridorId) where.corridorId = dto.corridorId;
+    if (dto.tripType) where.tripType = dto.tripType;
 
     const trips = await this.prisma.trip.findMany({ where, orderBy: { departureTime: 'asc' } });
     if (trips.length === 0) return [];
@@ -59,7 +62,11 @@ export class BookingService {
     const [drivers, vehicles] = await Promise.all([
       this.prisma.driverProfile.findMany({
         where: { id: { in: driverIds } },
-        select: { id: true, ratingAvg: true, user: { select: { name: true } } },
+        select: {
+          id: true,
+          ratingAvg: true,
+          user: { select: { name: true, gender: true } },
+        },
       }),
       this.prisma.vehicle.findMany({
         where: { id: { in: vehicleIds } },
@@ -69,7 +76,7 @@ export class BookingService {
     const driverMap = new Map(drivers.map((d) => [d.id, d]));
     const vehicleMap = new Map(vehicles.map((v) => [v.id, v]));
 
-    return trips.map((t) => {
+    const results = trips.map((t) => {
       const vehicle = vehicleMap.get(t.vehicleId);
       const driver = driverMap.get(t.driverId);
       return {
@@ -79,13 +86,23 @@ export class BookingService {
         pricePerSeat: t.pricePerSeat,
         seatsAvailable: t.seatsAvailable,
         seatsTotal: t.seatsTotal,
+        tripType: t.tripType,
         driverName: driver?.user?.name ?? null,
+        driverGender: driver?.user?.gender ?? null,
         driverRatingAvg: driver?.ratingAvg ?? 0,
         vehicle: vehicle
           ? { make: vehicle.make, model: vehicle.model, color: vehicle.color, seats: vehicle.seats }
           : null,
       };
     });
+
+    // driverGender lives on User (no Trip→User relation), so it can't be a DB
+    // where-filter — post-filter the enriched rows. An empty result is valid
+    // (e.g. near-zero female-driver supply), not an error.
+    if (dto.driverGender) {
+      return results.filter((r) => r.driverGender === dto.driverGender);
+    }
+    return results;
   }
 
   /** Book seats on a trip. Seat reservation is atomic and overbooking-safe. */
@@ -106,6 +123,22 @@ export class BookingService {
     }
     if (dto.seatCount > trip.seatsAvailable) {
       throw new ConflictException('المقاعد المطلوبة غير متاحة.');
+    }
+
+    // Gender eligibility — enforced BEFORE the seat-reservation transaction so the
+    // atomic row-lock/overbooking guarantee below is never weakened.
+    // Rule: a rider must have a gender set to book anything (complete profile);
+    // a WOMEN_FAMILY trip additionally requires the rider to be FEMALE (a woman
+    // may book extra seats for family). GENERAL trips place no gender restriction.
+    const rider = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { gender: true },
+    });
+    if (!rider || rider.gender == null) {
+      throw new ForbiddenException('يرجى إكمال ملفك الشخصي (تحديد الجنس) قبل الحجز.');
+    }
+    if (trip.tripType === TripType.WOMEN_FAMILY && rider.gender !== Gender.FEMALE) {
+      throw new ForbiddenException('هذه الرحلة مخصّصة للنساء والعائلات فقط.');
     }
 
     const booking = await this.prisma.$transaction(async (tx) => {
