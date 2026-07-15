@@ -1,9 +1,25 @@
-import { IsBoolean, IsInt, IsISO8601, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsInt,
+  IsISO8601,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
+import { TripType } from '@prisma/client';
 
 export class CreateTripDto {
   @IsString()
   @IsNotEmpty({ message: 'الممر مطلوب.' })
   corridorId!: string;
+
+  // Trip audience — defaults to GENERAL in the service. A driver of any gender
+  // may post a WOMEN_FAMILY trip; passenger eligibility is enforced at booking.
+  @IsOptional()
+  @IsEnum(TripType, { message: 'نوع الرحلة غير صالح.' })
+  tripType?: TripType;
 
   // Provide EITHER departureTime (scheduled) OR departNow=true. Cross-field
   // validation is done in the service.

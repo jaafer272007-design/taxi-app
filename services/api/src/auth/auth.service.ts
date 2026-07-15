@@ -1,17 +1,22 @@
 import { Injectable, BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { User, UserRole } from '@prisma/client';
+import { Gender, Prisma, User, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { OtpService } from './otp.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { normalizeIraqiPhone } from '../common/phone.util';
+import { UpdateMeDto } from './dto/update-me.dto';
 
 export interface PublicUser {
   id: string;
   phone: string;
   name: string | null;
+  gender: Gender | null;
   roles: UserRole[];
   createdAt: Date;
+  // A profile is complete only when BOTH name and gender are set. Existing users
+  // (gender = null) read as incomplete until they set it; the apps prompt them.
+  profileComplete: boolean;
 }
 
 @Injectable()
@@ -36,8 +41,10 @@ export class AuthService {
       id: user.id,
       phone: user.phone,
       name: user.name,
+      gender: user.gender,
       roles: user.roles,
       createdAt: user.createdAt,
+      profileComplete: user.name !== null && user.gender !== null,
     };
   }
 
@@ -79,16 +86,26 @@ export class AuthService {
     return this.toPublicUser(user);
   }
 
-  /** PATCH /auth/me — set the authenticated user's display name. */
-  async updateMe(userId: string, name: string): Promise<PublicUser> {
-    const trimmed = name.trim();
-    if (!trimmed) {
-      throw new BadRequestException('الاسم مطلوب.');
+  /**
+   * PATCH /auth/me — set the authenticated user's name and/or gender. Either may
+   * be sent alone; only the provided fields are written (a name-only update never
+   * clears an existing gender, and vice-versa). Gender is required to COMPLETE a
+   * profile (see toPublicUser.profileComplete), but each field is optional here
+   * so onboarding can set them in separate steps.
+   */
+  async updateMe(userId: string, dto: UpdateMeDto): Promise<PublicUser> {
+    const data: Prisma.UserUpdateInput = {};
+    if (dto.name !== undefined) {
+      const trimmed = dto.name.trim();
+      if (!trimmed) {
+        throw new BadRequestException('الاسم مطلوب.');
+      }
+      data.name = trimmed;
     }
-    const user = await this.prisma.user.update({
-      where: { id: userId },
-      data: { name: trimmed },
-    });
+    if (dto.gender !== undefined) {
+      data.gender = dto.gender;
+    }
+    const user = await this.prisma.user.update({ where: { id: userId }, data });
     return this.toPublicUser(user);
   }
 }

@@ -37,13 +37,13 @@ export class AuthController {
     return this.auth.me(userId);
   }
 
-  /** Set/update the authenticated user's display name (finishes onboarding). */
+  /** Set/update the authenticated user's name and/or gender (onboarding). */
   @Patch('me')
   @UseGuards(JwtAuthGuard)
   updateMe(
     @CurrentUser('id') userId: string,
     @Body() dto: UpdateMeDto,
   ): Promise<PublicUser> {
-    return this.auth.updateMe(userId, dto.name);
+    return this.auth.updateMe(userId, dto);
   }
 }

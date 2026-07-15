@@ -20,6 +20,12 @@ enum UserRole {
   ADMIN
 }
 
+// Phase 1 amendment: user gender (required to complete a profile via the API).
+enum Gender {
+  MALE
+  FEMALE
+}
+
 enum DriverStatus {
   PENDING
   APPROVED
@@ -53,6 +59,13 @@ enum TripCreatedBy {
   SYSTEM // SYSTEM = Phase 2
 }
 
+// Phase 1 amendment: trip audience. WOMEN_FAMILY = نسائية/عائلية (all passengers
+// must be female; the driver may be any gender). GENERAL = عامة (no restriction).
+enum TripType {
+  GENERAL
+  WOMEN_FAMILY
+}
+
 enum BookingStatus {
   CONFIRMED
   ONBOARD
@@ -74,6 +87,7 @@ model User {
   id        String         @id @default(cuid())
   phone     String         @unique // +964...
   name      String?
+  gender    Gender? // Phase 1 amendment: required to complete a profile (API-enforced)
   roles     UserRole[]
   driver    DriverProfile?
   createdAt DateTime       @default(now())
@@ -134,6 +148,7 @@ model Trip {
   pricePerSeat   Int
   status         TripStatus    @default(OPEN)
   createdBy      TripCreatedBy @default(DRIVER)
+  tripType       TripType      @default(GENERAL) // Phase 1 amendment: general vs women/family
   bookings       SeatBooking[]
   createdAt      DateTime      @default(now())
 }

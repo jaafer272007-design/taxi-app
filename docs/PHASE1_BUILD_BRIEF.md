@@ -24,11 +24,13 @@
 ## 2. نموذج البيانات (Prisma-style — مُصمَّم لاستيعاب Phase 2)
 ```prisma
 enum UserRole { RIDER DRIVER ADMIN }
+enum Gender { MALE FEMALE }                 // Phase 1 amendment: required to complete a profile
 enum DriverStatus { PENDING APPROVED SUSPENDED REJECTED }
 enum DocType { NATIONAL_ID DRIVING_LICENSE VEHICLE_REG }
 enum DocStatus { PENDING APPROVED REJECTED }
 enum TripStatus { OPEN LOCKED EN_ROUTE COMPLETED SETTLED CANCELLED }
 enum TripCreatedBy { DRIVER SYSTEM }        // SYSTEM = Phase 2
+enum TripType { GENERAL WOMEN_FAMILY }      // Phase 1 amendment: عامة / نسائية-عائلية
 enum BookingStatus { CONFIRMED ONBOARD COMPLETED CANCELLED NO_SHOW }
 enum PaymentMethod { CASH }                 // WALLET/ZAINCASH = Phase 3
 enum PaymentStatus { PENDING COLLECTED }
@@ -37,6 +39,7 @@ model User {
   id        String   @id @default(cuid())
   phone     String   @unique               // +964...
   name      String?
+  gender    Gender?  // Phase 1 amendment: nullable in DB (existing rows), API-required to complete
   roles     UserRole[]
   driver    DriverProfile?
   createdAt DateTime @default(now())
@@ -97,6 +100,7 @@ model Trip {
   pricePerSeat  Int
   status        TripStatus    @default(OPEN)
   createdBy     TripCreatedBy @default(DRIVER)
+  tripType      TripType      @default(GENERAL) // Phase 1 amendment: عامة / نسائية-عائلية
   bookings      SeatBooking[]
   createdAt     DateTime      @default(now())
 }
@@ -163,8 +167,9 @@ model DeviceToken {
 ### `auth`
 - `POST /auth/request-otp` `{ phone }` → يرسل OTP عبر واتساب.
 - `POST /auth/verify-otp` `{ phone, code }` → JWT (يُنشئ User إذا جديد).
-- `GET /auth/me`.
-**قبول:** رقم عراقي يستلم كود واتساب ويدخل بنجاح؛ إعادة الإرسال محدودة (rate-limit).
+- `GET /auth/me` → يرجّع `{ …, gender, profileComplete }`.
+- `PATCH /auth/me` `{ name?, gender? }` → تحديث جزئي (كل حقل اختياري ويُكتب وحده). **Phase 1 amendment:** `gender` (`MALE|FEMALE`) مطلوب لإكمال الملف؛ الملف **مكتمل** فقط عند ضبط الاسم **و** الجنس معاً (`profileComplete`). المستخدمون القدامى `gender=null` = غير مكتمل حتى يضبطوه. جنس غير صالح → 400.
+**قبول:** رقم عراقي يستلم كود واتساب ويدخل بنجاح؛ إعادة الإرسال محدودة (rate-limit)؛ ضبط الاسم والجنس يُكمل الملف.
 
 ### `driver`
 - `POST /driver/profile` (يصير سائق) · `POST /driver/vehicle` · `POST /driver/documents` (رفع) · `GET /driver/profile`.
@@ -176,19 +181,20 @@ model DeviceToken {
 **قبول:** ممر النجف↔كربلاء (اتجاهين) موجود بسعر/مقعد محدد.
 
 ### `trip` (جانب السائق)
-- `POST /trips` `{ corridorId, departureTime | departNow, seatsTotal }` (يأخذ pricePerSeat من الممر).
+- `POST /trips` `{ corridorId, departureTime | departNow, seatsTotal, tripType? }` (يأخذ pricePerSeat من الممر). **Phase 1 amendment:** `tripType` (`GENERAL` افتراضياً · `WOMEN_FAMILY`).
 - `GET /trips/mine` · `POST /trips/:id/start` → EN_ROUTE (يقفل) · `POST /trips/:id/complete` → COMPLETED (+ EarningsRecord) · `POST /trips/:id/cancel`.
-**قواعد:** `seatsTotal ≤ vehicle.seats`. سائق مُعتمد فقط. `departNow=true` → departureTime=now، ونافذة صلاحية افتراضية 30 دقيقة (قابلة للتمديد).
+**قواعد:** `seatsTotal ≤ vehicle.seats`. سائق مُعتمد فقط. `departNow=true` → departureTime=now، ونافذة صلاحية افتراضية 30 دقيقة (قابلة للتمديد). **سائق أي جنس يقدر يعلن رحلة `WOMEN_FAMILY`** (تقييد الركّاب يُفرض عند الحجز، لا عند النشر).
 **قبول:** سائق مُعتمد يعلن رحلة نجف→كربلاء بمقاعد؛ تظهر OPEN.
 
 ### `booking` (جانب الراكب)
-- `GET /trips/search?corridorId=&date=&fromTime=&toTime=` → رحلات OPEN و seatsAvailable>0 (مع وقت، سعر، تقييم السائق، السيارة).
+- `GET /trips/search?corridorId=&date=&fromTime=&toTime=&tripType=&driverGender=` → رحلات OPEN و seatsAvailable>0 (مع وقت، سعر، تقييم السائق، السيارة). **Phase 1 amendment:** فلاتر اختيارية `tripType` و`driverGender`؛ كل رحلة ترجع `tripType` + `driverGender` للشارات. قائمة فارغة نتيجة صالحة (توفّر السائقات ~صفر حالياً)، ليست خطأ.
 - `POST /bookings` `{ tripId, pickup{lat,lng,label}, dropoff{lat,lng,label}, seatCount }` → CONFIRMED.
 - `GET /bookings/mine` · `POST /bookings/:id/cancel`.
 - سائق: `POST /bookings/:id/onboard` · `POST /bookings/:id/no-show`.
 **⚠ قاعدة حرجة — Concurrency:** خصم `seatsAvailable` لازم يكون **transactional مع row-lock** (أو `UPDATE ... WHERE seatsAvailable >= seatCount`) لمنع overbooking عند حجزين متزامنين على آخر مقعد. الإلغاء يرجّع المقاعد.
+**⚠ أهلية الجنس (Phase 1 amendment — تُفرض على الخادم قبل معاملة المقعد):** الراكب بلا جنس محدَّد → **403** (أكمل الملف)؛ على رحلة `WOMEN_FAMILY` الراكب غير الأنثى → **403**؛ رحلة `GENERAL` بلا تقييد جنس. الفحص يسبق الـ transaction فلا يُضعف ضمان المقاعد.
 **قطع الحجز:** إلغاء مجاني حتى 15 دقيقة قبل المغادرة (افتراضي)؛ بعدها يُعلَّم.
-**قبول:** راكبان يحجزون آخر مقعد بنفس اللحظة → واحد ينجح فقط، والمخزون صحيح.
+**قبول:** راكبان يحجزون آخر مقعد بنفس اللحظة → واحد ينجح فقط، والمخزون صحيح؛ راكب ذكر يُرفض على رحلة نسائية، وأنثى تنجح.
 
 ### `rating`
 - `POST /ratings` `{ tripId, toUserId, score, comment }` (بعد COMPLETED فقط) · تحديث `ratingAvg`.
@@ -219,6 +225,8 @@ model DeviceToken {
 - **No-show:** السائق يعلّمها → تؤثر على سمعة الراكب (لا خصم مالي بالـ MVP).
 - **إلغاء السائق للرحلة:** كل الحجوزات CANCELLED + إشعار الركّاب فوراً.
 - **الهوية:** رقم الموبايل هو المفتاح؛ مستخدم واحد بدورين ممكن.
+- **الجنس مطلوب (Phase 1 amendment):** `gender` يُضبط بالتسجيل؛ الملف مكتمل عند الاسم+الجنس. لا يقدر راكب بلا جنس أن يحجز أي رحلة (`403` — أكمل الملف).
+- **رحلة نسائية/عائلية (`WOMEN_FAMILY`) — Phase 1 amendment:** **كل الركّاب يجب أن يكنّ إناثاً** (المرأة تحجز مقاعد إضافية للعائلة)، بينما **السائق قد يكون ذكراً أو أنثى** — يطابق واقع العرض العراقي. تُفرض الأهلية على الخادم عند `POST /bookings` **قبل** معاملة حجز المقعد (فلا تُضعف ضمان الـ transactional). الراكب قد يفلتر اختيارياً بجنس السائق (`driverGender`)، وقائمة فارغة نتيجة صالحة.
 
 ---
 

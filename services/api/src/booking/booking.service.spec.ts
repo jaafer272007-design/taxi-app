@@ -4,7 +4,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { BookingStatus, TripStatus } from '@prisma/client';
+import { BookingStatus, Gender, TripStatus, TripType } from '@prisma/client';
 import { BookingService } from './booking.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DriverService } from '../driver/driver.service';
@@ -32,6 +32,7 @@ const futureTrip = {
   vehicleId: 'v1',
   seatsAvailable: 3,
   pricePerSeat: 6000,
+  tripType: TripType.GENERAL,
 };
 
 const dto = {
@@ -53,6 +54,8 @@ describe('BookingService.book', () => {
     prisma = {
       trip: { findUnique: jest.fn().mockResolvedValue(futureTrip) },
       driverProfile: { findUnique: jest.fn().mockResolvedValue({ userId: 'driverU' }) },
+      // The booking rider — has a gender set so eligibility passes by default.
+      user: { findUnique: jest.fn().mockResolvedValue({ gender: Gender.FEMALE }) },
       $transaction: jest.fn((cb: any) => cb(tx)),
     };
     drivers = { findProfileByUserId: jest.fn().mockResolvedValue(null) };
@@ -121,6 +124,43 @@ describe('BookingService.book', () => {
     expect(tx.trip.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 't1' }, data: { status: TripStatus.LOCKED } }),
     );
+  });
+
+  // ── Gender eligibility (enforced BEFORE the seat-reservation transaction) ──
+  it('403 when the rider has no gender set — cannot book anything, no reservation', async () => {
+    prisma.user.findUnique.mockResolvedValue({ gender: null });
+    await expect(service.book('u1', dto)).rejects.toBeInstanceOf(ForbiddenException);
+    // The gate runs before the transaction, so the seat logic is never entered.
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('403 when a MALE rider books a WOMEN_FAMILY trip — no reservation', async () => {
+    prisma.trip.findUnique.mockResolvedValue({ ...futureTrip, tripType: TripType.WOMEN_FAMILY });
+    prisma.user.findUnique.mockResolvedValue({ gender: Gender.MALE });
+    await expect(service.book('u1', dto)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('a FEMALE rider may book a WOMEN_FAMILY trip', async () => {
+    prisma.trip.findUnique.mockResolvedValue({ ...futureTrip, tripType: TripType.WOMEN_FAMILY });
+    prisma.user.findUnique.mockResolvedValue({ gender: Gender.FEMALE });
+    tx.trip.updateMany.mockResolvedValue({ count: 1 });
+    tx.trip.findUniqueOrThrow.mockResolvedValue({ ...futureTrip, seatsAvailable: 1 });
+
+    const bk = await service.book('u1', dto);
+
+    expect(bk.status).toBe(BookingStatus.CONFIRMED);
+    expect(prisma.$transaction).toHaveBeenCalled();
+  });
+
+  it('a MALE rider may book a GENERAL trip (no gender restriction)', async () => {
+    prisma.user.findUnique.mockResolvedValue({ gender: Gender.MALE });
+    tx.trip.updateMany.mockResolvedValue({ count: 1 });
+    tx.trip.findUniqueOrThrow.mockResolvedValue({ ...futureTrip, seatsAvailable: 1 });
+
+    const bk = await service.book('u1', dto);
+
+    expect(bk.status).toBe(BookingStatus.CONFIRMED);
   });
 });
 
@@ -273,7 +313,7 @@ describe('BookingService.search', () => {
     return new BookingService(prisma as PrismaService, {} as DriverService, notifications);
   }
 
-  it('enriches OPEN future trips with driverName, rating, vehicle and seatsTotal', async () => {
+  it('enriches OPEN future trips with driverName, gender, tripType, rating, vehicle', async () => {
     const departureTime = new Date(Date.now() + 3_600_000);
     const prisma = {
       trip: {
@@ -287,12 +327,13 @@ describe('BookingService.search', () => {
             pricePerSeat: 6000,
             seatsAvailable: 1,
             seatsTotal: 4,
+            tripType: TripType.GENERAL,
           },
         ]),
       },
       driverProfile: {
         findMany: jest.fn().mockResolvedValue([
-          { id: 'd1', ratingAvg: 4.5, user: { name: 'علي حسن' } },
+          { id: 'd1', ratingAvg: 4.5, user: { name: 'علي حسن', gender: Gender.MALE } },
         ]),
       },
       vehicle: {
@@ -313,7 +354,9 @@ describe('BookingService.search', () => {
         pricePerSeat: 6000,
         seatsAvailable: 1,
         seatsTotal: 4,
+        tripType: TripType.GENERAL,
         driverName: 'علي حسن',
+        driverGender: Gender.MALE,
         driverRatingAvg: 4.5,
         vehicle: { make: 'Toyota', model: 'Corolla', color: 'أبيض', seats: 4 },
       },
@@ -326,6 +369,66 @@ describe('BookingService.search', () => {
           corridorId: 'c1',
         }),
         orderBy: { departureTime: 'asc' },
+      }),
+    );
+  });
+
+  it('filters by tripType via the DB where-clause', async () => {
+    const prisma = {
+      trip: { findMany: jest.fn().mockResolvedValue([]) },
+      driverProfile: { findMany: jest.fn() },
+      vehicle: { findMany: jest.fn() },
+    };
+    const service = makeService(prisma);
+
+    await service.search({ tripType: TripType.WOMEN_FAMILY });
+
+    expect(prisma.trip.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ tripType: TripType.WOMEN_FAMILY }),
+      }),
+    );
+  });
+
+  it('post-filters by driverGender; a no-female-driver result is [] (not an error)', async () => {
+    const departureTime = new Date(Date.now() + 3_600_000);
+    const prisma = {
+      trip: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 't1',
+            corridorId: 'c1',
+            driverId: 'd1',
+            vehicleId: 'v1',
+            departureTime,
+            pricePerSeat: 6000,
+            seatsAvailable: 1,
+            seatsTotal: 4,
+            tripType: TripType.GENERAL,
+          },
+        ]),
+      },
+      driverProfile: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'd1', ratingAvg: 4.5, user: { name: 'علي حسن', gender: Gender.MALE } },
+        ]),
+      },
+      vehicle: {
+        findMany: jest.fn().mockResolvedValue([
+          { id: 'v1', make: 'Toyota', model: 'Corolla', color: 'أبيض', seats: 4 },
+        ]),
+      },
+    };
+    const service = makeService(prisma);
+
+    // Only a male driver exists → filtering for FEMALE drivers yields an empty list.
+    const res = await service.search({ driverGender: Gender.FEMALE });
+    expect(res).toEqual([]);
+
+    // driverGender is NOT a DB where-key (no Trip→User relation) — it's post-filtered.
+    expect(prisma.trip.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.not.objectContaining({ driverGender: expect.anything() }),
       }),
     );
   });

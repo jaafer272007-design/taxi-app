@@ -10,6 +10,7 @@ import {
   PaymentStatus,
   TripCreatedBy,
   TripStatus,
+  TripType,
 } from '@prisma/client';
 import { TripService } from './trip.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -111,6 +112,29 @@ describe('TripService.createTrip', () => {
       service.createTrip('u1', { corridorId: 'c1', departNow: true, departureTime: future, seatsTotal: 2 }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(prisma.trip.create).not.toHaveBeenCalled();
+  });
+
+  it('defaults tripType to GENERAL when omitted', async () => {
+    prisma.vehicle.findUnique.mockResolvedValue({ id: 'v1', seats: 4 });
+    corridors.findById.mockResolvedValue({ id: 'c1', active: true, pricePerSeat: 6000 });
+
+    await service.createTrip('u1', { corridorId: 'c1', departNow: true, seatsTotal: 3 });
+
+    expect(prisma.trip.create.mock.calls[0][0].data.tripType).toBe(TripType.GENERAL);
+  });
+
+  it('posts a WOMEN_FAMILY trip when requested (the driver may be any gender)', async () => {
+    prisma.vehicle.findUnique.mockResolvedValue({ id: 'v1', seats: 4 });
+    corridors.findById.mockResolvedValue({ id: 'c1', active: true, pricePerSeat: 6000 });
+
+    await service.createTrip('u1', {
+      corridorId: 'c1',
+      departNow: true,
+      seatsTotal: 3,
+      tripType: TripType.WOMEN_FAMILY,
+    });
+
+    expect(prisma.trip.create.mock.calls[0][0].data.tripType).toBe(TripType.WOMEN_FAMILY);
   });
 });
 
