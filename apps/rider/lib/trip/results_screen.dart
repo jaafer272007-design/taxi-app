@@ -16,10 +16,16 @@ class ResultsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.watch<TripSearchController>();
-    final corridor = c.corridor;
-    final title = corridor == null
+    final origin = c.origin;
+    final dest = c.dest;
+    final title = (origin == null || dest == null)
         ? 'الرحلات المتاحة'
-        : '${cityAr(corridor.originCity)} إلى ${cityAr(corridor.destCity)}';
+        : '${cityAr(origin)} إلى ${cityAr(dest)}';
+
+    // Clearing filters only helps when a corridor actually serves this pair; if
+    // there's no corridor yet, keep the plain "no route" message (clearing
+    // filters wouldn't change anything).
+    final corridorServed = c.matchedCorridor != null;
 
     return AppScaffold(
       title: title,
@@ -31,9 +37,9 @@ class ResultsScreen extends StatelessWidget {
             onRetry: () => c.search(),
           ),
         TripSearchStatus.empty => TripEmptyView(
-            tripType: c.tripType,
-            driverGender: c.driverGender,
-            onClearFilters: c.hasActiveFilters
+            tripType: corridorServed ? c.tripType : null,
+            driverGender: corridorServed ? c.driverGender : null,
+            onClearFilters: (corridorServed && c.hasActiveFilters)
                 ? () {
                     c.clearFilters();
                     c.search();

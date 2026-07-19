@@ -20,8 +20,9 @@ class PostTripController extends ChangeNotifier {
   final int _maxSeats;
 
   CorridorsLoad _corridorsLoad = CorridorsLoad.loading;
-  List<Corridor> _corridors = const [];
-  Corridor? _corridor;
+  List<Corridor> _corridors = const []; // active only
+  String? _origin;
+  String? _dest;
   String? _corridorsError;
 
   DepartMode _mode = DepartMode.now;
@@ -35,7 +36,8 @@ class PostTripController extends ChangeNotifier {
 
   CorridorsLoad get corridorsLoad => _corridorsLoad;
   List<Corridor> get corridors => _corridors;
-  Corridor? get corridor => _corridor;
+  String? get origin => _origin;
+  String? get dest => _dest;
   String? get corridorsError => _corridorsError;
   DepartMode get mode => _mode;
   DateTime? get scheduledAt => _scheduledAt;
@@ -46,18 +48,38 @@ class PostTripController extends ChangeNotifier {
   String? get error => _error;
   DriverTrip? get posted => _posted;
 
-  /// Read-only, system-set price for the selected corridor (per seat, IQD).
-  int get pricePerSeat => _corridor?.pricePerSeat ?? 0;
+  /// The active corridor serving the picked (origin, dest), or null — the driver
+  /// can only post once the admin has created a corridor for this pair.
+  Corridor? get matchedCorridor {
+    final o = _origin;
+    final d = _dest;
+    if (o == null || d == null) return null;
+    for (final c in _corridors) {
+      if (c.originCity == o && c.destCity == d) return c;
+    }
+    return null;
+  }
+
+  /// Both cities chosen and distinct, but no active corridor serves them yet.
+  bool get noCorridorForPair =>
+      _origin != null &&
+      _dest != null &&
+      _origin != _dest &&
+      matchedCorridor == null;
+
+  /// Read-only, system-set price for the matched corridor (per seat, IQD).
+  int get pricePerSeat => matchedCorridor?.pricePerSeat ?? 0;
 
   bool get canDecrement => _seatCount > 1;
   bool get canIncrement => _seatCount < _maxSeats;
 
   bool get canSubmit =>
       !_submitting &&
-      _corridor != null &&
+      matchedCorridor != null &&
       (_mode == DepartMode.now || _scheduledAt != null);
 
-  /// Load active corridors once (idempotent); default-selects the first.
+  /// Load active corridors once (idempotent); defaults the from/to cities to the
+  /// first served corridor.
   Future<void> loadCorridors() async {
     if (_corridors.isNotEmpty) return;
     _corridorsLoad = CorridorsLoad.loading;
@@ -66,7 +88,10 @@ class PostTripController extends ChangeNotifier {
     try {
       final all = await _api.getCorridors();
       _corridors = all.where((c) => c.active).toList();
-      _corridor ??= _corridors.isEmpty ? null : _corridors.first;
+      if (_origin == null && _dest == null && _corridors.isNotEmpty) {
+        _origin = _corridors.first.originCity;
+        _dest = _corridors.first.destCity;
+      }
       _corridorsLoad = CorridorsLoad.ready;
     } on ApiException catch (e) {
       _corridorsError = e.message;
@@ -79,22 +104,22 @@ class PostTripController extends ChangeNotifier {
     }
   }
 
-  void selectCorridor(Corridor corridor) {
-    _corridor = corridor;
+  void setOrigin(String city) {
+    _origin = city;
     notifyListeners();
   }
 
-  /// Swap to the reverse-direction corridor (Najaf→Karbala ⇆ Karbala→Najaf).
-  void swapDirection() {
-    final current = _corridor;
-    if (current == null) return;
-    for (final c in _corridors) {
-      if (c.originCity == current.destCity && c.destCity == current.originCity) {
-        _corridor = c;
-        notifyListeners();
-        return;
-      }
-    }
+  void setDest(String city) {
+    _dest = city;
+    notifyListeners();
+  }
+
+  /// Swap the from/to cities.
+  void swapCities() {
+    final o = _origin;
+    _origin = _dest;
+    _dest = o;
+    notifyListeners();
   }
 
   void setMode(DepartMode mode) {
@@ -132,7 +157,7 @@ class PostTripController extends ChangeNotifier {
     notifyListeners();
     try {
       _posted = await _api.postTrip(
-        corridorId: _corridor!.id,
+        corridorId: matchedCorridor!.id,
         seatsTotal: _seatCount,
         departNow: _mode == DepartMode.now,
         departureTime: _mode == DepartMode.scheduled ? _scheduledAt : null,

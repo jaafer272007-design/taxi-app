@@ -5,8 +5,9 @@ import { normalizeIraqiPhone } from '../src/common/phone.util';
  * Idempotent seed:
  *  - ONE ADMIN user (from ADMIN_PHONE) so admin endpoints are testable. The admin
  *    logs in through the normal WhatsApp OTP flow and receives an ADMIN-role JWT.
- *  - BOTH directions of the Najaf↔Karbala corridor with a placeholder price
- *    (admin sets the real price via PATCH /corridors/:id).
+ *  - A few real corridors (both directions) with a placeholder price so
+ *    multi-corridor search is testable: Najaf↔Karbala, Najaf↔Baghdad,
+ *    Karbala↔Baghdad. Admin sets real prices / adds more via /corridors.
  *
  * Run: ADMIN_PHONE=+9647700000000 npm run prisma:seed
  */
@@ -17,6 +18,10 @@ const PLACEHOLDER_PRICE_IQD = 5000;
 const CORRIDORS = [
   { originCity: 'Najaf', destCity: 'Karbala' },
   { originCity: 'Karbala', destCity: 'Najaf' },
+  { originCity: 'Najaf', destCity: 'Baghdad' },
+  { originCity: 'Baghdad', destCity: 'Najaf' },
+  { originCity: 'Karbala', destCity: 'Baghdad' },
+  { originCity: 'Baghdad', destCity: 'Karbala' },
 ];
 
 async function seedAdmin() {
@@ -42,18 +47,23 @@ async function seedAdmin() {
 
 async function seedCorridors() {
   for (const c of CORRIDORS) {
-    // No unique constraint on (originCity, destCity), so guard by findFirst.
-    const existing = await prisma.corridor.findFirst({
-      where: { originCity: c.originCity, destCity: c.destCity },
+    // Idempotent via the (originCity, destCity) unique index. `update: {}` keeps
+    // any admin-adjusted price on re-seed.
+    const corridor = await prisma.corridor.upsert({
+      where: {
+        originCity_destCity: { originCity: c.originCity, destCity: c.destCity },
+      },
+      update: {},
+      create: {
+        originCity: c.originCity,
+        destCity: c.destCity,
+        pricePerSeat: PLACEHOLDER_PRICE_IQD,
+        active: true,
+      },
     });
-    if (existing) {
-      console.log(`• Corridor ${c.originCity}→${c.destCity} already exists`);
-      continue;
-    }
-    await prisma.corridor.create({
-      data: { originCity: c.originCity, destCity: c.destCity, pricePerSeat: PLACEHOLDER_PRICE_IQD, active: true },
-    });
-    console.log(`✔ Corridor ${c.originCity}→${c.destCity} (${PLACEHOLDER_PRICE_IQD} IQD)`);
+    console.log(
+      `✔ Corridor ${corridor.originCity}→${corridor.destCity} (${corridor.pricePerSeat} IQD)`,
+    );
   }
 }
 

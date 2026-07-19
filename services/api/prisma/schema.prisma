@@ -133,6 +133,10 @@ model Corridor {
   active       Boolean @default(true)
   pricePerSeat Int // ثابت يحدده الأدمن (IQD)
   trips        Trip[]
+
+  // One corridor per directed city pair — the admin can't create a duplicate
+  // (Najaf→Karbala twice). Reverse direction is a separate pair, so both remain.
+  @@unique([originCity, destCity])
 }
 
 model Trip {

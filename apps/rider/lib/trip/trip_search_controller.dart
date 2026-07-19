@@ -13,11 +13,14 @@ class TripSearchController extends ChangeNotifier {
 
   final TripApi _api;
 
-  // ── corridors ──
+  // ── corridors (loaded once; used to resolve a picked city pair → corridor) ──
   List<Corridor> _corridors = const [];
-  Corridor? _corridor;
   bool _corridorsLoading = false;
   String? _corridorsError;
+
+  // ── route (from/to cities, chosen from the canonical 18-city list) ──
+  String? _origin;
+  String? _dest;
 
   // ── form ──
   /// `null` = today.
@@ -35,9 +38,27 @@ class TripSearchController extends ChangeNotifier {
   String? _error;
 
   List<Corridor> get corridors => _corridors;
-  Corridor? get corridor => _corridor;
   bool get corridorsLoading => _corridorsLoading;
   String? get corridorsError => _corridorsError;
+
+  /// Picked origin / destination city keys (stored English values).
+  String? get origin => _origin;
+  String? get dest => _dest;
+
+  /// The corridor serving the picked (origin, dest), if the admin created one.
+  /// `null` means this pair isn't served yet → search shows the empty state.
+  Corridor? get matchedCorridor {
+    final o = _origin;
+    final d = _dest;
+    if (o == null || d == null) return null;
+    for (final c in _corridors) {
+      if (c.originCity == o && c.destCity == d) return c;
+    }
+    return null;
+  }
+
+  /// Both endpoints chosen and distinct.
+  bool get canSearch => _origin != null && _dest != null && _origin != _dest;
 
   DateTime? get date => _date;
   TimeOfDay? get fromTime => _fromTime;
@@ -53,7 +74,8 @@ class TripSearchController extends ChangeNotifier {
   TripSearchStatus get status => _status;
   String? get error => _error;
 
-  /// Load corridors once (idempotent). Default-selects the first corridor.
+  /// Load corridors once (idempotent). Defaults the from/to cities to the first
+  /// served corridor so the initial state is immediately searchable.
   Future<void> ensureCorridorsLoaded() async {
     if (_corridors.isNotEmpty || _corridorsLoading) return;
     _corridorsLoading = true;
@@ -61,7 +83,10 @@ class TripSearchController extends ChangeNotifier {
     notifyListeners();
     try {
       _corridors = await _api.getCorridors();
-      _corridor ??= _corridors.isEmpty ? null : _corridors.first;
+      if (_origin == null && _dest == null && _corridors.isNotEmpty) {
+        _origin = _corridors.first.originCity;
+        _dest = _corridors.first.destCity;
+      }
     } on ApiException catch (e) {
       _corridorsError = e.message;
     } catch (_) {
@@ -72,22 +97,22 @@ class TripSearchController extends ChangeNotifier {
     }
   }
 
-  void selectCorridor(Corridor corridor) {
-    _corridor = corridor;
+  void setOrigin(String city) {
+    _origin = city;
     notifyListeners();
   }
 
-  /// Swap to the reverse-direction corridor (Najaf→Karbala ⇆ Karbala→Najaf).
-  void swapDirection() {
-    final current = _corridor;
-    if (current == null) return;
-    for (final c in _corridors) {
-      if (c.originCity == current.destCity && c.destCity == current.originCity) {
-        _corridor = c;
-        notifyListeners();
-        return;
-      }
-    }
+  void setDest(String city) {
+    _dest = city;
+    notifyListeners();
+  }
+
+  /// Swap the from/to cities.
+  void swapCities() {
+    final o = _origin;
+    _origin = _dest;
+    _dest = o;
+    notifyListeners();
   }
 
   void setDate(DateTime? date) {
@@ -130,8 +155,18 @@ class TripSearchController extends ChangeNotifier {
 
   /// Run the search for the current form. Results are sorted by departure time.
   Future<void> search() async {
-    final corridor = _corridor;
-    if (corridor == null) return;
+    if (!canSearch) return;
+    final corridor = matchedCorridor;
+
+    // No corridor for this city pair yet → a valid empty result (not an error,
+    // not an API call). The empty view explains it clearly.
+    if (corridor == null) {
+      _results = const [];
+      _error = null;
+      _status = TripSearchStatus.empty;
+      notifyListeners();
+      return;
+    }
 
     _status = TripSearchStatus.loading;
     _error = null;

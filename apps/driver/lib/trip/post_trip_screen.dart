@@ -104,14 +104,20 @@ class _Form extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = controller;
     final space = context.space;
-    final corridor = c.corridor;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(height: space.md),
-        if (corridor != null)
-          _CorridorSelector(corridor: corridor, onSwap: c.swapDirection),
+        _RoutePicker(controller: c),
+        if (c.noCorridorForPair) ...[
+          SizedBox(height: space.md),
+          const DriverBanner(
+            message:
+                'لا يوجد ممر لهذا المسار حالياً. تواصل مع الأدمن لإضافته قبل نشر الرحلة.',
+            tone: BannerTone.warning,
+          ),
+        ],
         SizedBox(height: space.xl),
         Text('نوع الرحلة',
             style: context.text.label.copyWith(color: context.colors.textSecondary)),
@@ -152,8 +158,10 @@ class _Form extends StatelessWidget {
             style: context.text.label.copyWith(color: context.colors.textSecondary)),
         SizedBox(height: space.sm),
         _SeatStepper(controller: c),
-        SizedBox(height: space.xl),
-        _PriceCard(pricePerSeat: c.pricePerSeat),
+        if (c.matchedCorridor != null) ...[
+          SizedBox(height: space.xl),
+          _PriceCard(pricePerSeat: c.pricePerSeat),
+        ],
         if (c.error != null) ...[
           SizedBox(height: space.lg),
           DriverBanner(message: c.error!, tone: BannerTone.danger),
@@ -163,54 +171,40 @@ class _Form extends StatelessWidget {
   }
 }
 
-class _CorridorSelector extends StatelessWidget {
-  const _CorridorSelector({required this.corridor, required this.onSwap});
+/// From/to city pickers (full 18-city list) with a swap control. A pair is only
+/// postable once the admin has created an active corridor for it.
+class _RoutePicker extends StatelessWidget {
+  const _RoutePicker({required this.controller});
 
-  final Corridor corridor;
-  final VoidCallback onSwap;
+  final PostTripController controller;
 
   @override
   Widget build(BuildContext context) {
+    final c = controller;
     final space = context.space;
-    return AppCard(
-      child: Row(
-        children: [
-          Expanded(child: _Endpoint(label: 'من', city: cityAr(corridor.originCity))),
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: space.sm),
-            child: _SwapButton(onTap: onSwap),
-          ),
-          Expanded(
-            child: _Endpoint(
-              label: 'إلى',
-              city: cityAr(corridor.destCity),
-              alignEnd: true,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Endpoint extends StatelessWidget {
-  const _Endpoint({required this.label, required this.city, this.alignEnd = false});
-
-  final String label;
-  final String city;
-  final bool alignEnd;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    return Column(
-      crossAxisAlignment:
-          alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
+    return Row(
       children: [
-        Text(label, style: context.text.caption.copyWith(color: colors.textMuted)),
-        SizedBox(height: context.space.xs),
-        Text(city, style: context.text.h2.copyWith(color: colors.textPrimary)),
+        Expanded(
+          child: Column(
+            children: [
+              AppCityField(
+                label: 'من',
+                cityKey: c.origin,
+                onChanged: c.setOrigin,
+                excludeKey: c.dest,
+              ),
+              SizedBox(height: space.sm),
+              AppCityField(
+                label: 'إلى',
+                cityKey: c.dest,
+                onChanged: c.setDest,
+                excludeKey: c.origin,
+              ),
+            ],
+          ),
+        ),
+        SizedBox(width: space.sm),
+        _SwapButton(onTap: c.swapCities),
       ],
     );
   }

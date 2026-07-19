@@ -80,12 +80,16 @@ model Document {
 
 model Corridor {
   id         String  @id @default(cuid())
-  originCity String  // "Najaf"
+  originCity String  // "Najaf" — من قائمة المدن الرسمية (18 محافظة)
   destCity   String  // "Karbala"
   active     Boolean @default(true)
   pricePerSeat Int    // ثابت يحدده الأدمن (IQD)
   trips      Trip[]
+  @@unique([originCity, destCity]) // ممر واحد لكل زوج (اتجاه)؛ يمنع التكرار
 }
+// المدن: قائمة رسمية بـ 18 مدينة (محافظة) — services/api/src/corridor/cities.ts
+// و packages/shared/lib/constants/iraqi_cities.dart (متطابقتان). الممر يُنشأ بين
+// أي مدينتين من القائمة؛ زوج المدن يصبح قابلاً للبحث/النشر فقط بعد إنشاء ممر له.
 
 model Trip {
   id            String        @id @default(cuid())
@@ -177,8 +181,9 @@ model DeviceToken {
 **قبول:** سائق يرفع مستمسكاته → أدمن يعتمده → يقدر يعلن رحلة.
 
 ### `corridor` (أدمن)
-- `GET /corridors` · `POST /corridors` `{ originCity, destCity, pricePerSeat }` · `PATCH /corridors/:id`.
-**قبول:** ممر النجف↔كربلاء (اتجاهين) موجود بسعر/مقعد محدد.
+- `GET /corridors` (أي مستخدم مُصادَق) · `POST /corridors` `{ originCity, destCity, pricePerSeat }` · `PATCH /corridors/:id` (سعر/تفعيل/تعطيل). الإنشاء/التعديل **admin فقط** (RolesGuard).
+- **Phase 1 amendment (مدن كل المحافظات):** `originCity`/`destCity` يجب أن تكونا من قائمة المدن الرسمية (18) وإلا **400**؛ نفس المدينة للطرفين **400**؛ تكرار زوج `(origin,dest)` **409** (مع فهرس فريد بالـ DB). الأدمن ينشئ ممراً بين أي مدينتين فيصبح قابلاً للبحث/النشر فوراً.
+**قبول:** ممر النجف↔كربلاء (اتجاهين) موجود بسعر/مقعد محدد؛ يمكن إضافة ممرات أخرى (مثل نجف↔بغداد).
 
 ### `trip` (جانب السائق)
 - `POST /trips` `{ corridorId, departureTime | departNow, seatsTotal, tripType? }` (يأخذ pricePerSeat من الممر). **Phase 1 amendment:** `tripType` (`GENERAL` افتراضياً · `WOMEN_FAMILY`).

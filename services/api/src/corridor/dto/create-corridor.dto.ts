@@ -1,12 +1,11 @@
-import { IsInt, IsNotEmpty, IsString, Min } from 'class-validator';
+import { IsIn, IsInt, Min } from 'class-validator';
+import { IRAQI_CITIES } from '../cities';
 
 export class CreateCorridorDto {
-  @IsString()
-  @IsNotEmpty({ message: 'مدينة الانطلاق مطلوبة.' })
+  @IsIn([...IRAQI_CITIES], { message: 'مدينة الانطلاق غير صالحة.' })
   originCity!: string;
 
-  @IsString()
-  @IsNotEmpty({ message: 'مدينة الوصول مطلوبة.' })
+  @IsIn([...IRAQI_CITIES], { message: 'مدينة الوصول غير صالحة.' })
   destCity!: string;
 
   // IQD, integer (no fractions).

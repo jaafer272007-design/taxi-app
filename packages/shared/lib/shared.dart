@@ -24,9 +24,13 @@ export 'widgets/app_avatar.dart';
 export 'widgets/app_scaffold.dart';
 export 'widgets/app_segmented_control.dart';
 export 'widgets/app_confirm_dialog.dart';
+export 'widgets/app_city_field.dart';
 export 'widgets/rating_stars.dart';
 export 'widgets/onboarding_header.dart';
 export 'widgets/otp_input.dart';
+
+// Shared domain constants (canonical Iraqi cities, kept in sync with the API).
+export 'constants/iraqi_cities.dart';
 
 // Shared screens (reused across apps).
 export 'settings/settings_screen.dart';

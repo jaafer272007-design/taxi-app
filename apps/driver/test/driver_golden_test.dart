@@ -46,6 +46,7 @@ void main() {
   _screen('pending_review', _pending);
   _screen('post_trip', _postTrip);
   _screen('post_trip_women', _postTripWomen);
+  _screen('post_trip_no_corridor', _postTripNoCorridor);
   _screen('my_trips', _myTrips);
   _screen('trip_detail', _tripDetailOpen);
   _screen('trip_detail_enroute', _tripDetailEnRoute);
@@ -127,6 +128,21 @@ Future<Widget> _postTripWomen() async {
   await c.loadCorridors();
   c.setSeatCount(2);
   c.setTripType(TripType.womenFamily);
+  return ChangeNotifierProvider<PostTripController>.value(
+    value: c,
+    child: PostTripScreen(onPosted: () {}),
+  );
+}
+
+/// A city pair with no active corridor → the "ask the admin" notice, no price
+/// card, and a disabled post button.
+Future<Widget> _postTripNoCorridor() async {
+  final api = FakeDriverTripApi()..corridors = const [najafKarbala, karbalaNajaf];
+  final c = PostTripController(api: api, maxSeats: 4);
+  await c.loadCorridors();
+  c
+    ..setOrigin('Baghdad')
+    ..setDest('Basra');
   return ChangeNotifierProvider<PostTripController>.value(
     value: c,
     child: PostTripScreen(onPosted: () {}),

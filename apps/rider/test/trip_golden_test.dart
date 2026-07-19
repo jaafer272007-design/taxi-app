@@ -66,6 +66,21 @@ void main() {
     });
   });
 
+  group('city_picker', () {
+    testWidgets('light', (t) async {
+      await _golden(t,
+          name: 'city_picker_light',
+          brightness: Brightness.light,
+          child: _cityPickerSheet());
+    });
+    testWidgets('dark', (t) async {
+      await _golden(t,
+          name: 'city_picker_dark',
+          brightness: Brightness.dark,
+          child: _cityPickerSheet());
+    });
+  });
+
   group('results', () {
     testWidgets('light', (t) async {
       await _golden(t,
@@ -157,6 +172,27 @@ void main() {
     });
   });
 }
+
+/// The canonical-city picker rendered like the modal bottom sheet it opens as
+/// (bottom-aligned, rounded top), so the full 18-city dropdown is visible.
+Widget _cityPickerSheet() => Builder(
+      builder: (context) => ColoredBox(
+        color: context.colors.background,
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: SizedBox(
+            height: 640,
+            child: Material(
+              color: context.colors.surface,
+              borderRadius:
+                  BorderRadius.vertical(top: Radius.circular(context.radii.lg)),
+              clipBehavior: Clip.antiAlias,
+              child: AppCityPickerSheet(selected: 'Najaf', onSelect: (_) {}),
+            ),
+          ),
+        ),
+      ),
+    );
 
 AuthController _freshAuth() =>
     AuthController(api: FakeAuthApi(), tokenStore: InMemoryTokenStore());

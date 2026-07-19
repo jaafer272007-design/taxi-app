@@ -12,13 +12,16 @@ void main() {
 
   setUp(() => api = FakeTripApi());
 
-  group('corridors', () {
-    test('ensureCorridorsLoaded loads and default-selects the first', () async {
+  group('route (from/to cities)', () {
+    test('ensureCorridorsLoaded defaults from/to to the first corridor', () async {
       api.corridors = const [najafKarbala, karbalaNajaf];
       final c = make();
       await c.ensureCorridorsLoaded();
       expect(c.corridors.length, 2);
-      expect(c.corridor?.id, 'c1');
+      expect(c.origin, 'Najaf');
+      expect(c.dest, 'Karbala');
+      expect(c.matchedCorridor?.id, 'c1');
+      expect(c.canSearch, isTrue);
       expect(c.corridorsError, isNull);
     });
 
@@ -30,23 +33,40 @@ void main() {
       expect(api.getCorridorsCalls, 1);
     });
 
-    test('error surfaces a message', () async {
+    test('error surfaces a message; no cities defaulted', () async {
       api.corridorsError = const ApiException('تعذّر تحميل المسارات.');
       final c = make();
       await c.ensureCorridorsLoaded();
       expect(c.corridorsError, 'تعذّر تحميل المسارات.');
-      expect(c.corridor, isNull);
+      expect(c.origin, isNull);
+      expect(c.dest, isNull);
     });
 
-    test('swapDirection selects the reverse corridor', () async {
+    test('swapCities swaps from/to and resolves the reverse corridor', () async {
       api.corridors = const [najafKarbala, karbalaNajaf];
       final c = make();
       await c.ensureCorridorsLoaded();
-      expect(c.corridor?.id, 'c1');
-      c.swapDirection();
-      expect(c.corridor?.id, 'c2');
-      c.swapDirection();
-      expect(c.corridor?.id, 'c1');
+      expect(c.matchedCorridor?.id, 'c1');
+      c.swapCities();
+      expect(c.origin, 'Karbala');
+      expect(c.dest, 'Najaf');
+      expect(c.matchedCorridor?.id, 'c2');
+    });
+
+    test('a pair with no corridor → search is empty, never hits the API',
+        () async {
+      api.corridors = const [najafKarbala]; // only Najaf→Karbala is served
+      final c = make();
+      await c.ensureCorridorsLoaded();
+      c.setOrigin('Baghdad');
+      c.setDest('Basra');
+      expect(c.matchedCorridor, isNull);
+      expect(c.canSearch, isTrue); // distinct cities, so searchable...
+
+      await c.search();
+      expect(c.status, TripSearchStatus.empty); // ...but no corridor → empty
+      expect(api.searchCalls, 0);
+      expect(c.error, isNull);
     });
   });
 
@@ -84,8 +104,8 @@ void main() {
       expect(c.error, 'تعذّر الاتصال بالخادم.');
     });
 
-    test('no-op without a selected corridor', () async {
-      final c = make();
+    test('no-op when no cities are chosen', () async {
+      final c = make(); // corridors not loaded → origin/dest null → canSearch false
       await c.search();
       expect(c.status, TripSearchStatus.initial);
       expect(api.searchCalls, 0);
