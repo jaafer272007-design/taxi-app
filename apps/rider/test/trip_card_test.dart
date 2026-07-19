@@ -60,7 +60,8 @@ void main() {
   testWidgets('empty state shows the no-trips message', (tester) async {
     await tester.pumpWidget(_host(const TripEmptyView()));
 
-    expect(find.text('لا توجد رحلات متاحة على هذا المسار'), findsOneWidget);
+    expect(
+        find.text('لا توجد رحلات متاحة على هذا المسار حالياً'), findsOneWidget);
   });
 
   testWidgets(
