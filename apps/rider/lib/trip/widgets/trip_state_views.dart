@@ -112,10 +112,12 @@ class TripEmptyView extends StatelessWidget {
         ),
       );
     }
+    // Shown both when a corridor has no trips yet AND when the picked city pair
+    // has no corridor at all — either way it's a normal state, not a bug.
     return const _CenteredMessage(
       icon: AppIcons.route,
-      title: 'لا توجد رحلات متاحة على هذا المسار',
-      subtitle: 'جرّب تاريخاً آخر أو اعكس الاتجاه.',
+      title: 'لا توجد رحلات متاحة على هذا المسار حالياً',
+      subtitle: 'جرّب مساراً أو تاريخاً آخر.',
     );
   }
 }

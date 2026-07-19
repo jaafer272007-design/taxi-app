@@ -10,7 +10,7 @@ PostTripController _controller(FakeDriverTripApi api, {int maxSeats = 4}) =>
 
 void main() {
   group('PostTripController', () {
-    test('loadCorridors filters inactive corridors and default-selects first',
+    test('loadCorridors filters inactive corridors and defaults from/to first',
         () async {
       final api = FakeDriverTripApi()
         ..corridors = const [
@@ -18,8 +18,8 @@ void main() {
           karbalaNajaf,
           Corridor(
             id: 'c3',
-            originCity: 'X',
-            destCity: 'Y',
+            originCity: 'Baghdad',
+            destCity: 'Basra',
             active: false,
             pricePerSeat: 1000,
           ),
@@ -28,16 +28,34 @@ void main() {
       await c.loadCorridors();
       expect(c.corridorsLoad, CorridorsLoad.ready);
       expect(c.corridors.length, 2); // inactive filtered out
-      expect(c.corridor, najafKarbala);
+      expect(c.origin, 'Najaf');
+      expect(c.dest, 'Karbala');
+      expect(c.matchedCorridor, najafKarbala);
       expect(c.pricePerSeat, 6000);
     });
 
-    test('swapDirection selects the reverse corridor', () async {
+    test('swapCities resolves the reverse corridor', () async {
       final api = FakeDriverTripApi()..corridors = const [najafKarbala, karbalaNajaf];
       final c = _controller(api);
       await c.loadCorridors();
-      c.swapDirection();
-      expect(c.corridor, karbalaNajaf);
+      c.swapCities();
+      expect(c.origin, 'Karbala');
+      expect(c.dest, 'Najaf');
+      expect(c.matchedCorridor, karbalaNajaf);
+    });
+
+    test('a pair with no active corridor blocks posting (clear notice)',
+        () async {
+      final api = FakeDriverTripApi()..corridors = const [najafKarbala];
+      final c = _controller(api);
+      await c.loadCorridors();
+
+      c.setOrigin('Baghdad');
+      c.setDest('Basra');
+      expect(c.matchedCorridor, isNull);
+      expect(c.noCorridorForPair, isTrue);
+      expect(c.canSubmit, isFalse);
+      expect(c.pricePerSeat, 0);
     });
 
     test('seat count is capped at the vehicle seats', () async {

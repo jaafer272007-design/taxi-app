@@ -1,5 +1,7 @@
 // Pure formatting helpers for trip data (no design values here).
 
+import 'package:shared/shared.dart';
+
 /// Iraq is UTC+3 year-round (no DST); show departure in Baghdad wall-clock.
 const Duration _baghdadOffset = Duration(hours: 3);
 
@@ -25,13 +27,9 @@ String formatIqd(int amount) {
 /// Price with the Arabic dinar suffix, e.g. "12,000 د.ع".
 String formatPrice(int amount) => '${formatIqd(amount)} د.ع';
 
-const Map<String, String> _cityAr = {
-  'Najaf': 'النجف',
-  'Karbala': 'كربلاء',
-};
-
-/// Arabic name for a stored (English) city; falls back to the input.
-String cityAr(String city) => _cityAr[city] ?? city;
+/// Arabic name for a stored (English) city, from the shared canonical list;
+/// falls back to the input for any unknown/legacy value.
+String cityAr(String city) => cityArName(city);
 
 const List<String> _arMonths = [
   'كانون الثاني',

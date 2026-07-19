@@ -1,14 +1,13 @@
-import { IsBoolean, IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsOptional, Min } from 'class-validator';
+import { IRAQI_CITIES } from '../cities';
 
 export class UpdateCorridorDto {
   @IsOptional()
-  @IsString()
-  @IsNotEmpty({ message: 'مدينة الانطلاق لا يمكن أن تكون فارغة.' })
+  @IsIn([...IRAQI_CITIES], { message: 'مدينة الانطلاق غير صالحة.' })
   originCity?: string;
 
   @IsOptional()
-  @IsString()
-  @IsNotEmpty({ message: 'مدينة الوصول لا يمكن أن تكون فارغة.' })
+  @IsIn([...IRAQI_CITIES], { message: 'مدينة الوصول غير صالحة.' })
   destCity?: string;
 
   @IsOptional()
