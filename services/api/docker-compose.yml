@@ -1,26 +1,36 @@
 # Local development infra for the Taxi API (Phase 1).
 # Usage: docker compose up -d   (from services/api/)
 #
-# PostGIS is available on the DB image but UNUSED in Phase 1 — the schema
-# stores plain lat/lng floats. It is here so Phase 2 geo-queries need no
-# infra change.
+# DELIBERATELY ISOLATED so this can run alongside another local stack (e.g.
+# "Aurora") on the same machine WITHOUT any collision:
+#   • host ports are NON-default — Postgres 5433 (not 5432), Redis 6380 (not 6379)
+#   • project name `taxi` → its own Docker network (taxi_default) + volume prefix
+#   • container names are taxi_-prefixed, the DB is `taxi_db`, volumes are taxi_-scoped
+# Nothing here is shared with any other project. See docs/RUN_LOCAL.md.
+#
+# PostGIS is available on the DB image but UNUSED in Phase 1 — the schema stores
+# plain lat/lng floats. It is here so Phase 2 geo-queries need no infra change.
+
+name: taxi
+
 services:
   db:
     image: postgis/postgis:16-3.4
-    container_name: taxi_db
+    container_name: taxi_postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: taxi
       POSTGRES_PASSWORD: taxi
-      POSTGRES_DB: taxi_dev
+      POSTGRES_DB: taxi_db
       TZ: Asia/Baghdad
       PGTZ: Asia/Baghdad
     ports:
-      - "5432:5432"
+      # host:container — host 5433 avoids clashing with a default Postgres (5432).
+      - "5433:5432"
     volumes:
-      - taxi_db_data:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U taxi -d taxi_dev"]
+      test: ["CMD-SHELL", "pg_isready -U taxi -d taxi_db"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -31,15 +41,18 @@ services:
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     ports:
-      - "6379:6379"
+      # host:container — host 6380 avoids clashing with a default Redis (6379).
+      - "6380:6379"
     volumes:
-      - taxi_redis_data:/data
+      - redisdata:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
 
+# Named volumes are scoped to the `taxi` project (effective names: taxi_pgdata,
+# taxi_redisdata) so the taxi data never mixes with another stack's data.
 volumes:
-  taxi_db_data:
-  taxi_redis_data:
+  pgdata:
+  redisdata:
