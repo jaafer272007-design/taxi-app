@@ -1,0 +1,143 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens — mirrored EXACTLY from packages/shared/lib/theme/colors.dart
+ * (AppColors.light / AppColors.dark), the single source of truth shared by the
+ * rider, driver AND admin apps. Do not hand-pick new colors here; if the brand
+ * palette changes, change AppColors.dart and update these hex values to match.
+ *
+ * Shadcn semantic-slot mapping notes:
+ *  - `accent` here is shadcn's usual meaning (subtle hover/highlight surface),
+ *    NOT AppColors.accent (the bold amber brand color) — those are different
+ *    concepts that happen to share a name. The amber isn't needed by any
+ *    screen in this app yet; if a future screen needs it, add a dedicated
+ *    `--color-brand-accent` token rather than overloading shadcn's `accent`.
+ *  - `success` / `warning` are custom additions (shadcn ships no default for
+ *    them) used by the corridor active/inactive badge and form banners.
+ */
+:root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #0f172a;
+  --muted: #f1f5f9;
+  --muted-foreground: #475569;
+  --accent: #f1f5f9;
+  --accent-foreground: #0f172a;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --success: #16a34a;
+  --success-foreground: #ffffff;
+  --warning: #d97706;
+  --warning-foreground: #ffffff;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #2563eb;
+  --radius: 0.75rem;
+
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0f172a;
+  --sidebar-primary: #2563eb;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f1f5f9;
+  --sidebar-accent-foreground: #0f172a;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: #2563eb;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0b1220;
+    --foreground: #f1f5f9;
+    --card: #111a2e;
+    --card-foreground: #f1f5f9;
+    --popover: #111a2e;
+    --popover-foreground: #f1f5f9;
+    --primary: #3b82f6;
+    --primary-foreground: #ffffff;
+    --secondary: #1e293b;
+    --secondary-foreground: #f1f5f9;
+    --muted: #1e293b;
+    --muted-foreground: #94a3b8;
+    --accent: #1e293b;
+    --accent-foreground: #f1f5f9;
+    --destructive: #f87171;
+    --destructive-foreground: #2a0606;
+    --success: #22c55e;
+    --success-foreground: #04120a;
+    --warning: #f59e0b;
+    --warning-foreground: #231400;
+    --border: #24324a;
+    --input: #24324a;
+    --ring: #3b82f6;
+
+    --sidebar: #111a2e;
+    --sidebar-foreground: #f1f5f9;
+    --sidebar-primary: #3b82f6;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #1e293b;
+    --sidebar-accent-foreground: #f1f5f9;
+    --sidebar-border: #24324a;
+    --sidebar-ring: #3b82f6;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans: var(--font-cairo);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-feature-settings: "tnum" 1, "lnum" 1; /* tabular numerals for IQD prices */
+}
+
+/* Tabular numerals specifically where prices/counts render, matching the
+   Flutter apps' `.tabular` text style convention. */
+.tabular-nums-ar {
+  font-variant-numeric: tabular-nums;
+}
