@@ -148,6 +148,89 @@ void main() {
     });
   });
 
+  group('SeatCountPicker', () {
+    Widget picker({
+      int value = 1,
+      int max = 4,
+      int offered = 4,
+      void Function(int)? onChanged,
+    }) =>
+        host(SizedBox(
+          width: 358,
+          child: SeatCountPicker(
+            value: value,
+            max: max,
+            offered: offered,
+            onChanged: onChanged ?? (_) {},
+            hint: 'مقعدان متاحان',
+          ),
+        ));
+
+    testWidgets('draws one tile per offered count, in Arabic-Indic digits',
+        (tester) async {
+      await tester.pumpWidget(picker());
+      for (final d in ['١', '٢', '٣', '٤']) {
+        expect(find.text(d), findsOneWidget);
+      }
+      expect(find.text('مقعدان متاحان'), findsOneWidget);
+    });
+
+    testWidgets('reports the tapped count', (tester) async {
+      int? picked;
+      await tester.pumpWidget(picker(onChanged: (n) => picked = n));
+      await tester.tap(find.text('٣'));
+      expect(picked, 3);
+    });
+
+    testWidgets('a tile above `max` is drawn but dead', (tester) async {
+      // The whole reason this replaced the ± stepper: the ceiling is visible
+      // BEFORE you reach for it, not discovered by a button that does nothing.
+      await tester.pumpWidget(picker(max: 2));
+      expect(find.text('٤'), findsOneWidget);
+      final tile = tester.widget<GestureDetector>(
+        find
+            .ancestor(of: find.text('٤'), matching: find.byType(GestureDetector))
+            .first,
+      );
+      expect(tile.onTap, isNull);
+    });
+
+    testWidgets('every tile clears the 48dp minimum target', (tester) async {
+      await tester.pumpWidget(picker());
+      for (final d in ['١', '٢', '٣', '٤']) {
+        final size = tester.getSize(
+          find
+              .ancestor(of: find.text(d), matching: find.byType(GestureDetector))
+              .first,
+        );
+        expect(size.height, greaterThanOrEqualTo(48.0));
+        expect(size.width, greaterThanOrEqualTo(48.0));
+      }
+    });
+
+    testWidgets('shows the driver\'s larger vehicle capacity', (tester) async {
+      await tester.pumpWidget(picker(max: 6, offered: 6));
+      expect(find.text('٦'), findsOneWidget);
+    });
+  });
+
+  group('OnPrimaryChip', () {
+    testWidgets('renders on a primary field', (tester) async {
+      await tester.pumpWidget(host(const OnPrimaryChip(
+        label: 'نسائية/عائلية',
+        icon: AppIcons.users,
+      )));
+      expect(find.text('نسائية/عائلية'), findsOneWidget);
+    });
+
+    test('its fill is opaque — never a live alpha wash', () {
+      // A translucent fill composites over whatever is behind it, so the same
+      // chip would measure a different ratio on each hero it lands on.
+      expect(OnPrimaryChip.fillOn(AppColors.light).a, 1.0);
+      expect(OnPrimaryChip.fillOn(AppColors.dark).a, 1.0);
+    });
+  });
+
   group('FloatingPillNav', () {
     const items = [
       FloatingPillNavItem(icon: AppIcons.search, label: 'ابحث'),

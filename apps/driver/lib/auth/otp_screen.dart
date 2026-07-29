@@ -28,7 +28,7 @@ class _OtpScreenState extends State<OtpScreen> {
           SizedBox(height: space.xl2),
           OnboardingHeader(
             title: 'أدخل رمز التحقق',
-            subtitle: 'أرسلنا رمزاً من 6 أرقام إلى ${auth.phone}',
+            subtitle: 'أرسلنا رمزاً من ٦ أرقام إلى ${auth.phone}',
           ),
           SizedBox(height: space.xl2),
           OtpInput(

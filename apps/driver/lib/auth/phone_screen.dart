@@ -24,6 +24,9 @@ class _PhoneScreenState extends State<PhoneScreen> {
   void _submit(AuthController auth) {
     final normalized = IraqiPhone.normalize(_controller.text);
     if (normalized == null) {
+      // Western digits deliberately: this describes what the keyboard
+      // produces in the phone field, and inputs stay Western per the locked
+      // numerals rule.
       setState(() => _localError = 'أدخل رقم موبايل عراقي صحيح (يبدأ بـ 07).');
       return;
     }

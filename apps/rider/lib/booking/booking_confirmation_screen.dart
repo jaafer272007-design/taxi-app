@@ -46,6 +46,11 @@ class BookingConfirmationScreen extends StatelessWidget {
   /// Hand-off badge diameter.
   static const double _badge = 88;
 
+  /// Alpha of the on-primary ink blended into the pine field behind the check.
+  /// Lighter than [OnPrimaryChip.blend]: at 88dp this is a large shape, and the
+  /// chip's weight would read as a second button.
+  static const double badgeBlend = 0.14;
+
   void _openMyBookings(BuildContext context) {
     final api = context.read<BookingApi>();
     Navigator.of(context).push(
@@ -84,10 +89,7 @@ class BookingConfirmationScreen extends StatelessWidget {
                         decoration: BoxDecoration(
                           // Opaque: pre-blended rather than a live alpha wash,
                           // so the badge's contrast is fixed and measurable.
-                          color: Color.alphaBlend(
-                            colors.onPrimary.withValues(alpha: 0.14),
-                            colors.primary,
-                          ),
+                          color: onPrimaryFill(colors, badgeBlend),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(AppIcons.check,

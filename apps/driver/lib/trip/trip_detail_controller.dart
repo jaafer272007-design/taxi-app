@@ -78,6 +78,31 @@ class TripDetailController extends ChangeNotifier {
   bool canTransition(TripBooking b) =>
       isEnRoute && b.status == BookingStatus.confirmed;
 
+  // ── Live figures for the hero ─────────────────────────────────────────────
+  //
+  // "On board" and "expected cash" mean different things either side of the
+  // start: before the trip leaves they are what is *booked*; once it is moving
+  // they are what actually got in the car. Keeping the definition here rather
+  // than in the widget means the CTA's cash figure and the completion summary
+  // can never drift apart.
+
+  /// Bookings that count toward the cash the driver expects to hold.
+  ///
+  /// Before departure: every CONFIRMED booking. While EN_ROUTE and after: only
+  /// riders actually ONBOARD or COMPLETED — a no-show pays nothing.
+  Iterable<TripBooking> get _payingBookings => _bookings.where((b) =>
+      (isEnRoute || isDone)
+          ? (b.status == BookingStatus.onboard ||
+              b.status == BookingStatus.completed)
+          : b.status == BookingStatus.confirmed);
+
+  /// Seats on board (or booked, before departure).
+  int get seatsOnBoard =>
+      _payingBookings.fold<int>(0, (s, b) => s + b.seatCount);
+
+  /// Cash the driver should be holding when this trip ends, in IQD.
+  int get expectedCash => _payingBookings.fold<int>(0, (s, b) => s + b.fare);
+
   /// Riders who rode (COMPLETED booking), deduped by riderId — the rate targets.
   List<TripBooking> get riddenRiders {
     final seen = <String>{};

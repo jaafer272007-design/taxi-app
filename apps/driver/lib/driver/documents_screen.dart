@@ -35,7 +35,7 @@ class DocumentsScreen extends StatelessWidget {
           Text('ارفع مستمسكاتك',
               style: context.text.h2.copyWith(color: context.colors.textPrimary)),
           SizedBox(height: space.xs),
-          Text('صورة واضحة لكل مستند (صورة أو PDF، حتى 5 ميغابايت).',
+          Text('صورة واضحة لكل مستند (صورة أو PDF، حتى ٥ ميغابايت).',
               style: context.text.body.copyWith(color: context.colors.textSecondary)),
           SizedBox(height: space.lg),
           for (final type in kRequiredDocs) ...[

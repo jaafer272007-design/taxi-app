@@ -30,8 +30,8 @@ class OnboardingHeader extends StatelessWidget {
             height: space.xl4 + space.xl2,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: colors.primary.withValues(alpha: 0.12),
-              borderRadius: context.radii.lgAll,
+              color: colors.primaryTonal,
+              borderRadius: context.radii.cardAll,
             ),
             child: Icon(icon, color: colors.primary, size: space.xl4),
           ),

@@ -500,7 +500,7 @@ class _ThemePreviewState extends State<ThemePreview> {
             runSpacing: context.space.sm,
             children: const [
               AppPill(label: 'النجف → كربلاء', tone: AppBadgeTone.info, icon: AppIcons.route),
-              AppPill(label: '3 مقاعد', tone: AppBadgeTone.success, icon: AppIcons.seat),
+              AppPill(label: '٣ مقاعد', tone: AppBadgeTone.success, icon: AppIcons.seat),
             ],
           ),
         ],

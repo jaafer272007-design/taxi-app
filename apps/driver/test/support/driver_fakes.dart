@@ -388,6 +388,7 @@ EarningsRecord earningsRecordFixture({
   String id = 'e1',
   String tripId = 't1',
   int amount = 6000,
+  int dayUtc = 20,
   int hourUtc = 5,
   int minute = 0,
 }) =>
@@ -395,5 +396,5 @@ EarningsRecord earningsRecordFixture({
       id: id,
       tripId: tripId,
       amount: amount,
-      collectedAt: DateTime.utc(2026, 7, 20, hourUtc, minute),
+      collectedAt: DateTime.utc(2026, 7, dayUtc, hourUtc, minute),
     );

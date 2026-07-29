@@ -275,15 +275,33 @@ Future<Widget> _tripCompleted() async {
   return _hostDetail(c);
 }
 
+/// The earnings fixture is deliberately **self-consistent**: every total is the
+/// sum of the rows it sits above, and the today range is exactly the newest
+/// day's rows. The screen's whole claim is that its arithmetic checks out, so a
+/// screenshot showing figures that don't add up would be worse than no
+/// screenshot.
 Future<Widget> _earnings() async {
+  final ledger = [
+    // ٢٠ تموز — 18,000 (also the "today" range)
+    earningsRecordFixture(
+        id: 'e1', amount: 12000, dayUtc: 20, hourUtc: 6, minute: 15),
+    earningsRecordFixture(
+        id: 'e2', amount: 6000, dayUtc: 20, hourUtc: 4, minute: 30),
+    // ١٩ تموز — 30,000
+    earningsRecordFixture(
+        id: 'e3', amount: 18000, dayUtc: 19, hourUtc: 11, minute: 0),
+    earningsRecordFixture(
+        id: 'e4', amount: 12000, dayUtc: 19, hourUtc: 2, minute: 45),
+    // ١٨ تموز — 48,000
+    earningsRecordFixture(
+        id: 'e5', amount: 24000, dayUtc: 18, hourUtc: 12, minute: 0),
+    earningsRecordFixture(
+        id: 'e6', amount: 24000, dayUtc: 18, hourUtc: 3, minute: 20),
+  ];
   final api = FakeDriverTripApi()
     ..earningsByRange = {
-      'today': const DriverEarnings(total: 18000, records: []),
-      'all': DriverEarnings(total: 96000, records: [
-        earningsRecordFixture(id: 'e1', amount: 12000, hourUtc: 6, minute: 15),
-        earningsRecordFixture(id: 'e2', amount: 6000, hourUtc: 4, minute: 30),
-        earningsRecordFixture(id: 'e3', amount: 18000, hourUtc: 2, minute: 0),
-      ]),
+      'today': DriverEarnings(total: 18000, records: ledger.take(2).toList()),
+      'all': DriverEarnings(total: 96000, records: ledger),
     };
   final c = EarningsController(api: api);
   await c.load();

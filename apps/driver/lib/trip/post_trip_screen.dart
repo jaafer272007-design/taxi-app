@@ -118,8 +118,7 @@ class _Form extends StatelessWidget {
           ),
         ],
         SizedBox(height: space.xl),
-        Text('نوع الرحلة',
-            style: context.text.label.copyWith(color: context.colors.textSecondary)),
+        const _SectionLabel('نوع الرحلة'),
         SizedBox(height: space.sm),
         AppSegmentedControl<TripType>(
           value: c.tripType,
@@ -137,8 +136,7 @@ class _Form extends StatelessWidget {
           style: context.text.caption.copyWith(color: context.colors.textMuted),
         ),
         SizedBox(height: space.xl),
-        Text('متى؟',
-            style: context.text.label.copyWith(color: context.colors.textSecondary)),
+        const _SectionLabel('متى؟'),
         SizedBox(height: space.sm),
         _ModeToggle(
           mode: c.mode,
@@ -153,13 +151,20 @@ class _Form extends StatelessWidget {
           ),
         ],
         SizedBox(height: space.xl),
-        Text('عدد المقاعد',
-            style: context.text.label.copyWith(color: context.colors.textSecondary)),
+        const _SectionLabel('كم مقعداً تعرض؟'),
         SizedBox(height: space.sm),
-        _SeatStepper(controller: c),
+        SeatCountPicker(
+          value: c.seatCount,
+          max: c.maxSeats,
+          // Always draw at least four tiles so the vehicle's ceiling is visible
+          // as dead tiles rather than as a `+` that silently stops working.
+          offered: c.maxSeats < 4 ? 4 : c.maxSeats,
+          onChanged: c.setSeatCount,
+          hint: 'سعة سيارتك ${formatSeats(c.maxSeats)}',
+        ),
         if (c.matchedCorridor != null) ...[
           SizedBox(height: space.xl),
-          _PriceCard(pricePerSeat: c.pricePerSeat),
+          _PriceCard(pricePerSeat: c.pricePerSeat, seatCount: c.seatCount),
         ],
         if (c.error != null) ...[
           SizedBox(height: space.lg),
@@ -191,6 +196,18 @@ class _RoutePicker extends StatelessWidget {
   }
 }
 
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Text(
+        text,
+        style: context.text.label.copyWith(color: context.colors.textSecondary),
+      );
+}
 
 class _ModeToggle extends StatelessWidget {
   const _ModeToggle({
@@ -247,36 +264,46 @@ class _ToggleOption extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final space = context.space;
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: EdgeInsets.symmetric(vertical: space.md),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: selected
-              ? colors.primary.withValues(alpha: 0.12)
-              : colors.surface,
-          borderRadius: context.radii.mdAll,
-          border: Border.all(
-            color: selected ? colors.primary : colors.border,
-            width: selected ? 1.6 : 1,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon,
-                size: space.lg,
-                color: selected ? colors.primary : colors.textSecondary),
-            SizedBox(width: space.sm),
-            Text(
-              label,
-              style: context.text.bodyStrong.copyWith(
-                color: selected ? colors.primary : colors.textSecondary,
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Container(
+            padding: EdgeInsets.symmetric(vertical: space.md),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              // Opaque tonal, not `primary` at 12%: the toggle sits on the page
+              // background here but on a card in other layouts, and an alpha
+              // tint measures differently on each.
+              color: selected ? colors.primaryTonal : colors.surface,
+              borderRadius: context.radii.fieldLgAll,
+              border: Border.all(
+                color: selected ? colors.primary : colors.border,
+                width: selected ? 2 : 1,
               ),
             ),
-          ],
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon,
+                    size: space.lg,
+                    color: selected ? colors.primary : colors.textSecondary),
+                SizedBox(width: space.sm),
+                Text(
+                  label,
+                  style: context.text.bodyStrong.copyWith(
+                    color: selected ? colors.primary : colors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -296,28 +323,38 @@ class _ScheduleChip extends StatelessWidget {
     final label = at == null
         ? 'اختر التاريخ والوقت'
         : '${formatDayShort(at!)} · ${_hm(at!)}';
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: space.lg, vertical: space.md),
-        decoration: BoxDecoration(
-          color: colors.surface,
-          borderRadius: context.radii.mdAll,
-          border: Border.all(color: colors.border),
-        ),
-        child: Row(
-          children: [
-            Icon(AppIcons.calendar, size: space.lg, color: colors.textSecondary),
-            SizedBox(width: space.sm),
-            Expanded(
-              child: Text(
-                label,
-                style: context.text.body.copyWith(color: colors.textPrimary),
-              ),
+    return Semantics(
+      button: true,
+      label: 'موعد الانطلاق',
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Container(
+            padding:
+                EdgeInsets.symmetric(horizontal: space.lg, vertical: space.md),
+            decoration: BoxDecoration(
+              color: colors.surface,
+              borderRadius: context.radii.fieldLgAll,
+              border: Border.all(color: colors.border),
             ),
-            Icon(AppIcons.chevronLeft, size: space.lg, color: colors.textMuted),
-          ],
+            child: Row(
+              children: [
+                Icon(AppIcons.calendar,
+                    size: space.lg, color: colors.textSecondary),
+                SizedBox(width: space.sm),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: context.text.body.copyWith(color: colors.textPrimary),
+                  ),
+                ),
+                Icon(AppIcons.chevronLeft,
+                    size: space.lg, color: colors.textMuted),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -328,120 +365,65 @@ class _ScheduleChip extends StatelessWidget {
   static String _hm(DateTime t) => formatClock(t.hour, t.minute);
 }
 
-class _SeatStepper extends StatelessWidget {
-  const _SeatStepper({required this.controller});
-
-  final PostTripController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final space = context.space;
-    final colors = context.colors;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            _StepButton(
-              icon: AppIcons.minus,
-              semanticLabel: 'إنقاص',
-              onTap: controller.canDecrement ? controller.decrementSeat : null,
-            ),
-            Expanded(
-              child: Center(
-                child: Text(formatCount(controller.seatCount),
-                    style: context.text.h1.tabular
-                        .copyWith(color: colors.textPrimary)),
-              ),
-            ),
-            _StepButton(
-              icon: AppIcons.plus,
-              semanticLabel: 'زيادة',
-              onTap: controller.canIncrement ? controller.incrementSeat : null,
-            ),
-          ],
-        ),
-        SizedBox(height: space.xs),
-        Text('حتى ${controller.maxSeats} (سعة سيارتك)',
-            style: context.text.caption.copyWith(color: colors.textMuted)),
-      ],
-    );
-  }
-}
-
-class _StepButton extends StatelessWidget {
-  const _StepButton({
-    required this.icon,
-    required this.semanticLabel,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final String semanticLabel;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final space = context.space;
-    final enabled = onTap != null;
-    return Semantics(
-      button: true,
-      enabled: enabled,
-      label: semanticLabel,
-      child: Opacity(
-        opacity: enabled ? 1 : 0.4,
-        child: GestureDetector(
-          onTap: onTap,
-          behavior: HitTestBehavior.opaque,
-          child: Container(
-            width: space.xl4 + space.xs,
-            height: space.xl4 + space.xs,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: colors.primary.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: colors.primary, size: space.xl),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
+/// What the trip is worth: the system-set seat price, and what a full car pays.
+///
+/// The driver is choosing how many seats to offer, so the number that decides
+/// that choice is the *potential take* — showing only the per-seat price makes
+/// them do the arithmetic themselves. It is labelled "إذا امتلأت" rather than
+/// stated flatly, because it is a ceiling, not a promise.
 class _PriceCard extends StatelessWidget {
-  const _PriceCard({required this.pricePerSeat});
+  const _PriceCard({required this.pricePerSeat, required this.seatCount});
 
   final int pricePerSeat;
+  final int seatCount;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final space = context.space;
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: space.lg, vertical: space.md),
-      decoration: BoxDecoration(
-        color: colors.surfaceMuted,
-        borderRadius: context.radii.mdAll,
-      ),
-      child: Row(
+
+    return AppCard(
+      child: Column(
         children: [
-          Icon(AppIcons.cash, size: space.lg, color: colors.textMuted),
-          SizedBox(width: space.sm),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
+          Row(
             children: [
-              Text('السعر للمقعد',
-                  style: context.text.bodyStrong.copyWith(color: colors.textPrimary)),
-              Text('يحدده النظام',
-                  style: context.text.caption.copyWith(color: colors.textMuted)),
+              Icon(AppIcons.cash, size: space.lg, color: colors.textMuted),
+              SizedBox(width: space.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('السعر للمقعد',
+                        style: context.text.bodyStrong
+                            .copyWith(color: colors.textPrimary)),
+                    Text('يحدده النظام',
+                        style: context.text.caption
+                            .copyWith(color: colors.textMuted)),
+                  ],
+                ),
+              ),
+              Text(formatPrice(pricePerSeat),
+                  style: context.text.title.tabular
+                      .copyWith(color: colors.textPrimary)),
             ],
           ),
-          const Spacer(),
-          Text(formatPrice(pricePerSeat),
-              style: context.text.h2.tabular.copyWith(color: colors.primary)),
+          SizedBox(height: space.md),
+          Divider(height: 1, color: colors.border),
+          SizedBox(height: space.md),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text('إذا امتلأت · ${formatSeats(seatCount)}',
+                  style:
+                      context.text.body.copyWith(color: colors.textSecondary)),
+              const Spacer(),
+              Text(formatPrice(pricePerSeat * seatCount),
+                  style:
+                      context.text.h1.tabular.copyWith(color: colors.primary)),
+            ],
+          ),
         ],
       ),
     );

@@ -125,7 +125,6 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
   Widget build(BuildContext context) {
     final c = context.watch<TripDetailController>();
     final space = context.space;
-    final route = _routeLabel(c);
 
     return AppScaffold(
       title: 'تفاصيل الرحلة',
@@ -134,7 +133,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       body: ListView(
         padding: EdgeInsets.all(space.lg),
         children: [
-          _TripInfoCard(controller: c, route: route),
+          _TripHero(controller: c),
           if (c.summary != null) ...[
             SizedBox(height: space.md),
             _SummaryCard(summary: c.summary!),
@@ -202,8 +201,11 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       );
     }
     if (c.isEnRoute) {
+      // The cash rides on the button. Completing the trip IS the collection, so
+      // the driver should see the figure they are about to be holding at the
+      // moment they commit — not have to remember it from the hero.
       return AppButton(
-        label: 'أنهِ الرحلة',
+        label: 'أنهِ الرحلة · تحصيل ${formatPrice(c.expectedCash)}',
         icon: AppIcons.check,
         loading: c.tripActionInFlight,
         onPressed: () => _onComplete(c),
@@ -211,80 +213,91 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     }
     return null;
   }
-
-  String _routeLabel(TripDetailController c) {
-    final corridor = c.corridor;
-    if (corridor == null) return 'رحلة';
-    return '${cityArName(corridor.originCity)} إلى ${cityArName(corridor.destCity)}';
-  }
 }
 
-class _TripInfoCard extends StatelessWidget {
-  const _TripInfoCard({required this.controller, required this.route});
+/// The pine hero: the route on the rail, then the three figures a driver checks
+/// mid-trip — when it leaves, how many are on board, and how much cash that is.
+///
+/// Cash gets a place on the hero because it is the number the driver is
+/// carrying. Its meaning shifts with the trip's state (booked before departure,
+/// actually-on-board after), so the label shifts with it rather than quietly
+/// changing what the same word means — see `TripDetailController.expectedCash`.
+class _TripHero extends StatelessWidget {
+  const _TripHero({required this.controller});
 
   final TripDetailController controller;
-  final String route;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final space = context.space;
     final trip = controller.trip;
-    final typeBadge = tripTypeBadge(trip.tripType);
+    final corridor = controller.corridor;
+    final ink = colors.onPrimary;
+    final moving = controller.isEnRoute || controller.isDone;
 
-    return AppCard(
+    return Container(
+      padding: EdgeInsets.all(space.xl),
+      decoration: BoxDecoration(
+        color: colors.primary,
+        borderRadius: context.radii.cardAll,
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          RouteRail(
+            onPrimaryField: true,
+            origin: _HeroEndpoint(
+              city: corridor?.originCity,
+              trailing: Text(
+                formatTime(trip.departureTime),
+                style: context.text.h1.tabular.copyWith(color: ink),
+              ),
+            ),
+            destination: _HeroEndpoint(
+              city: corridor?.destCity,
+              trailing: Text(
+                formatDayShortBaghdad(trip.departureTime),
+                style: context.text.body.copyWith(color: ink),
+              ),
+            ),
+          ),
+          SizedBox(height: space.lg),
+          Row(
+            children: [
+              OnPrimaryChip(
+                label: tripStatusLabel(trip.status),
+                icon: AppIcons.route,
+              ),
+              if (trip.tripType == TripType.womenFamily) ...[
+                SizedBox(width: space.sm),
+                const OnPrimaryChip(
+                  label: 'نسائية/عائلية',
+                  icon: AppIcons.users,
+                ),
+              ],
+            ],
+          ),
+          SizedBox(height: space.lg),
+          Divider(height: 1, color: onPrimaryFill(colors, 0.28)),
+          SizedBox(height: space.lg),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Text(route,
-                    style: context.text.title.copyWith(color: colors.textPrimary),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
+                child: _HeroStat(
+                  label: moving ? 'على المتن' : 'محجوز',
+                  value: formatCount(controller.seatsOnBoard),
+                  unit: 'من ${formatCount(trip.seatsTotal)}',
+                ),
               ),
-              SizedBox(width: space.sm),
-              tripStatusPill(trip.status),
-            ],
-          ),
-          if (typeBadge != null) ...[
-            SizedBox(height: space.sm),
-            Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: typeBadge,
-            ),
-          ],
-          SizedBox(height: space.md),
-          Row(
-            children: [
-              _MetaChip(
-                  icon: AppIcons.clock, label: formatTime(trip.departureTime)),
-              SizedBox(width: space.lg),
-              _MetaChip(
-                  icon: AppIcons.calendar,
-                  label: formatDayShortBaghdad(trip.departureTime)),
-            ],
-          ),
-          SizedBox(height: space.sm),
-          Row(
-            children: [
-              _MetaChip(
-                icon: AppIcons.seat,
-                label: '${formatCount(trip.seatsBooked)}/${formatCount(trip.seatsTotal)} محجوز',
+              Expanded(
+                child: _HeroStat(
+                  label: moving ? 'نقد متوقع' : 'نقد محجوز',
+                  value: formatIqd(controller.expectedCash),
+                  unit: iqdSuffix,
+                ),
               ),
-            ],
-          ),
-          SizedBox(height: space.md),
-          Divider(height: 1, color: colors.border),
-          SizedBox(height: space.md),
-          Row(
-            children: [
-              Text(formatPrice(trip.pricePerSeat),
-                  style: context.text.title.tabular.copyWith(color: colors.primary)),
-              Text(' / للمقعد',
-                  style: context.text.caption.copyWith(color: colors.textMuted)),
             ],
           ),
         ],
@@ -293,6 +306,79 @@ class _TripInfoCard extends StatelessWidget {
   }
 }
 
+/// A city on the hero rail, with its time / date on the trailing edge.
+class _HeroEndpoint extends StatelessWidget {
+  const _HeroEndpoint({required this.city, required this.trailing});
+
+  final String? city;
+  final Widget trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        Expanded(
+          child: Text(
+            city == null ? 'الرحلة' : cityArName(city!),
+            style: context.text.h2.copyWith(color: context.colors.onPrimary),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        SizedBox(width: context.space.sm),
+        trailing,
+      ],
+    );
+  }
+}
+
+/// One figure on the hero. Hierarchy is size, not opacity — every glyph here is
+/// full `onPrimary`.
+class _HeroStat extends StatelessWidget {
+  const _HeroStat({
+    required this.label,
+    required this.value,
+    required this.unit,
+  });
+
+  final String label;
+  final String value;
+  final String unit;
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = context.colors.onPrimary;
+    final space = context.space;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: context.text.caption.copyWith(color: ink)),
+        SizedBox(height: space.xs),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Flexible(
+              child: Text(
+                value,
+                style: context.text.h1.tabular.copyWith(color: ink),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            SizedBox(width: space.xs),
+            Text(unit, style: context.text.caption.copyWith(color: ink)),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// The receipt after a trip settles: who rode and what the driver is holding.
 class _SummaryCard extends StatelessWidget {
   const _SummaryCard({required this.summary});
 
@@ -303,7 +389,14 @@ class _SummaryCard extends StatelessWidget {
     final colors = context.colors;
     final space = context.space;
 
-    return AppCard(
+    return Container(
+      padding: EdgeInsets.all(space.lg),
+      decoration: BoxDecoration(
+        // Opaque tonal — this sits on the page background here, but the same
+        // receipt block would measure differently on a card.
+        color: colors.successTonal,
+        borderRadius: context.radii.cardAll,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -312,7 +405,7 @@ class _SummaryCard extends StatelessWidget {
               Icon(AppIcons.success, size: space.xl, color: colors.success),
               SizedBox(width: space.sm),
               Text('اكتملت الرحلة',
-                  style: context.text.title.copyWith(color: colors.textPrimary)),
+                  style: context.text.title.copyWith(color: colors.success)),
             ],
           ),
           SizedBox(height: space.md),
@@ -320,15 +413,20 @@ class _SummaryCard extends StatelessWidget {
             children: [
               Expanded(
                 child: _SummaryStat(
+                  label: 'ركّاب',
+                  value: formatCount(summary.ridersCount),
+                ),
+              ),
+              Expanded(
+                child: _SummaryStat(
                   label: 'مقاعد ركبت',
-                  value: '${summary.seatsRidden}',
+                  value: formatCount(summary.seatsRidden),
                 ),
               ),
               Expanded(
                 child: _SummaryStat(
                   label: 'نقد محصّل',
-                  value: formatPrice(summary.cashCollected),
-                  highlight: true,
+                  value: formatIqd(summary.cashCollected),
                 ),
               ),
             ],
@@ -340,15 +438,10 @@ class _SummaryCard extends StatelessWidget {
 }
 
 class _SummaryStat extends StatelessWidget {
-  const _SummaryStat({
-    required this.label,
-    required this.value,
-    this.highlight = false,
-  });
+  const _SummaryStat({required this.label, required this.value});
 
   final String label;
   final String value;
-  final bool highlight;
 
   @override
   Widget build(BuildContext context) {
@@ -357,33 +450,13 @@ class _SummaryStat extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: context.text.caption.copyWith(color: colors.textMuted)),
+        Text(label,
+            style: context.text.caption.copyWith(color: colors.success)),
         SizedBox(height: space.xs),
         Text(value,
-            style: context.text.h2.tabular.copyWith(
-                color: highlight ? colors.primary : colors.textPrimary)),
-      ],
-    );
-  }
-}
-
-class _MetaChip extends StatelessWidget {
-  const _MetaChip({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final space = context.space;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: space.lg, color: colors.textMuted),
-        SizedBox(width: space.sm),
-        Text(label,
-            style: context.text.body.tabular.copyWith(color: colors.textSecondary)),
+            style: context.text.h2.tabular.copyWith(color: colors.success),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis),
       ],
     );
   }
@@ -430,7 +503,7 @@ class _BookingCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis),
                     SizedBox(height: space.xs),
-                    Text('${formatCount(booking.seatCount)} مقعد · ${formatPrice(booking.fare)}',
+                    Text('${formatSeats(booking.seatCount)} · ${formatPrice(booking.fare)}',
                         style: context.text.caption
                             .copyWith(color: colors.textMuted)),
                   ],
@@ -571,18 +644,39 @@ class _InlineError extends StatelessWidget {
   }
 }
 
+/// The Arabic name of a trip state. One source of truth — the pill, the compact
+/// badge and the hero chip all read from here, so a state can never be called
+/// two different things on two screens.
+String tripStatusLabel(TripStatus status) => switch (status) {
+      TripStatus.open => 'مفتوحة',
+      TripStatus.locked => 'مكتملة الحجز',
+      TripStatus.enRoute => 'جارية',
+      TripStatus.completed || TripStatus.settled => 'منتهية',
+      TripStatus.cancelled => 'ملغاة',
+      TripStatus.unknown => '—',
+    };
+
+AppBadgeTone _tripStatusTone(TripStatus status) => switch (status) {
+      TripStatus.open => AppBadgeTone.success,
+      TripStatus.locked => AppBadgeTone.warning,
+      TripStatus.enRoute => AppBadgeTone.info,
+      TripStatus.completed || TripStatus.settled => AppBadgeTone.neutral,
+      TripStatus.cancelled => AppBadgeTone.danger,
+      TripStatus.unknown => AppBadgeTone.neutral,
+    };
+
 /// Status pill for a trip (shared with the trips list mapping).
-Widget tripStatusPill(TripStatus status) {
-  final (String label, AppBadgeTone tone) = switch (status) {
-    TripStatus.open => ('مفتوحة', AppBadgeTone.success),
-    TripStatus.locked => ('مكتملة الحجز', AppBadgeTone.warning),
-    TripStatus.enRoute => ('جارية', AppBadgeTone.info),
-    TripStatus.completed || TripStatus.settled => ('منتهية', AppBadgeTone.neutral),
-    TripStatus.cancelled => ('ملغاة', AppBadgeTone.danger),
-    TripStatus.unknown => ('—', AppBadgeTone.neutral),
-  };
-  return AppPill(label: label, tone: tone);
-}
+Widget tripStatusPill(TripStatus status) => AppPill(
+      label: tripStatusLabel(status),
+      tone: _tripStatusTone(status),
+    );
+
+/// The same status as a compact [AppBadge], for rails and list rows where a
+/// full pill would squeeze the city name into an ellipsis.
+Widget tripStatusBadge(TripStatus status) => AppBadge(
+      label: tripStatusLabel(status),
+      tone: _tripStatusTone(status),
+    );
 
 /// Badge marking a women/family trip; `null` for general trips (no badge).
 Widget? tripTypeBadge(TripType type) => type == TripType.womenFamily

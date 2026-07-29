@@ -74,11 +74,21 @@ class _TripsList extends StatelessWidget {
   }
 }
 
+/// A posted trip in the Masar anatomy: a status stripe along the top edge, the
+/// route on the rail, and the two numbers a driver actually scans for — when it
+/// leaves and how full it is.
+///
+/// The seat state is drawn with [SeatGlyphs] rather than spelled as "٢/٤ متاح":
+/// on this screen the driver is checking *fill*, and a fill state reads faster
+/// as a picture than as a fraction.
 class _TripCard extends StatelessWidget {
   const _TripCard({required this.trip, required this.corridor});
 
   final DriverTrip trip;
   final Corridor? corridor;
+
+  /// Hand-off stripe thickness.
+  static const double _stripe = 4;
 
   /// Open the trip detail (bookings + lifecycle). Refreshes the list on return
   /// so any status change (started/completed/cancelled) shows immediately.
@@ -99,68 +109,116 @@ class _TripCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final space = context.space;
-    final route = corridor == null
-        ? 'رحلة'
-        : '${cityArName(corridor!.originCity)} إلى ${cityArName(corridor!.destCity)}';
     final typeBadge = tripTypeBadge(trip.tripType);
+    final done = trip.status == TripStatus.completed ||
+        trip.status == TripStatus.settled ||
+        trip.status == TripStatus.cancelled;
 
-    return AppCard(
-      onTap: () => _open(context),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(route,
-                    style: context.text.title.copyWith(color: colors.textPrimary),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
+    return ClipRRect(
+      borderRadius: context.radii.cardAll,
+      child: AppCard(
+        onTap: () => _open(context),
+        muted: done,
+        padding: EdgeInsets.zero,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Decorative and redundant with the status pill below it, so it is
+            // deliberately not held to 4.5:1 — nothing here is colour-only.
+            Container(height: _stripe, color: _statusTone(trip.status, colors)),
+            Padding(
+              padding: EdgeInsets.all(space.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  RouteRail(
+                    variant: RouteRailVariant.compact,
+                    origin: _EndpointRow(
+                      city: corridor?.originCity,
+                      trailing: Text(
+                        formatTime(trip.departureTime),
+                        style: context.text.h2.tabular
+                            .copyWith(color: colors.textPrimary),
+                      ),
+                    ),
+                    destination: _EndpointRow(
+                      city: corridor?.destCity,
+                      trailing: tripStatusBadge(trip.status),
+                    ),
+                  ),
+                  if (typeBadge != null) ...[
+                    SizedBox(height: space.md),
+                    Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: typeBadge,
+                    ),
+                  ],
+                  SizedBox(height: space.md),
+                  Divider(height: 1, color: colors.border),
+                  SizedBox(height: space.md),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: SeatAvailability(
+                          total: trip.seatsTotal,
+                          available: trip.seatsAvailable,
+                          compact: true,
+                        ),
+                      ),
+                      SizedBox(width: space.sm),
+                      Text(
+                        formatPrice(trip.pricePerSeat),
+                        style: context.text.title.tabular
+                            .copyWith(color: colors.primary),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              SizedBox(width: space.sm),
-              tripStatusPill(trip.status),
-            ],
-          ),
-          if (typeBadge != null) ...[
-            SizedBox(height: space.sm),
-            Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: typeBadge,
             ),
           ],
-          SizedBox(height: space.md),
-          Row(
-            children: [
-              Icon(AppIcons.clock, size: space.lg, color: colors.textMuted),
-              SizedBox(width: space.sm),
-              Text(formatTime(trip.departureTime),
-                  style: context.text.body.tabular
-                      .copyWith(color: colors.textSecondary)),
-              SizedBox(width: space.lg),
-              Icon(AppIcons.seat, size: space.lg, color: colors.textMuted),
-              SizedBox(width: space.sm),
-              Text('${formatCount(trip.seatsAvailable)}/${formatCount(trip.seatsTotal)} متاح',
-                  style: context.text.body.tabular
-                      .copyWith(color: colors.textSecondary)),
-            ],
-          ),
-          SizedBox(height: space.md),
-          Divider(height: 1, color: colors.border),
-          SizedBox(height: space.md),
-          Row(
-            children: [
-              Text(formatPrice(trip.pricePerSeat),
-                  style: context.text.title.tabular.copyWith(color: colors.primary)),
-              Text(' / للمقعد',
-                  style: context.text.caption.copyWith(color: colors.textMuted)),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
 }
+
+/// A city on the trip rail with its time / status on the trailing edge.
+class _EndpointRow extends StatelessWidget {
+  const _EndpointRow({required this.city, required this.trailing});
+
+  final String? city;
+  final Widget trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: Text(
+            city == null ? 'رحلة' : cityArName(city!),
+            style: context.text.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        SizedBox(width: context.space.sm),
+        trailing,
+      ],
+    );
+  }
+}
+
+Color _statusTone(TripStatus status, AppColors c) => switch (status) {
+      TripStatus.open => c.success,
+      TripStatus.locked => c.warning,
+      TripStatus.enRoute => c.info,
+      TripStatus.completed || TripStatus.settled => c.borderStrong,
+      TripStatus.cancelled => c.danger,
+      TripStatus.unknown => c.borderStrong,
+    };
 
 class _EmptyView extends StatelessWidget {
   const _EmptyView();
@@ -180,7 +238,7 @@ class _EmptyView extends StatelessWidget {
               height: space.xl4 + space.xl2,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: colors.primary.withValues(alpha: 0.12),
+                color: colors.primaryTonal,
                 shape: BoxShape.circle,
               ),
               child: Icon(AppIcons.route, color: colors.primary, size: space.xl2),
@@ -220,7 +278,7 @@ class _ErrorView extends StatelessWidget {
               height: space.xl4 + space.xl2,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: colors.danger.withValues(alpha: 0.12),
+                color: colors.dangerTonal,
                 shape: BoxShape.circle,
               ),
               child: Icon(AppIcons.warning, color: colors.danger, size: space.xl2),

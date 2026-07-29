@@ -95,7 +95,7 @@ class _ErrorView extends StatelessWidget {
                 height: space.xl4 + space.xl2,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: colors.danger.withValues(alpha: 0.12),
+                  color: colors.dangerTonal,
                   shape: BoxShape.circle,
                 ),
                 child: Icon(AppIcons.warning, color: colors.danger, size: space.xl2),

@@ -82,8 +82,45 @@ void main() {
     await t.pumpWidget(_host(c));
     await t.pump();
 
-    expect(find.widgetWithText(AppButton, 'أنهِ الرحلة'), findsOneWidget);
+    expect(find.textContaining('أنهِ الرحلة'), findsOneWidget);
     expect(find.widgetWithText(AppButton, 'ابدأ الرحلة'), findsNothing);
+  });
+
+  testWidgets('EN_ROUTE: the CTA carries the cash about to be collected',
+      (t) async {
+    final api = FakeDriverTripApi()
+      ..tripBookingsResult = [
+        bookingFixture(
+            id: 'b1', seatCount: 2, fare: 12000,
+            status: BookingStatus.onboard),
+        // A no-show pays nothing and must not inflate the figure.
+        bookingFixture(
+            id: 'b2', riderId: 'r2', fare: 6000,
+            status: BookingStatus.noShow),
+      ];
+    final c = await _loaded(api, TripStatus.enRoute);
+    await t.pumpWidget(_host(c));
+    await t.pump();
+
+    expect(c.expectedCash, 12000);
+    expect(c.seatsOnBoard, 2);
+    expect(find.textContaining('تحصيل ١٢٬٠٠٠ د.ع'), findsOneWidget);
+  });
+
+  testWidgets('before departure the hero counts CONFIRMED bookings', (t) async {
+    final api = FakeDriverTripApi()
+      ..tripBookingsResult = [
+        bookingFixture(id: 'b1', seatCount: 2, fare: 12000),
+        bookingFixture(id: 'b2', riderId: 'r2', fare: 6000),
+      ];
+    final c = await _loaded(api, TripStatus.open);
+    await t.pumpWidget(_host(c));
+    await t.pump();
+
+    expect(c.seatsOnBoard, 3);
+    expect(c.expectedCash, 18000);
+    expect(find.text('محجوز'), findsOneWidget);
+    expect(find.text('نقد محجوز'), findsOneWidget);
   });
 
   testWidgets('empty bookings shows the no-bookings hint', (t) async {

@@ -105,7 +105,15 @@ class _BookingScreenState extends State<BookingScreen> {
           SizedBox(height: space.xl),
           const _SectionLabel('اختر مقاعدك'),
           SizedBox(height: space.sm),
-          _SeatPicker(controller: c),
+          SeatCountPicker(
+            value: c.seatCount,
+            // A booking is capped at 4 seats regardless of vehicle size, so the
+            // row always shows 4 tiles and anything the trip can't seat is
+            // drawn dead.
+            max: c.maxSeats,
+            onChanged: c.setSeatCount,
+            hint: SeatGlyphs.label(c.trip.seatsAvailable),
+          ),
           SizedBox(height: space.xl),
           const _SectionLabel('من الباب إلى الباب'),
           SizedBox(height: space.sm),
@@ -209,118 +217,6 @@ class _TripSummaryCard extends StatelessWidget {
             ],
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// Tap the number of seats you want. Replaces the ± stepper: unavailable counts
-/// are visibly dead rather than merely un-pressable, so the ceiling is legible
-/// before you reach for it.
-class _SeatPicker extends StatelessWidget {
-  const _SeatPicker({required this.controller});
-
-  final BookingController controller;
-
-  /// A booking is capped at 4 seats regardless of vehicle size.
-  static const int _maxOffered = 4;
-
-  @override
-  Widget build(BuildContext context) {
-    final space = context.space;
-    final colors = context.colors;
-    final max = controller.maxSeats;
-
-    return AppCard(
-      child: Column(
-        children: [
-          Row(
-            children: [
-              for (var n = 1; n <= _maxOffered; n++) ...[
-                if (n > 1) SizedBox(width: space.sm),
-                Expanded(
-                  child: _SeatTile(
-                    n: n,
-                    selected: controller.seatCount == n,
-                    available: n <= max,
-                    onTap: n <= max ? () => controller.setSeatCount(n) : null,
-                  ),
-                ),
-              ],
-            ],
-          ),
-          SizedBox(height: space.md),
-          Text(
-            SeatGlyphs.label(controller.trip.seatsAvailable),
-            style: context.text.caption.copyWith(color: colors.textMuted),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SeatTile extends StatelessWidget {
-  const _SeatTile({
-    required this.n,
-    required this.selected,
-    required this.available,
-    this.onTap,
-  });
-
-  final int n;
-  final bool selected;
-  final bool available;
-  final VoidCallback? onTap;
-
-  /// Hand-off tile height; comfortably above the 48dp minimum.
-  static const double _height = 76;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-
-    // Unavailable counts use the recessed surface + muted ink rather than an
-    // opacity wash: a translucent tile composites over whatever is behind it
-    // and its contrast stops being predictable.
-    final Color bg = selected
-        ? colors.primary
-        : available
-            ? colors.surface
-            : colors.surfaceMuted;
-    final Color ink = selected
-        ? colors.onPrimary
-        : available
-            ? colors.textSecondary
-            : colors.textMuted;
-    final Color border = selected ? colors.primary : colors.border;
-
-    return Semantics(
-      button: available,
-      enabled: available,
-      selected: selected,
-      label: '${formatCount(n)} مقعد',
-      excludeSemantics: true,
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          height: _height,
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: context.radii.fieldAll,
-            border: Border.all(color: border, width: 2),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(AppIcons.seat, size: context.space.xl2, color: ink),
-              SizedBox(height: context.space.xs),
-              Text(formatCount(n),
-                  style: context.text.label.copyWith(color: ink)),
-            ],
-          ),
-        ),
       ),
     );
   }

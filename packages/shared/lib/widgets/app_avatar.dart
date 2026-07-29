@@ -34,7 +34,7 @@ class AppAvatar extends StatelessWidget {
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: colors.primary.withValues(alpha: 0.12),
+        color: colors.primaryTonal,
         shape: BoxShape.circle,
       ),
       // Scale the token text style to the avatar rather than hardcoding a size:

@@ -24,18 +24,13 @@ import 'trip_search_controller.dart';
 ///
 /// Same rule as the confirmation screen: hierarchy comes from size and weight,
 /// not opacity. Every glyph on the hero is full `onPrimary` (7.93 light / 7.64
-/// dark). The trip-type chip is a **pre-blended opaque** fill
-/// (`onPrimary` at 16% composited into `primary` once, not a live alpha wash),
-/// which measures 5.33 light / 5.79 dark against its `onPrimary` ink — see the
-/// enforced contract in `contrast_test.dart`.
+/// dark). The trip-type chip uses the shared [OnPrimaryChip], whose fill is
+/// composited once into an opaque colour (5.33 light / 5.79 dark against its
+/// `onPrimary` ink) rather than applied as a live alpha wash.
 class TripDetailsScreen extends StatelessWidget {
   const TripDetailsScreen({super.key, required this.trip});
 
   final TripSummary trip;
-
-  /// Alpha of the on-primary ink pre-blended into the pine field for the hero
-  /// chip. Blended once into an opaque colour, never applied live.
-  static const double heroChipBlend = 0.16;
 
   /// Resolve the trip's corridor (for endpoint city names) from the already-
   /// loaded corridors; null when unavailable (booking falls back to generic
@@ -167,7 +162,7 @@ class _TripHero extends StatelessWidget {
             SizedBox(height: space.lg),
             const Align(
               alignment: AlignmentDirectional.centerStart,
-              child: _HeroChip(label: 'نسائية/عائلية', icon: AppIcons.users),
+              child: OnPrimaryChip(label: 'نسائية/عائلية', icon: AppIcons.users),
             ),
           ],
         ],
@@ -199,46 +194,6 @@ class _HeroEndpoint extends StatelessWidget {
         SizedBox(width: context.space.sm),
         trailing,
       ],
-    );
-  }
-}
-
-/// A chip that lives on the pine field. Its fill is composited **once** into an
-/// opaque colour so the measured ratio can't drift with whatever sits behind it.
-class _HeroChip extends StatelessWidget {
-  const _HeroChip({required this.label, required this.icon});
-
-  final String label;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final space = context.space;
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: space.md, vertical: space.xs),
-      decoration: BoxDecoration(
-        color: Color.alphaBlend(
-          colors.onPrimary
-              .withValues(alpha: TripDetailsScreen.heroChipBlend),
-          colors.primary,
-        ),
-        borderRadius: context.radii.pillAll,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: colors.onPrimary),
-          SizedBox(width: space.xs),
-          Text(
-            label,
-            style: context.text.caption.copyWith(
-              color: colors.onPrimary,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

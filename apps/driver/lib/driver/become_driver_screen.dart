@@ -86,8 +86,8 @@ class _Benefit extends StatelessWidget {
             height: space.xl4,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: colors.primary.withValues(alpha: 0.12),
-              borderRadius: context.radii.mdAll,
+              color: colors.primaryTonal,
+              borderRadius: context.radii.fieldLgAll,
             ),
             child: Icon(icon, color: colors.primary, size: space.xl),
           ),

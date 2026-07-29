@@ -247,11 +247,11 @@ void _auditScreens(AppColors c, String label) {
   // ── Confirmation screen — the full-bleed pine field ───────────────────────
   pair('confirmation hero copy (onPrimary on primary)', c.onPrimary, c.primary);
   test('$label: confirmation badge (onPrimary on the pre-blended fill)', () {
-    // Mirrors BookingConfirmationScreen's badge: onPrimary at 14% composited
-    // into primary ONCE, so the ratio cannot drift with what sits behind it.
-    final fill =
-        Color.alphaBlend(c.onPrimary.withValues(alpha: 0.14), c.primary);
-    final r = _contrast(c.onPrimary, fill);
+    // Mirrors BookingConfirmationScreen.badgeBlend — onPrimary at 14%
+    // composited into primary ONCE, so the ratio cannot drift with what sits
+    // behind it. (The screen lives in an app package this test cannot import,
+    // so the alpha is repeated; the blend function itself is shared.)
+    final r = _contrast(c.onPrimary, onPrimaryFill(c, 0.14));
     expect(r, greaterThanOrEqualTo(_aa),
         reason: 'confirmation badge is ${r.toStringAsFixed(2)}:1');
   });
@@ -268,17 +268,27 @@ void _auditScreens(AppColors c, String label) {
 
   // ── Trip details — the pine hero ──────────────────────────────────────────
   pair('trip details hero (onPrimary on primary)', c.onPrimary, c.primary);
-  test('$label: trip details hero chip (onPrimary on the pre-blended fill)',
-      () {
-    // Mirrors TripDetailsScreen.heroChipBlend.
-    final fill =
-        Color.alphaBlend(c.onPrimary.withValues(alpha: 0.16), c.primary);
-    final r = _contrast(c.onPrimary, fill);
-    expect(r, greaterThanOrEqualTo(_aa),
-        reason: 'trip details hero chip is ${r.toStringAsFixed(2)}:1');
-  });
   pair('trip details eligibility note (info on infoTonal)', c.info, c.infoTonal);
   pair('trip details book bar price (primary on background)', c.primary,
+      c.background);
+
+  // ── OnPrimaryChip — the trip-details hero chip and the earnings denominator.
+  test('$label: OnPrimaryChip (onPrimary on its pre-blended fill)', () {
+    final r = _contrast(c.onPrimary, OnPrimaryChip.fillOn(c));
+    expect(r, greaterThanOrEqualTo(_aa),
+        reason: 'OnPrimaryChip is ${r.toStringAsFixed(2)}:1');
+  });
+
+  // ── Driver earnings — the screen a driver checks daily ────────────────────
+  pair('earnings today card (onPrimary on primary)', c.onPrimary, c.primary);
+  pair('earnings all-time total (primary on surface)', c.primary, c.surface);
+  pair('earnings day subtotal (primary on background)', c.primary,
+      c.background);
+  pair('earnings ledger amount (textPrimary on surface)', c.textPrimary,
+      c.surface);
+  pair('earnings ledger marker (success on successTonal)', c.success,
+      c.successTonal);
+  pair('earnings cash note (textMuted on background)', c.textMuted,
       c.background);
 }
 
