@@ -41,14 +41,14 @@ void main() {
       await _matchGolden(tester,
           name: 'colors_light',
           brightness: Brightness.light,
-          height: 620,
+          height: 820,
           child: const ColorTokensGallery());
     });
     testWidgets('dark', (tester) async {
       await _matchGolden(tester,
           name: 'colors_dark',
           brightness: Brightness.dark,
-          height: 620,
+          height: 820,
           child: const ColorTokensGallery());
     });
   });
@@ -58,14 +58,14 @@ void main() {
       await _matchGolden(tester,
           name: 'typography_light',
           brightness: Brightness.light,
-          height: 560,
+          height: 660,
           child: const TypeScaleGallery());
     });
     testWidgets('dark', (tester) async {
       await _matchGolden(tester,
           name: 'typography_dark',
           brightness: Brightness.dark,
-          height: 560,
+          height: 660,
           child: const TypeScaleGallery());
     });
   });

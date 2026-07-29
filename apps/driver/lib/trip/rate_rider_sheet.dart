@@ -16,7 +16,7 @@ Future<void> showRateRiderSheet(
     isScrollControlled: true,
     backgroundColor: colors.surface,
     shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(radii.lg)),
+      borderRadius: radii.sheetTop,
     ),
     builder: (_) => RateRiderSheet(riderName: riderName, onSubmit: onSubmit),
   );

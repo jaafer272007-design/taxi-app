@@ -21,7 +21,9 @@ void main() {
     );
 
     expect(seen.primary, AppColors.light.primary);
-    expect(seen.primary, const Color(0xFF2563EB));
+    // Masar pine green. If this line has to change, a brand color changed —
+    // which is exactly the kind of edit that should be deliberate.
+    expect(seen.primary, const Color(0xFF0E5C4A));
   });
 
   testWidgets('overriding the primary token re-skins without touching widgets',

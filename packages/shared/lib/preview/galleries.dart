@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../format/numerals.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_avatar.dart';
 import '../widgets/app_badge.dart';
@@ -46,11 +47,21 @@ class ColorTokensGallery extends StatelessWidget {
     final swatches = <_SwatchLabel>[
       _SwatchLabel('primary', c.primary, c.onPrimary),
       _SwatchLabel('primaryPressed', c.primaryPressed, c.onPrimary),
-      _SwatchLabel('accent', c.accent, c.onAccent),
+      // accent is a FILL token — its label is drawn in onAccent (dark ink),
+      // because the saffron itself is never legible as text on a page.
+      _SwatchLabel('accent (fill)', c.accent, c.onAccent),
+      // accentText is the saffron when it must be ink; shown on surface.
+      _SwatchLabel('accentText', c.surface, c.accentText),
       _SwatchLabel('success', c.success, c.onSuccess),
       _SwatchLabel('warning', c.warning, c.onWarning),
       _SwatchLabel('danger', c.danger, c.onDanger),
       _SwatchLabel('info', c.info, c.onInfo),
+      // Tonal backgrounds, each labelled in the ink actually drawn on it.
+      _SwatchLabel('primaryTonal', c.primaryTonal, c.primary),
+      _SwatchLabel('successTonal', c.successTonal, c.success),
+      _SwatchLabel('warningTonal', c.warningTonal, c.warning),
+      _SwatchLabel('dangerTonal', c.dangerTonal, c.danger),
+      _SwatchLabel('infoTonal', c.infoTonal, c.info),
       _SwatchLabel('textPrimary', c.textPrimary, c.surface),
       _SwatchLabel('textSecondary', c.textSecondary, c.surface),
       _SwatchLabel('textMuted', c.textMuted, c.surface),
@@ -133,11 +144,21 @@ class TypeScaleGallery extends StatelessWidget {
           row('bodyStrong', t.bodyStrong),
           row('label', t.label),
           row('caption', t.caption),
-          SizedBox(height: context.space.sm),
-          Text('أرقام tabular · Prices & times',
+          SizedBox(height: context.space.md),
+          // The locked numeral rule, shown side by side.
+          Text('عرض · Arabic-Indic (prices, times, counts)',
               style: t.caption.copyWith(color: context.colors.textMuted)),
           SizedBox(height: context.space.xs),
-          Text('12,000 IQD · 07:30 · +9647701234567',
+          Text(
+            '${formatPrice(12000)} · ${formatClock(7, 30)} · '
+            '${formatCount(3)} مقاعد · ${formatRating(4.8)}',
+            style: t.title.tabular.copyWith(color: context.colors.textPrimary),
+          ),
+          SizedBox(height: context.space.sm),
+          Text('إدخال · Western (phone & OTP entry only)',
+              style: t.caption.copyWith(color: context.colors.textMuted)),
+          SizedBox(height: context.space.xs),
+          Text('+964 771 234 5678 · 419254',
               style: t.title.tabular.copyWith(color: context.colors.textPrimary)),
         ],
       ),

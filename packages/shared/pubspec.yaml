@@ -48,6 +48,10 @@ flutter:
   # Cairo is bundled (not fetched at runtime): google_fonts discovers these by
   # filename, so GoogleFonts.cairo() loads the local asset in the apps (offline,
   # no network) and in golden tests (deterministic, real Arabic/Latin glyphs).
+  # Weights bundled: 400 Regular, 500 Medium, 600 SemiBold, 700 Bold,
+  # 800 ExtraBold. EVERY weight the type scale asks for must have a file here —
+  # with runtime fetching disabled, a missing weight silently falls back and the
+  # goldens no longer match the design (the Masar `display` style needs w800).
   # OFL 1.1 — see assets/fonts/OFL.txt.
   assets:
     - assets/fonts/

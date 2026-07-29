@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
+import '../format/numerals.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_avatar.dart';
 import '../widgets/app_badge.dart';
@@ -172,11 +173,17 @@ class _ThemePreviewState extends State<ThemePreview> {
     final swatches = <_Swatch>[
       _Swatch('primary', c.primary, c.onPrimary),
       _Swatch('primaryPressed', c.primaryPressed, c.onPrimary),
-      _Swatch('accent', c.accent, c.onAccent),
+      _Swatch('accent (fill)', c.accent, c.onAccent),
+      _Swatch('accentText', c.surface, c.accentText),
       _Swatch('success', c.success, c.onSuccess),
       _Swatch('warning', c.warning, c.onWarning),
       _Swatch('danger', c.danger, c.onDanger),
       _Swatch('info', c.info, c.onInfo),
+      _Swatch('primaryTonal', c.primaryTonal, c.primary),
+      _Swatch('successTonal', c.successTonal, c.success),
+      _Swatch('warningTonal', c.warningTonal, c.warning),
+      _Swatch('dangerTonal', c.dangerTonal, c.danger),
+      _Swatch('infoTonal', c.infoTonal, c.info),
       _Swatch('surface', c.surface, c.textPrimary),
       _Swatch('surfaceMuted', c.surfaceMuted, c.textPrimary),
       _Swatch('background', c.background, c.textPrimary),
@@ -243,11 +250,20 @@ class _ThemePreviewState extends State<ThemePreview> {
           row('bodyStrong', t.bodyStrong),
           row('label', t.label),
           row('caption', t.caption),
-          SizedBox(height: context.space.sm),
-          Text('أرقام tabular · Prices & times',
+          SizedBox(height: context.space.md),
+          Text('عرض · Arabic-Indic (prices, times, counts)',
               style: t.caption.copyWith(color: context.colors.textMuted)),
           SizedBox(height: context.space.xs),
-          Text('12,000 IQD · 07:30 · +9647701234567',
+          Text(
+            '${formatPrice(12000)} · ${formatClock(7, 30)} · '
+            '${formatCount(3)} مقاعد · ${formatRating(4.8)}',
+            style: t.title.tabular.copyWith(color: context.colors.textPrimary),
+          ),
+          SizedBox(height: context.space.sm),
+          Text('إدخال · Western (phone & OTP entry only)',
+              style: t.caption.copyWith(color: context.colors.textMuted)),
+          SizedBox(height: context.space.xs),
+          Text('+964 771 234 5678 · 419254',
               style: t.title.tabular.copyWith(color: context.colors.textPrimary)),
         ],
       ),
@@ -302,9 +318,12 @@ class _ThemePreviewState extends State<ThemePreview> {
   Widget _radiiSection(BuildContext context) {
     final radii = context.radii;
     final items = <(String, BorderRadius)>[
-      ('sm 8', radii.smAll),
-      ('md 12', radii.mdAll),
-      ('lg 16', radii.lgAll),
+      ('chip 12', radii.chipAll),
+      ('field 14', radii.fieldAll),
+      ('fieldLg 16', radii.fieldLgAll),
+      ('button 18', radii.buttonAll),
+      ('card 20', radii.cardAll),
+      ('sheet 28 ↑', radii.sheetTop),
       ('pill', radii.pillAll),
     ];
     return _section(
@@ -339,16 +358,36 @@ class _ThemePreviewState extends State<ThemePreview> {
     return _section(
       context,
       'الظل · Elevation',
-      AppCard(
-        child: Row(
-          children: [
-            Icon(AppIcons.car, color: context.colors.primary),
-            SizedBox(width: context.space.md),
-            Expanded(
-              child: Text('بطاقة بظل ناعم', style: context.text.body),
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AppCard(
+            child: Row(
+              children: [
+                Icon(AppIcons.car, color: context.colors.primary),
+                SizedBox(width: context.space.md),
+                Expanded(
+                  child: Text('بطاقة بظل ناعم · card',
+                      style: context.text.body),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          SizedBox(height: context.space.xl),
+          // The stronger lift used by the floating pill nav and sticky CTAs.
+          Container(
+            height: 62,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: context.colors.surface,
+              borderRadius: context.radii.pillAll,
+              boxShadow: context.elevation.floating,
+            ),
+            child: Text('شريط عائم · floating',
+                style: context.text.label
+                    .copyWith(color: context.colors.textSecondary)),
+          ),
+        ],
       ),
     );
   }

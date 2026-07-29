@@ -4,6 +4,22 @@ import 'package:google_fonts/google_fonts.dart';
 /// Type scale — Arabic-first, built on the "Cairo" family (excellent Arabic +
 /// Latin coverage). Every text style in the apps comes from
 /// `context.text.title` etc.; never a raw `TextStyle(fontSize: …)` in a screen.
+///
+/// ## Masar scale
+///
+/// | token      | size | weight |
+/// |------------|------|--------|
+/// | display    | 34   | w800   |
+/// | h1         | 26   | w700   |
+/// | h2         | 20   | w700   |
+/// | title      | 17   | w700   |
+/// | body       | 15   | w400   |
+/// | bodyStrong | 15   | w700   |
+/// | label      | 13   | w600   |
+/// | caption    | 12   | w400   |
+///
+/// The scale leans on weight rather than size for hierarchy — Cairo's w700/w800
+/// are strong enough that 17px reads as a title next to 15px body.
 @immutable
 class AppTypography extends ThemeExtension<AppTypography> {
   const AppTypography({
@@ -17,52 +33,73 @@ class AppTypography extends ThemeExtension<AppTypography> {
     required this.caption,
   });
 
-  /// 28 / w700 — hero numbers, splash headings.
+  /// 34 / w800 — hero numbers (fares, earnings), splash headings.
   final TextStyle display;
 
-  /// 24 / w700 — screen title.
+  /// 26 / w700 — screen title.
   final TextStyle h1;
 
-  /// 20 / w600 — section heading.
+  /// 20 / w700 — section heading.
   final TextStyle h2;
 
-  /// 18 / w600 — card / list title.
+  /// 17 / w700 — card / list title.
   final TextStyle title;
 
-  /// 16 / w400 — default body.
+  /// 15 / w400 — default body.
   final TextStyle body;
 
-  /// 16 / w600 — emphasized body / button label.
+  /// 15 / w700 — emphasized body / button label.
   final TextStyle bodyStrong;
 
-  /// 14 / w500 — form labels, chips.
+  /// 13 / w600 — form labels, chips.
   final TextStyle label;
 
-  /// 13 / w400 — captions, helper text.
+  /// 12 / w400 — captions, helper text.
   final TextStyle caption;
 
-  /// Comfortable reading line-height for Arabic.
-  static const double _lineHeight = 1.5;
+  /// Comfortable reading line-height for Arabic. Arabic needs more leading than
+  /// Latin (ascenders, descenders and diacritics stack), so running text sits at
+  /// 1.5.
+  static const double _readingHeight = 1.5;
+
+  /// Headings are set tighter — at 20–26px a 1.5 multiple opens gaps that read
+  /// as separate blocks rather than one heading.
+  static const double _headingHeight = 1.3;
+
+  /// The display size is a single hero number, not running text; it is set
+  /// nearly solid so a fare or a departure time reads as one object.
+  static const double _displayHeight = 1.15;
 
   /// Build the scale in [color]. Called once per theme (light/dark) so the
   /// same font sizes/weights are shared and only the ink color differs.
   factory AppTypography.build(Color color) {
-    TextStyle style(double size, FontWeight weight) => GoogleFonts.cairo(
+    TextStyle style(
+      double size,
+      FontWeight weight, {
+      double height = _readingHeight,
+      double? letterSpacing,
+    }) =>
+        GoogleFonts.cairo(
           fontSize: size,
           fontWeight: weight,
-          height: _lineHeight,
+          height: height,
+          letterSpacing: letterSpacing,
           color: color,
         );
 
     return AppTypography(
-      display: style(28, FontWeight.w700),
-      h1: style(24, FontWeight.w700),
-      h2: style(20, FontWeight.w600),
-      title: style(18, FontWeight.w600),
-      body: style(16, FontWeight.w400),
-      bodyStrong: style(16, FontWeight.w600),
-      label: style(14, FontWeight.w500),
-      caption: style(13, FontWeight.w400),
+      // Slight negative tracking on the two largest sizes keeps big Arabic
+      // numerals from looking loose (matches the hand-off's -.02em / -.01em).
+      display: style(34, FontWeight.w800,
+          height: _displayHeight, letterSpacing: -0.68),
+      h1: style(26, FontWeight.w700,
+          height: _headingHeight, letterSpacing: -0.26),
+      h2: style(20, FontWeight.w700, height: _headingHeight),
+      title: style(17, FontWeight.w700, height: _headingHeight),
+      body: style(15, FontWeight.w400),
+      bodyStrong: style(15, FontWeight.w700),
+      label: style(13, FontWeight.w600),
+      caption: style(12, FontWeight.w400),
     );
   }
 
@@ -126,11 +163,14 @@ class AppTypography extends ThemeExtension<AppTypography> {
   }
 }
 
-/// Numeric styling helpers for prices, times and phone numbers. Latin digits
-/// with tabular figures keep columns aligned and read cleanly in an RTL layout.
+/// Numeric styling helper for figures that must line up in a column.
+///
+/// Note the numeral *system* is chosen by the formatting helpers in
+/// `format/numerals.dart` (Arabic-Indic for display, Western for input), not
+/// here — this only controls glyph metrics.
 extension TabularFigures on TextStyle {
-  /// Force Latin digits + tabular (monospaced) figures — use for IQD prices,
-  /// clock times and +964 phone numbers.
+  /// Monospaced (tabular) figures — use for stacked IQD prices, clock times and
+  /// the +964 phone/OTP fields so digits stay in vertical alignment.
   TextStyle get tabular => copyWith(
         fontFeatures: const [
           FontFeature.tabularFigures(),

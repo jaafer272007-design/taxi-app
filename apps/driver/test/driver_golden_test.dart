@@ -301,8 +301,7 @@ Future<Widget> _rateRider() async {
         children: [
           Material(
             color: context.colors.surface,
-            borderRadius:
-                BorderRadius.vertical(top: Radius.circular(context.radii.lg)),
+            borderRadius: context.radii.sheetTop,
             clipBehavior: Clip.antiAlias,
             child: RateRiderSheet(
               riderName: 'علي حسن',
