@@ -59,11 +59,18 @@ class _NameScreenState extends State<NameScreen> {
     final colors = context.colors;
     return AppScaffold(
       scrollable: true,
+      bottomBar: AppButton(
+        label: 'متابعة',
+        loading: auth.busy,
+        onPressed: auth.busy ? null : () => _submit(auth),
+      ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(height: space.xl2),
           const OnboardingHeader(
+            step: 3,
+            totalSteps: 3,
             icon: AppIcons.user,
             title: 'عرّفنا بنفسك',
             subtitle: 'اسمك وجنسك يظهران للسائق عند الحجز.',
@@ -107,12 +114,6 @@ class _NameScreenState extends State<NameScreen> {
             style: context.text.caption.copyWith(
               color: _genderMissing ? colors.danger : colors.textMuted,
             ),
-          ),
-          SizedBox(height: space.xl),
-          AppButton(
-            label: 'متابعة',
-            loading: auth.busy,
-            onPressed: auth.busy ? null : () => _submit(auth),
           ),
         ],
       ),

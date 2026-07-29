@@ -41,11 +41,20 @@ class _PhoneScreenState extends State<PhoneScreen> {
     final space = context.space;
     return AppScaffold(
       scrollable: true,
+      // Pinned: the primary action stays reachable when the keyboard is up,
+      // instead of being pushed under it with the rest of the form.
+      bottomBar: AppButton(
+        label: 'إرسال الرمز',
+        loading: auth.busy,
+        onPressed: auth.busy ? null : () => _submit(auth),
+      ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(height: space.xl2),
           const OnboardingHeader(
+            step: 1,
+            totalSteps: 3,
             icon: AppIcons.car,
             title: 'تكسي مشترك',
             subtitle: 'سجّل دخولك برقم موبايلك للحجز بين المحافظات.',
@@ -68,12 +77,6 @@ class _PhoneScreenState extends State<PhoneScreen> {
               if (_localError != null) setState(() => _localError = null);
             },
             onSubmitted: (_) => _submit(auth),
-          ),
-          SizedBox(height: space.xl),
-          AppButton(
-            label: 'إرسال الرمز',
-            loading: auth.busy,
-            onPressed: auth.busy ? null : () => _submit(auth),
           ),
         ],
       ),

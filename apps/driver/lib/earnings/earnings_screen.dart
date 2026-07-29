@@ -85,7 +85,11 @@ class _Loaded extends StatelessWidget {
             amount: controller.allTimeTotal,
             trips: controller.tripCount,
           ),
-          SizedBox(height: space.xl),
+          // Above the ledger, not under it: the reassurance is only worth
+          // anything if it is on screen the first time a driver opens this, and
+          // the ledger can run for pages.
+          const _CashNote(),
+          SizedBox(height: space.md),
           Text(
             'سجل الأرباح',
             style: context.text.h2.copyWith(color: context.colors.textPrimary),
@@ -98,7 +102,6 @@ class _Loaded extends StatelessWidget {
               _DaySection(day: d),
               SizedBox(height: space.lg),
             ],
-          const _CashNote(),
         ],
       ),
     );

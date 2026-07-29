@@ -45,6 +45,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: colors.surface,
+        shape: RoundedRectangleBorder(borderRadius: ctx.radii.cardAll),
         title: Text(title,
             style: ctx.text.title.copyWith(color: colors.textPrimary)),
         content: Text(message,
