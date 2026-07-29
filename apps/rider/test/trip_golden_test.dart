@@ -381,6 +381,13 @@ Future<void> _golden(
     find.byType(MaterialApp),
     matchesGoldenFile('goldens/$name.png'),
   );
+
+  // Each `auth` here is built fresh for this one shot, and `.value` providers
+  // never dispose what they are handed. The OTP screen's controller holds a
+  // periodic resend-cooldown timer, and flutter_test asserts on a timer that
+  // outlives the tree — so it is cancelled here, inside the body, rather than in
+  // an addTearDown (which runs *after* that invariant check).
+  auth?.dispose();
 }
 
 
