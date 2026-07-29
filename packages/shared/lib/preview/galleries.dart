@@ -8,7 +8,10 @@ import '../widgets/app_button.dart';
 import '../widgets/app_card.dart';
 import '../widgets/app_icons.dart';
 import '../widgets/app_text_field.dart';
+import '../widgets/floating_pill_nav.dart';
 import '../widgets/rating_stars.dart';
+import '../widgets/route_rail.dart';
+import '../widgets/seat_glyphs.dart';
 
 /// Reusable, self-contained "gallery" widgets that render slices of the design
 /// system from tokens only. Used both by the on-device Theme Preview and by the
@@ -310,6 +313,121 @@ class WidgetShowcaseGallery extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+
+/// The Masar signature components introduced in PR 2: the route rail, seats
+/// drawn as seats, and the floating pill nav.
+class MasarComponentsGallery extends StatelessWidget {
+  const MasarComponentsGallery({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final space = context.space;
+    final colors = context.colors;
+    final text = context.text;
+
+    Widget cityBlock(String label, String city) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label, style: text.caption.copyWith(color: colors.textMuted)),
+            Text(city, style: text.title),
+          ],
+        );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GallerySection(
+          title: 'قضيب المسار · Route rail',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AppCard(
+                child: RouteRail(
+                  divided: true,
+                  origin: cityBlock('من', 'النجف'),
+                  destination: cityBlock('إلى', 'كربلاء'),
+                ),
+              ),
+              SizedBox(height: space.md),
+              AppCard(
+                child: RouteRail(
+                  variant: RouteRailVariant.compact,
+                  origin: Text('النجف', style: text.bodyStrong),
+                  destination: Text('كربلاء', style: text.bodyStrong),
+                ),
+              ),
+              SizedBox(height: space.md),
+              // On a primary field both endpoints use the on-primary ink and
+              // are told apart by shape (filled dot vs stroked ring).
+              Container(
+                padding: EdgeInsets.all(space.lg),
+                decoration: BoxDecoration(
+                  color: colors.primary,
+                  borderRadius: context.radii.cardAll,
+                ),
+                child: RouteRail(
+                  onPrimaryField: true,
+                  origin: Text('النجف',
+                      style: text.title.copyWith(color: colors.onPrimary)),
+                  destination: Text('كربلاء',
+                      style: text.title.copyWith(color: colors.onPrimary)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: space.xl2),
+        GallerySection(
+          title: 'المقاعد · Seat glyphs',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final free in [4, 3, 2, 1, 0]) ...[
+                SeatAvailability(total: 4, available: free),
+                SizedBox(height: space.sm),
+              ],
+              SizedBox(height: space.xs),
+              Text('مضغوط · compact',
+                  style: text.caption.copyWith(color: colors.textMuted)),
+              SizedBox(height: space.xs),
+              const SeatGlyphs(total: 5, available: 2, compact: true),
+            ],
+          ),
+        ),
+        SizedBox(height: space.xl2),
+        GallerySection(
+          title: 'شريط التنقّل العائم · Floating pill nav',
+          child: Column(
+            children: [
+              FloatingPillNav(
+                currentIndex: 0,
+                onSelect: (_) {},
+                items: const [
+                  FloatingPillNavItem(icon: AppIcons.search, label: 'ابحث'),
+                  FloatingPillNavItem(icon: AppIcons.seat, label: 'حجوزاتي'),
+                  FloatingPillNavItem(icon: AppIcons.user, label: 'حسابي'),
+                ],
+              ),
+              FloatingPillNav(
+                currentIndex: 2,
+                onSelect: (_) {},
+                items: const [
+                  FloatingPillNavItem(icon: AppIcons.plusCircle, label: 'انشر'),
+                  FloatingPillNavItem(icon: AppIcons.route, label: 'رحلاتي'),
+                  FloatingPillNavItem(icon: AppIcons.wallet, label: 'أرباحي'),
+                  FloatingPillNavItem(icon: AppIcons.user, label: 'حسابي'),
+                ],
+              ),
+            ],
           ),
         ),
       ],

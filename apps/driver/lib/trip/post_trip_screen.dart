@@ -6,7 +6,6 @@ import '../widgets/driver_banner.dart';
 import 'my_trips_controller.dart';
 import 'post_trip_controller.dart';
 import 'driver_trip_models.dart';
-import 'trip_format.dart';
 
 /// Post-a-trip form (APPROVED drivers only): corridor + departure (now/scheduled)
 /// + seat count (capped at the vehicle) + read-only corridor price.
@@ -185,22 +184,19 @@ class _RoutePicker extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: Column(
-            children: [
-              AppCityField(
-                label: 'من',
-                cityKey: c.origin,
-                onChanged: c.setOrigin,
-                excludeKey: c.dest,
-              ),
-              SizedBox(height: space.sm),
-              AppCityField(
-                label: 'إلى',
-                cityKey: c.dest,
-                onChanged: c.setDest,
-                excludeKey: c.origin,
-              ),
-            ],
+          child: RouteRail(
+            origin: AppCityField(
+              label: 'من',
+              cityKey: c.origin,
+              onChanged: c.setOrigin,
+              excludeKey: c.dest,
+            ),
+            destination: AppCityField(
+              label: 'إلى',
+              cityKey: c.dest,
+              onChanged: c.setDest,
+              excludeKey: c.origin,
+            ),
           ),
         ),
         SizedBox(width: space.sm),
@@ -371,8 +367,9 @@ class _ScheduleChip extends StatelessWidget {
     );
   }
 
-  static String _hm(DateTime t) =>
-      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+  // Display time — Arabic-Indic, via the shared helper. The DateTime here is
+  // already local wall-clock (it came from the picker), so no Baghdad shift.
+  static String _hm(DateTime t) => formatClock(t.hour, t.minute);
 }
 
 class _SeatStepper extends StatelessWidget {
@@ -396,7 +393,7 @@ class _SeatStepper extends StatelessWidget {
             ),
             Expanded(
               child: Center(
-                child: Text('${controller.seatCount}',
+                child: Text(formatCount(controller.seatCount),
                     style: context.text.h1.tabular
                         .copyWith(color: colors.textPrimary)),
               ),

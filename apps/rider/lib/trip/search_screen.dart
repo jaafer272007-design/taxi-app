@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:shared/shared.dart';
 
 import 'results_screen.dart';
-import 'trip_format.dart';
 import 'trip_models.dart';
 import 'trip_search_controller.dart';
 import 'widgets/trip_state_views.dart';
@@ -159,8 +158,8 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
-  static String _hm(TimeOfDay t) =>
-      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+  // Display time — Arabic-Indic, via the shared helper.
+  static String _hm(TimeOfDay t) => formatClock(t.hour, t.minute);
 }
 
 /// From/to city pickers (chosen from the full 18-city list) with a swap control.
@@ -177,22 +176,19 @@ class _RoutePicker extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: Column(
-            children: [
-              AppCityField(
-                label: 'من',
-                cityKey: c.origin,
-                onChanged: c.setOrigin,
-                excludeKey: c.dest,
-              ),
-              SizedBox(height: space.sm),
-              AppCityField(
-                label: 'إلى',
-                cityKey: c.dest,
-                onChanged: c.setDest,
-                excludeKey: c.origin,
-              ),
-            ],
+          child: RouteRail(
+            origin: AppCityField(
+              label: 'من',
+              cityKey: c.origin,
+              onChanged: c.setOrigin,
+              excludeKey: c.dest,
+            ),
+            destination: AppCityField(
+              label: 'إلى',
+              cityKey: c.dest,
+              onChanged: c.setDest,
+              excludeKey: c.origin,
+            ),
           ),
         ),
         SizedBox(width: space.sm),

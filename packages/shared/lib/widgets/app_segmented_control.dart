@@ -35,7 +35,7 @@ class AppSegmentedControl<T> extends StatelessWidget {
       padding: EdgeInsets.all(space.xs),
       decoration: BoxDecoration(
         color: colors.surfaceMuted,
-        borderRadius: radii.pillAll,
+        borderRadius: radii.fieldAll,
         border: Border.all(color: colors.border),
       ),
       child: Row(
@@ -81,7 +81,7 @@ class _Segment<T> extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: selected ? colors.surface : Colors.transparent,
-          borderRadius: radii.pillAll,
+          borderRadius: radii.fieldAll,
           border: selected ? Border.all(color: colors.border) : null,
         ),
         child: Row(

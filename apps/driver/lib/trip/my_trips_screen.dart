@@ -7,7 +7,6 @@ import 'driver_trip_models.dart';
 import 'my_trips_controller.dart';
 import 'trip_detail_controller.dart';
 import 'trip_detail_screen.dart';
-import 'trip_format.dart';
 
 /// "رحلاتي": the driver's posted trips (GET /trips/mine), newest first, each with
 /// route, time, seats, price and a status pill.
@@ -102,7 +101,7 @@ class _TripCard extends StatelessWidget {
     final space = context.space;
     final route = corridor == null
         ? 'رحلة'
-        : '${cityAr(corridor!.originCity)} إلى ${cityAr(corridor!.destCity)}';
+        : '${cityArName(corridor!.originCity)} إلى ${cityArName(corridor!.destCity)}';
     final typeBadge = tripTypeBadge(trip.tripType);
 
     return AppCard(
@@ -141,7 +140,7 @@ class _TripCard extends StatelessWidget {
               SizedBox(width: space.lg),
               Icon(AppIcons.seat, size: space.lg, color: colors.textMuted),
               SizedBox(width: space.sm),
-              Text('${trip.seatsAvailable}/${trip.seatsTotal} متاح',
+              Text('${formatCount(trip.seatsAvailable)}/${formatCount(trip.seatsTotal)} متاح',
                   style: context.text.body.tabular
                       .copyWith(color: colors.textSecondary)),
             ],

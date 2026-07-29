@@ -51,20 +51,20 @@ void main() {
     await tester.pumpWidget(_host(_controller(price: 6000)));
 
     // Starts at 1 seat → total 6,000; no 12,000 yet.
-    expect(find.text('1'), findsOneWidget);
-    expect(find.text('12,000 د.ع'), findsNothing);
+    expect(find.text('١'), findsOneWidget);
+    expect(find.text('١٢٬٠٠٠ د.ع'), findsNothing);
 
     _stepButtonTap(tester, AppIcons.plus)!();
     await tester.pump();
 
     // 2 seats → total 12,000 د.ع.
-    expect(find.text('2'), findsOneWidget);
-    expect(find.text('12,000 د.ع'), findsOneWidget);
+    expect(find.text('٢'), findsOneWidget);
+    expect(find.text('١٢٬٠٠٠ د.ع'), findsOneWidget);
 
     _stepButtonTap(tester, AppIcons.minus)!();
     await tester.pump();
-    expect(find.text('1'), findsOneWidget);
-    expect(find.text('12,000 د.ع'), findsNothing);
+    expect(find.text('١'), findsOneWidget);
+    expect(find.text('١٢٬٠٠٠ د.ع'), findsNothing);
   });
 
   testWidgets('seat stepper never exceeds available seats', (tester) async {
@@ -73,7 +73,7 @@ void main() {
 
     _stepButtonTap(tester, AppIcons.plus)!(); // 1 → 2 (max)
     await tester.pump();
-    expect(find.text('2'), findsOneWidget);
+    expect(find.text('٢'), findsOneWidget);
     expect(c.seatCount, 2);
 
     // At the cap the increment button is disabled (no onTap).

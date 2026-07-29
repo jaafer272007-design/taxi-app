@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared/shared.dart';
 
-import '../trip/trip_format.dart';
 import 'booking_confirmation_screen.dart';
 import 'booking_controller.dart';
 import 'booking_error.dart';
@@ -27,7 +26,7 @@ class _BookingScreenState extends State<BookingScreen> {
     final geocoder = context.read<ReverseGeocoder>();
 
     final city = isPickup ? c.originCity : c.destCity;
-    final cityName = city == null ? null : cityAr(city);
+    final cityName = city == null ? null : cityArName(city);
     final current = isPickup ? c.pickup : c.dropoff;
     final isSet = isPickup ? c.pickupSet : c.dropoffSet;
 
@@ -75,7 +74,7 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   String _pointLabel(String base, String? city) =>
-      city == null ? base : '$base في ${cityAr(city)}';
+      city == null ? base : '$base في ${cityArName(city)}';
 
   @override
   Widget build(BuildContext context) {
@@ -231,7 +230,7 @@ class _SeatSection extends StatelessWidget {
             ),
             Expanded(
               child: Center(
-                child: Text('${controller.seatCount}',
+                child: Text(formatCount(controller.seatCount),
                     style: context.text.h1.tabular
                         .copyWith(color: colors.textPrimary)),
               ),

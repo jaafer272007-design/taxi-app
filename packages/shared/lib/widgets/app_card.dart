@@ -2,8 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
-/// A surface container with the standard radius, border and soft card shadow.
+/// A surface container at the Masar card radius (20), lifted off the page.
 /// Optionally tappable (with press feedback).
+///
+/// How it is lifted depends on the theme, which is what the hand-off does:
+/// a **light** card floats on the warm paper with a soft shadow and no outline,
+/// while a **dark** card uses a hairline border and no shadow — an ink shadow is
+/// invisible against a near-black field, so the border is what separates the
+/// card from the background. [bordered] overrides that per-instance.
 class AppCard extends StatefulWidget {
   const AppCard({
     super.key,
@@ -11,7 +17,7 @@ class AppCard extends StatefulWidget {
     this.onTap,
     this.padding,
     this.muted = false,
-    this.bordered = true,
+    this.bordered,
     this.elevated = true,
   });
 
@@ -22,8 +28,9 @@ class AppCard extends StatefulWidget {
   /// Use the recessed [AppColors.surfaceMuted] fill.
   final bool muted;
 
-  /// Draw the hairline border.
-  final bool bordered;
+  /// Force the hairline border on/off. Defaults to the theme-driven behaviour
+  /// described on the class (border in dark, shadow in light).
+  final bool? bordered;
 
   /// Draw the soft card shadow.
   final bool elevated;
@@ -49,18 +56,20 @@ class _AppCardState extends State<AppCard> {
     final baseColor = widget.muted ? colors.surfaceMuted : colors.surface;
     final bg = _pressed ? colors.surfaceMuted : baseColor;
 
+    // Dark lifts with a border, light with a shadow. A muted card is recessed
+    // rather than raised, so it gets neither.
+    final isDark = context.isDark;
+    final bordered = widget.bordered ?? (isDark && !widget.muted);
+    final shadowed = widget.elevated && !widget.muted && !isDark;
+
     final card = AnimatedContainer(
       duration: const Duration(milliseconds: 120),
       padding: widget.padding ?? EdgeInsets.all(space.lg),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: radii.lgAll,
-        border: widget.bordered
-            ? Border.all(color: colors.border, width: 1)
-            : null,
-        boxShadow: widget.elevated && !widget.muted
-            ? context.elevation.card
-            : null,
+        borderRadius: radii.cardAll,
+        border: bordered ? Border.all(color: colors.border, width: 1) : null,
+        boxShadow: shadowed ? context.elevation.card : null,
       ),
       child: widget.child,
     );

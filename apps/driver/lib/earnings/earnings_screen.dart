@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:shared/shared.dart';
 
 import '../trip/driver_trip_models.dart';
-import '../trip/trip_format.dart';
 import 'earnings_controller.dart';
 
 /// "أرباحي": the driver's cash earnings — today's total, the all-time total, and
@@ -162,7 +161,7 @@ class _RecordRow extends StatelessWidget {
                         .copyWith(color: colors.textPrimary)),
                 SizedBox(height: space.xs),
                 Text(
-                  '${formatDayBaghdad(record.collectedAt)} · ${formatTime(record.collectedAt)}',
+                  '${formatDayShortBaghdad(record.collectedAt)} · ${formatTime(record.collectedAt)}',
                   style: context.text.caption.copyWith(color: colors.textMuted),
                 ),
               ],

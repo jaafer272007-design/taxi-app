@@ -70,6 +70,23 @@ void main() {
     });
   });
 
+  group('masar components', () {
+    testWidgets('light', (tester) async {
+      await _matchGolden(tester,
+          name: 'masar_components_light',
+          brightness: Brightness.light,
+          height: 900,
+          child: const MasarComponentsGallery());
+    });
+    testWidgets('dark', (tester) async {
+      await _matchGolden(tester,
+          name: 'masar_components_dark',
+          brightness: Brightness.dark,
+          height: 900,
+          child: const MasarComponentsGallery());
+    });
+  });
+
   group('base widgets', () {
     testWidgets('light', (tester) async {
       await _matchGolden(tester,

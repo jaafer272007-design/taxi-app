@@ -114,7 +114,7 @@ class _AppButtonState extends State<AppButton> {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: bg,
-          borderRadius: radii.pillAll,
+          borderRadius: radii.buttonAll,
           border: style.border == null
               ? null
               : Border.all(color: style.border!, width: 1.5),

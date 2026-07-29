@@ -104,7 +104,7 @@ class _OtpInputState extends State<OtpInput> {
     final borderColor = widget.hasError ? colors.danger : colors.border;
 
     OutlineInputBorder border(Color color, double width) => OutlineInputBorder(
-          borderRadius: radii.mdAll,
+          borderRadius: radii.fieldAll,
           borderSide: BorderSide(color: color, width: width),
         );
 
