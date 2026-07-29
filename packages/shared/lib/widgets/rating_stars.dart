@@ -44,7 +44,10 @@ class RatingStars extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final space = context.space;
-    final active = colors.accent;
+    // accentText, not accent: a filled star is an accent-colored *icon* on a
+    // card surface, and the raw saffron is 2.60:1 there — below even WCAG's 3:1
+    // floor for meaningful graphics. See AppColors.accent ("fills only").
+    final active = colors.accentText;
     final inactive = colors.borderStrong;
     final rtl = Directionality.of(context) == TextDirection.rtl;
     final fills = ratingStarFills(value, count: count);

@@ -158,9 +158,15 @@ class _AppButtonState extends State<AppButton> {
           foreground: c.onDanger,
         );
       case AppButtonVariant.dangerTonal:
+        // Opaque tonal fill (not an alpha tint) so the danger ink keeps a fixed
+        // contrast ratio wherever the button sits — see AppColors.dangerTonal.
         return _ButtonStyle(
-          background: c.danger.withValues(alpha: 0.10),
-          pressedBackground: c.danger.withValues(alpha: 0.18),
+          background: c.dangerTonal,
+          // Deliberately a small step: the pressed fill moves toward the danger
+          // hue, which closes the gap with the danger ink drawn on it. 0.05
+          // keeps the pressed pair at 4.58:1 (light) / 6.06:1 (dark); 0.12 would
+          // drop light to 4.15:1.
+          pressedBackground: Color.lerp(c.dangerTonal, c.danger, 0.05)!,
           foreground: c.danger,
           border: c.danger.withValues(alpha: 0.45),
         );

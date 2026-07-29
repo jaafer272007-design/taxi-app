@@ -43,6 +43,34 @@ consumed via context (e.g. context.colors.primary).
   files ONLY, never the screens.
 - Arabic-first, RTL. Support multiple themes (light/dark) where feasible.
 
+### Palette: "Masar" (مَسار) — locked
+Pine + saffron on warm paper. Light `primary #0E5C4A` / `bg #F4F1EA`; dark
+`primary #45C6A2` / `bg #0A100E`. Type is Cairo at 34/26/20/17/15/13/12.
+- **Accessibility is a locked rule: every foreground/background token pair is
+  >= 4.5:1.** It is enforced by `packages/shared/test/contrast_test.dart`, not
+  just documented — if a re-skin makes a pair illegible, CI goes red.
+- `accent` (#DE8F27) is a **fill-only** token — as ink it is 2.6:1. Use
+  `accentText` whenever the saffron must be text or an icon.
+- Status backgrounds use the opaque `*Tonal` tokens, never
+  `tone.withValues(alpha: …)` — a translucent tint composites over whatever is
+  behind it and silently fails contrast depending on where the widget sits.
+- The measured ratio table and every deviation from the raw design hand-off (with
+  its reason) live in the doc comment at the top of `theme/colors.dart`.
+
+### Numerals (locked decision)
+- **Display values render in Arabic-Indic numerals** (`٠١٢٣`) with the Arabic
+  thousands separator `٬` (U+066C) and decimal separator `٫` (U+066B) — prices,
+  fares, earnings, times, dates, seat counts, ratings.
+- **Input fields stay Western** (`0123`) — phone entry and OTP entry. The
+  keyboard emits Western digits; converting them mid-typing causes real friction.
+- Helpers live in `packages/shared/lib/format/numerals.dart`
+  (`toArabicDigits` / `toWesternDigits` / `formatIqd` / `formatPrice` /
+  `formatCount` / `formatRating` / `formatTime` / `formatClock` /
+  `formatDayShort`). Screens must never hand-roll digit formatting.
+- `toWesternDigits` is the inbound direction: normalise anything pasted
+  (Arabic-Indic or Persian digits) before parsing or sending to the API — the
+  wire format is always Western.
+
 ### Theme mode (light / dark / system)
 - Apps ship **light + dark** (both built in `/packages/shared/theme`).
 - **Default = `ThemeMode.system`** — follows the phone's setting.

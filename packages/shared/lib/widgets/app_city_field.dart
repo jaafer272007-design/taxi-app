@@ -110,10 +110,7 @@ Future<String?> showAppCityPicker(
     context: context,
     backgroundColor: context.colors.surface,
     isScrollControlled: true,
-    shape: RoundedRectangleBorder(
-      borderRadius:
-          BorderRadius.vertical(top: Radius.circular(context.radii.lg)),
-    ),
+    shape: RoundedRectangleBorder(borderRadius: context.radii.sheetTop),
     builder: (sheetContext) => AppCityPickerSheet(
       selected: selected,
       title: title,

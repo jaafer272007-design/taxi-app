@@ -184,8 +184,7 @@ Widget _cityPickerSheet() => Builder(
             height: 640,
             child: Material(
               color: context.colors.surface,
-              borderRadius:
-                  BorderRadius.vertical(top: Radius.circular(context.radii.lg)),
+              borderRadius: context.radii.sheetTop,
               clipBehavior: Clip.antiAlias,
               child: AppCityPickerSheet(selected: 'Najaf', onSelect: (_) {}),
             ),

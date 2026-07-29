@@ -3,6 +3,11 @@ import 'package:flutter/material.dart';
 /// Spacing scale — a strict 4 / 8 rhythm. Every gap, padding and margin in the
 /// apps must come from one of these steps (via `context.space.md` etc.), never
 /// a raw number.
+///
+/// The Masar scale is **4 · 8 · 12 · 16 · 20 · 24 · 32** ([xs] … [xl3]), which
+/// the existing steps already match exactly — this file is unchanged by the
+/// re-skin. [xl4] (40) is retained on top of it for page-bottom gutters and the
+/// space reserved under the floating nav bar.
 @immutable
 class AppSpacing extends ThemeExtension<AppSpacing> {
   const AppSpacing({

@@ -103,16 +103,21 @@ class _TonePair {
   final Color foreground;
 }
 
+// Backgrounds come from the opaque *Tonal tokens rather than an alpha tint of
+// the tone. A translucent tint composites over whatever is behind the badge, so
+// the same pair measured 4.6:1 on a white card but 3.8:1 on the paper
+// background; the opaque tokens make each pair fixed and testable
+// (see contrast_test.dart).
 _TonePair _toneColors(AppColors c, AppBadgeTone tone) {
   switch (tone) {
     case AppBadgeTone.success:
-      return _TonePair(c.success.withValues(alpha: 0.14), c.success);
+      return _TonePair(c.successTonal, c.success);
     case AppBadgeTone.warning:
-      return _TonePair(c.warning.withValues(alpha: 0.16), c.warning);
+      return _TonePair(c.warningTonal, c.warning);
     case AppBadgeTone.danger:
-      return _TonePair(c.danger.withValues(alpha: 0.14), c.danger);
+      return _TonePair(c.dangerTonal, c.danger);
     case AppBadgeTone.info:
-      return _TonePair(c.info.withValues(alpha: 0.14), c.info);
+      return _TonePair(c.infoTonal, c.info);
     case AppBadgeTone.neutral:
       return _TonePair(c.surfaceMuted, c.textSecondary);
   }
