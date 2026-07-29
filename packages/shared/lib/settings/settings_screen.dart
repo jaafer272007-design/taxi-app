@@ -200,6 +200,8 @@ class _AboutCard extends StatelessWidget {
             child: Text('تكسي مشترك',
                 style: context.text.bodyStrong.copyWith(color: colors.textPrimary)),
           ),
+          // Western: a version string is an identifier, not a quantity — it has
+          // to match what appears in the store listing and in bug reports.
           Text('الإصدار $version',
               style: context.text.caption.copyWith(color: colors.textMuted)),
         ],
@@ -258,6 +260,7 @@ class _EditNameDialogState extends State<_EditNameDialog> {
     final colors = context.colors;
     return AlertDialog(
       backgroundColor: colors.surface,
+      shape: RoundedRectangleBorder(borderRadius: context.radii.cardAll),
       title: Text('تعديل الاسم',
           style: context.text.title.copyWith(color: colors.textPrimary)),
       content: AppTextField(

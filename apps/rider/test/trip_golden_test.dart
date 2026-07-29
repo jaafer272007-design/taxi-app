@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:rider/auth/name_screen.dart';
+import 'package:rider/auth/otp_screen.dart';
+import 'package:rider/auth/phone_screen.dart';
 import 'package:rider/trip/results_screen.dart';
 import 'package:rider/trip/search_screen.dart';
 import 'package:rider/trip/trip_details_screen.dart';
@@ -30,6 +32,40 @@ void main() {
     AppTheme.light();
     AppTheme.dark();
     await GoogleFonts.pendingFonts();
+  });
+
+  group('onboarding_phone', () {
+    testWidgets('light', (t) async {
+      await _golden(t,
+          name: 'onboarding_phone_light',
+          brightness: Brightness.light,
+          auth: _freshAuth(),
+          child: const PhoneScreen());
+    });
+    testWidgets('dark', (t) async {
+      await _golden(t,
+          name: 'onboarding_phone_dark',
+          brightness: Brightness.dark,
+          auth: _freshAuth(),
+          child: const PhoneScreen());
+    });
+  });
+
+  group('onboarding_otp', () {
+    testWidgets('light', (t) async {
+      await _golden(t,
+          name: 'onboarding_otp_light',
+          brightness: Brightness.light,
+          auth: await _otpAuth(),
+          child: const OtpScreen());
+    });
+    testWidgets('dark', (t) async {
+      await _golden(t,
+          name: 'onboarding_otp_dark',
+          brightness: Brightness.dark,
+          auth: await _otpAuth(),
+          child: const OtpScreen());
+    });
   });
 
   group('rider_profile', () {
@@ -216,6 +252,13 @@ Widget _cityPickerSheet() => Builder(
 AuthController _freshAuth() =>
     AuthController(api: FakeAuthApi(), tokenStore: InMemoryTokenStore());
 
+/// An auth controller parked on the OTP step (phone already submitted).
+Future<AuthController> _otpAuth() async {
+  final c = _freshAuth();
+  await c.requestOtp('+9647701234567');
+  return c;
+}
+
 Future<AuthController> _riderAuth(Gender gender) async {
   final api = FakeAuthApi()..meResult = fakeUser(name: 'راكب', gender: gender);
   final c = AuthController(api: api, tokenStore: InMemoryTokenStore('jwt'));
@@ -338,6 +381,13 @@ Future<void> _golden(
     find.byType(MaterialApp),
     matchesGoldenFile('goldens/$name.png'),
   );
+
+  // Each `auth` here is built fresh for this one shot, and `.value` providers
+  // never dispose what they are handed. The OTP screen's controller holds a
+  // periodic resend-cooldown timer, and flutter_test asserts on a timer that
+  // outlives the tree — so it is cancelled here, inside the body, rather than in
+  // an addTearDown (which runs *after* that invariant check).
+  auth?.dispose();
 }
 
 

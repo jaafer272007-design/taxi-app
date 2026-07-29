@@ -186,6 +186,30 @@ class EarningsRecord {
       );
 }
 
+/// One Baghdad calendar day of the earnings ledger.
+///
+/// The ledger is grouped by day so every figure on the screen reconciles: a
+/// day's [total] is the sum of the rows printed under it, and the sum of the
+/// days is the all-time total. A driver handling cash has to be able to check
+/// the app against what is in their pocket, and that only works if the arithmetic
+/// is visible.
+class EarningsDay {
+  const EarningsDay({
+    required this.date,
+    required this.records,
+    required this.total,
+  });
+
+  /// Midnight of the Baghdad calendar day these records fall on.
+  final DateTime date;
+
+  /// The day's records, newest first.
+  final List<EarningsRecord> records;
+
+  /// Sum of [records] — never taken from anywhere else.
+  final int total;
+}
+
 /// A driver's earnings for one range (GET /driver/earnings?range=today|all).
 class DriverEarnings {
   const DriverEarnings({required this.total, required this.records});

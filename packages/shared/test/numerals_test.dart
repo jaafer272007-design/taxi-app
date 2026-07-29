@@ -78,6 +78,35 @@ void main() {
       expect(formatCount(71), '٧١');
     });
 
+    test('formatSeats uses the Arabic dual', () {
+      expect(formatSeats(0), 'لا مقاعد');
+      expect(formatSeats(1), 'مقعد واحد');
+      // The dual — "٢ مقاعد" is wrong Arabic.
+      expect(formatSeats(2), 'مقعدان');
+      expect(formatSeats(3), '٣ مقاعد');
+      expect(formatSeats(4), '٤ مقاعد');
+    });
+
+    test('formatTrips uses the Arabic dual', () {
+      expect(formatTrips(0), 'لا رحلات');
+      expect(formatTrips(1), 'رحلة واحدة');
+      expect(formatTrips(2), 'رحلتان');
+      expect(formatTrips(3), '٣ رحلات');
+    });
+
+    test('baghdadTime shifts UTC by +3 with no DST', () {
+      // The earnings ledger buckets by Baghdad day; getting this wrong files a
+      // late-evening trip under the previous day and the driver's totals stop
+      // matching their cash.
+      final t = baghdadTime(DateTime.utc(2026, 7, 19, 22, 30));
+      expect(t.year, 2026);
+      expect(t.month, 7);
+      expect(t.day, 20);
+      expect(t.hour, 1);
+      // Iraq has no DST, so January behaves identically.
+      expect(baghdadTime(DateTime.utc(2026, 1, 19, 22, 30)).day, 20);
+    });
+
     test('formatRating uses the Arabic decimal separator', () {
       expect(formatRating(4.8), '٤٫٨');
       expect(formatRating(5), '٥٫٠');

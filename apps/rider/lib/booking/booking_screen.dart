@@ -7,9 +7,13 @@ import 'booking_controller.dart';
 import 'booking_error.dart';
 import 'booking_models.dart';
 
-/// Reserve-a-seat form: seat count + live fare, door-to-door pickup/dropoff
-/// (chosen on a map), a cash note, and a confirm button. Reads/writes a
-/// [BookingController] provided by the route that opened this screen.
+/// Reserve-a-seat: pick how many seats, set the door-to-door points on a map,
+/// and confirm. Reads/writes a [BookingController] provided by the route that
+/// opened this screen.
+///
+/// Laid out per the Masar hand-off: seats are *picked*, not stepped; pickup and
+/// dropoff share one route-rail card; and the running total sits with the CTA
+/// in the sticky bar rather than inline in the form.
 class BookingScreen extends StatefulWidget {
   const BookingScreen({super.key});
 
@@ -73,9 +77,6 @@ class _BookingScreenState extends State<BookingScreen> {
     );
   }
 
-  String _pointLabel(String base, String? city) =>
-      city == null ? base : '$base في ${cityArName(city)}';
-
   @override
   Widget build(BuildContext context) {
     final c = context.watch<BookingController>();
@@ -87,11 +88,13 @@ class _BookingScreenState extends State<BookingScreen> {
     return AppScaffold(
       title: 'حجز مقعد',
       scrollable: true,
-      bottomBar: AppButton(
-        label: 'تأكيد الحجز',
-        icon: AppIcons.check,
+      // Total + CTA travel together, so the fare is visible at the moment of
+      // commitment rather than scrolled away up the form.
+      bottomBar: _ConfirmBar(
+        seatCount: c.seatCount,
+        fare: c.fare,
         loading: c.submitting,
-        onPressed:
+        onConfirm:
             (c.canSubmit && !seatGone && !notEligible) ? _confirm : null,
       ),
       body: Column(
@@ -99,23 +102,25 @@ class _BookingScreenState extends State<BookingScreen> {
         children: [
           SizedBox(height: space.md),
           _TripSummaryCard(controller: c),
-          SizedBox(height: space.lg),
-          _SeatSection(controller: c),
-          SizedBox(height: space.lg),
-          _FareRow(fare: c.fare),
           SizedBox(height: space.xl),
-          _PointEntry(
-            title: _pointLabel('نقطة الانطلاق', c.originCity),
-            point: c.pickup,
-            isSet: c.pickupSet,
-            onTap: () => _pickPoint(isPickup: true),
+          const _SectionLabel('اختر مقاعدك'),
+          SizedBox(height: space.sm),
+          SeatCountPicker(
+            value: c.seatCount,
+            // A booking is capped at 4 seats regardless of vehicle size, so the
+            // row always shows 4 tiles and anything the trip can't seat is
+            // drawn dead.
+            max: c.maxSeats,
+            onChanged: c.setSeatCount,
+            hint: SeatGlyphs.label(c.trip.seatsAvailable),
           ),
-          SizedBox(height: space.lg),
-          _PointEntry(
-            title: _pointLabel('نقطة النزول', c.destCity),
-            point: c.dropoff,
-            isSet: c.dropoffSet,
-            onTap: () => _pickPoint(isPickup: false),
+          SizedBox(height: space.xl),
+          const _SectionLabel('من الباب إلى الباب'),
+          SizedBox(height: space.sm),
+          _DoorToDoorCard(
+            controller: c,
+            onPickPickup: () => _pickPoint(isPickup: true),
+            onPickDropoff: () => _pickPoint(isPickup: false),
           ),
           SizedBox(height: space.lg),
           const _CashNote(),
@@ -134,7 +139,19 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 }
 
-/// Compact recap of the trip being booked: driver + time + price per seat.
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Text(
+        text,
+        style: context.text.label.copyWith(color: context.colors.textSecondary),
+      );
+}
+
+/// Compact recap of the trip being booked: driver + departure time + unit price.
 class _TripSummaryCard extends StatelessWidget {
   const _TripSummaryCard({required this.controller});
 
@@ -162,23 +179,23 @@ class _TripSummaryCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(name, style: context.text.title, maxLines: 1),
+                    Text(name, style: context.text.bodyStrong, maxLines: 1),
                     SizedBox(height: space.xs),
                     RatingStars(value: trip.driverRatingAvg, size: space.lg),
                   ],
                 ),
               ),
+              // Time is the headline here too.
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('وقت الانطلاق',
+                  Text(formatTime(trip.departureTime),
+                      style: context.text.h1.tabular
+                          .copyWith(color: colors.textPrimary)),
+                  Text('الانطلاق',
                       style: context.text.caption
                           .copyWith(color: colors.textMuted)),
-                  SizedBox(height: space.xs),
-                  Text(formatTime(trip.departureTime),
-                      style: context.text.h2.tabular
-                          .copyWith(color: colors.textPrimary)),
                 ],
               ),
             ],
@@ -191,8 +208,8 @@ class _TripSummaryCard extends StatelessWidget {
               Icon(AppIcons.cash, size: space.lg, color: colors.textMuted),
               SizedBox(width: space.sm),
               Text('السعر للمقعد',
-                  style: context.text.body
-                      .copyWith(color: colors.textSecondary)),
+                  style:
+                      context.text.body.copyWith(color: colors.textSecondary)),
               const Spacer(),
               Text(formatPrice(trip.pricePerSeat),
                   style: context.text.bodyStrong.tabular
@@ -205,125 +222,45 @@ class _TripSummaryCard extends StatelessWidget {
   }
 }
 
-/// Seat-count label + stepper, bounded to 1..min(4, seatsAvailable).
-class _SeatSection extends StatelessWidget {
-  const _SeatSection({required this.controller});
-
-  final BookingController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final space = context.space;
-    final colors = context.colors;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('عدد المقاعد',
-            style: context.text.label.copyWith(color: colors.textSecondary)),
-        SizedBox(height: space.sm),
-        Row(
-          children: [
-            _StepButton(
-              icon: AppIcons.minus,
-              semanticLabel: 'إنقاص',
-              onTap: controller.canDecrement ? controller.decrementSeat : null,
-            ),
-            Expanded(
-              child: Center(
-                child: Text(formatCount(controller.seatCount),
-                    style: context.text.h1.tabular
-                        .copyWith(color: colors.textPrimary)),
-              ),
-            ),
-            _StepButton(
-              icon: AppIcons.plus,
-              semanticLabel: 'زيادة',
-              onTap: controller.canIncrement ? controller.incrementSeat : null,
-            ),
-          ],
-        ),
-        SizedBox(height: space.xs),
-        Text('المتاح: ${controller.trip.seatsAvailable} مقاعد',
-            style: context.text.caption.copyWith(color: colors.textMuted)),
-      ],
-    );
-  }
-}
-
-class _StepButton extends StatelessWidget {
-  const _StepButton({
-    required this.icon,
-    required this.semanticLabel,
-    this.onTap,
+/// Pickup and dropoff in a single route-rail card — one journey, not two
+/// unrelated address fields.
+class _DoorToDoorCard extends StatelessWidget {
+  const _DoorToDoorCard({
+    required this.controller,
+    required this.onPickPickup,
+    required this.onPickDropoff,
   });
 
-  final IconData icon;
-  final String semanticLabel;
-  final VoidCallback? onTap;
+  final BookingController controller;
+  final VoidCallback onPickPickup;
+  final VoidCallback onPickDropoff;
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
-    final space = context.space;
-    final enabled = onTap != null;
-    return Semantics(
-      button: true,
-      enabled: enabled,
-      label: semanticLabel,
-      child: Opacity(
-        opacity: enabled ? 1 : 0.4,
-        child: GestureDetector(
-          onTap: onTap,
-          behavior: HitTestBehavior.opaque,
-          child: Container(
-            width: space.xl4 + space.xs,
-            height: space.xl4 + space.xs,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: colors.primary.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: colors.primary, size: space.xl),
-          ),
+    return AppCard(
+      child: RouteRail(
+        divided: true,
+        origin: _PointRow(
+          title: 'نقطة الانطلاق',
+          point: controller.pickup,
+          isSet: controller.pickupSet,
+          onTap: onPickPickup,
+        ),
+        destination: _PointRow(
+          title: 'نقطة النزول',
+          point: controller.dropoff,
+          isSet: controller.dropoffSet,
+          onTap: onPickDropoff,
         ),
       ),
     );
   }
 }
 
-/// Live total fare = price per seat × seats.
-class _FareRow extends StatelessWidget {
-  const _FareRow({required this.fare});
-
-  final int fare;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final space = context.space;
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: space.lg, vertical: space.md),
-      decoration: BoxDecoration(
-        color: colors.surfaceMuted,
-        borderRadius: context.radii.mdAll,
-      ),
-      child: Row(
-        children: [
-          Text('الإجمالي',
-              style: context.text.bodyStrong.copyWith(color: colors.textPrimary)),
-          const Spacer(),
-          Text(formatPrice(fare),
-              style: context.text.h2.tabular.copyWith(color: colors.primary)),
-        ],
-      ),
-    );
-  }
-}
-
-/// A tappable pickup/dropoff row: shows the chosen label (or a prompt) and opens
-/// the map picker. Coordinates come from the map, not typed text.
-class _PointEntry extends StatelessWidget {
-  const _PointEntry({
+/// One endpoint inside [_DoorToDoorCard]: label, the chosen address (or a
+/// prompt), and a chevron into the map picker.
+class _PointRow extends StatelessWidget {
+  const _PointRow({
     required this.title,
     required this.point,
     required this.isSet,
@@ -340,42 +277,54 @@ class _PointEntry extends StatelessWidget {
     final colors = context.colors;
     final space = context.space;
     final hasLabel = isSet && point.label.trim().isNotEmpty;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title,
-            style: context.text.label.copyWith(color: colors.textSecondary)),
-        SizedBox(height: space.sm),
-        AppCard(
-          onTap: onTap,
+
+    return Semantics(
+      button: true,
+      label: title,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
           child: Row(
             children: [
-              Icon(AppIcons.mapPin,
-                  size: space.xl,
-                  color: isSet ? colors.primary : colors.textMuted),
-              SizedBox(width: space.md),
               Expanded(
-                child: Text(
-                  hasLabel ? point.label.trim() : 'حدّد النقطة على الخريطة',
-                  style: hasLabel
-                      ? context.text.bodyStrong
-                          .copyWith(color: colors.textPrimary)
-                      : context.text.body.copyWith(color: colors.textMuted),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(title,
+                        style: context.text.caption
+                            .copyWith(color: colors.textMuted)),
+                    SizedBox(height: space.xs),
+                    Text(
+                      hasLabel
+                          ? point.label.trim()
+                          : 'حدّد النقطة على الخريطة',
+                      style: hasLabel
+                          ? context.text.bodyStrong
+                              .copyWith(color: colors.textPrimary)
+                          : context.text.body
+                              .copyWith(color: colors.textMuted),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
               ),
               SizedBox(width: space.sm),
-              Icon(AppIcons.chevronLeft, size: space.lg, color: colors.textMuted),
+              Icon(AppIcons.chevronLeft,
+                  size: space.lg, color: colors.textMuted),
             ],
           ),
         ),
-      ],
+      ),
     );
   }
 }
 
-/// "الدفع نقداً عند الرحلة" — informational, no action (cash only in Phase 1).
+/// "الدفع نقداً عند الرحلة" — informational (cash only in Phase 1), on the
+/// opaque warning tonal so its contrast does not depend on what sits behind it.
 class _CashNote extends StatelessWidget {
   const _CashNote();
 
@@ -383,13 +332,70 @@ class _CashNote extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final space = context.space;
-    return Row(
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(space.lg),
+      decoration: BoxDecoration(
+        color: colors.warningTonal,
+        borderRadius: context.radii.fieldLgAll,
+      ),
+      child: Row(
+        children: [
+          Icon(AppIcons.cash, size: space.xl, color: colors.warning),
+          SizedBox(width: space.md),
+          Expanded(
+            child: Text('الدفع نقداً عند الرحلة — لا حاجة لبطاقة',
+                style: context.text.label.copyWith(color: colors.warning)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The sticky commitment bar: running total, then the confirm action.
+class _ConfirmBar extends StatelessWidget {
+  const _ConfirmBar({
+    required this.seatCount,
+    required this.fare,
+    required this.loading,
+    required this.onConfirm,
+  });
+
+  final int seatCount;
+  final int fare;
+  final bool loading;
+  final VoidCallback? onConfirm;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final space = context.space;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(AppIcons.cash, size: space.lg, color: colors.textSecondary),
-        SizedBox(width: space.sm),
-        Expanded(
-          child: Text('الدفع نقداً عند الرحلة',
-              style: context.text.body.copyWith(color: colors.textSecondary)),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: space.xs),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text('الإجمالي · ${formatSeats(seatCount)}',
+                  style: context.text.label
+                      .copyWith(color: colors.textSecondary)),
+              const Spacer(),
+              Text(formatPrice(fare),
+                  style: context.text.h1.tabular
+                      .copyWith(color: colors.textPrimary)),
+            ],
+          ),
+        ),
+        SizedBox(height: space.md),
+        AppButton(
+          label: 'تأكيد الحجز',
+          icon: AppIcons.check,
+          loading: loading,
+          onPressed: onConfirm,
         ),
       ],
     );
@@ -409,15 +415,17 @@ class _ErrorBanner extends StatelessWidget {
     final colors = context.colors;
     final space = context.space;
     final seatGone = error.kind == BookingErrorKind.seatGone;
+    // Opaque tonal fills — an alpha tint composites over whatever is behind the
+    // banner and silently changes its contrast.
     final tone = seatGone ? colors.warning : colors.danger;
+    final tonal = seatGone ? colors.warningTonal : colors.dangerTonal;
 
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(space.lg),
       decoration: BoxDecoration(
-        color: tone.withValues(alpha: 0.12),
-        borderRadius: context.radii.mdAll,
-        border: Border.all(color: tone.withValues(alpha: 0.30)),
+        color: tonal,
+        borderRadius: context.radii.fieldLgAll,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -430,7 +438,7 @@ class _ErrorBanner extends StatelessWidget {
               SizedBox(width: space.sm),
               Expanded(
                 child: Text(error.message,
-                    style: context.text.body.copyWith(color: colors.textPrimary)),
+                    style: context.text.body.copyWith(color: tone)),
               ),
             ],
           ),

@@ -132,6 +132,8 @@ class _VehicleFormScreenState extends State<VehicleFormScreen> {
           SizedBox(height: space.lg),
           AppTextField(
             label: 'عدد المقاعد',
+            // Western: this is an example of what to TYPE into a numeric field,
+            // and input fields stay Western per the locked numerals rule.
             hint: 'مثال: 4',
             helper: 'عدد مقاعد الركّاب في سيارتك.',
             error: _seatsErr,

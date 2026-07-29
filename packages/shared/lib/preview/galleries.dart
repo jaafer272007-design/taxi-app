@@ -92,7 +92,7 @@ class ColorTokensGallery extends StatelessWidget {
       alignment: Alignment.bottomRight,
       decoration: BoxDecoration(
         color: s.color,
-        borderRadius: context.radii.mdAll,
+        borderRadius: context.radii.fieldLgAll,
         border: Border.all(color: context.colors.border),
       ),
       child: Text(
@@ -287,7 +287,7 @@ class WidgetShowcaseGallery extends StatelessWidget {
                 runSpacing: space.sm,
                 children: const [
                   AppPill(label: 'النجف → كربلاء', tone: AppBadgeTone.info, icon: AppIcons.route),
-                  AppPill(label: '3 مقاعد', tone: AppBadgeTone.success, icon: AppIcons.seat),
+                  AppPill(label: '٣ مقاعد', tone: AppBadgeTone.success, icon: AppIcons.seat),
                 ],
               ),
             ],

@@ -23,13 +23,35 @@ class _OtpScreenState extends State<OtpScreen> {
 
     return AppScaffold(
       scrollable: true,
+      bottomBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AppButton(
+            label: 'تأكيد',
+            loading: auth.busy,
+            onPressed: (complete && !auth.busy)
+                ? () => context.read<AuthController>().verifyOtp(_code)
+                : null,
+          ),
+          SizedBox(height: space.sm),
+          AppButton(
+            label: 'تغيير الرقم',
+            variant: AppButtonVariant.ghost,
+            onPressed: auth.busy
+                ? null
+                : () => context.read<AuthController>().changePhone(),
+          ),
+        ],
+      ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(height: space.xl2),
           OnboardingHeader(
+            step: 2,
+            totalSteps: 3,
             title: 'أدخل رمز التحقق',
-            subtitle: 'أرسلنا رمزاً من 6 أرقام إلى ${auth.phone}',
+            subtitle: 'أرسلنا رمزاً من ٦ أرقام إلى ${auth.phone}',
           ),
           SizedBox(height: space.xl2),
           OtpInput(
@@ -59,25 +81,6 @@ class _OtpScreenState extends State<OtpScreen> {
           ],
           SizedBox(height: space.xl),
           const Center(child: _ResendControl()),
-          SizedBox(height: space.xl),
-          AppButton(
-            label: 'تأكيد',
-            loading: auth.busy,
-            onPressed: (complete && !auth.busy)
-                ? () => context.read<AuthController>().verifyOtp(_code)
-                : null,
-          ),
-          SizedBox(height: space.sm),
-          Center(
-            child: AppButton(
-              label: 'تغيير الرقم',
-              variant: AppButtonVariant.ghost,
-              expand: false,
-              onPressed: auth.busy
-                  ? null
-                  : () => context.read<AuthController>().changePhone(),
-            ),
-          ),
         ],
       ),
     );
@@ -100,7 +103,7 @@ class _ResendControl extends StatelessWidget {
       );
     }
     return Text(
-      'إعادة الإرسال بعد ${auth.resendSeconds} ثانية',
+      'إعادة الإرسال بعد ${formatCount(auth.resendSeconds)} ثانية',
       style: context.text.caption.copyWith(color: context.colors.textMuted),
     );
   }

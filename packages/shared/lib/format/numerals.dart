@@ -101,6 +101,27 @@ String formatPrice(int amount) => formatIqd(amount, withSuffix: true);
 /// A plain whole number in Arabic-Indic digits — seat counts, trip counts.
 String formatCount(int value) => toArabicDigits(value.toString());
 
+/// A seat count as an Arabic noun phrase — `مقعد واحد` / `مقعدان` / `٣ مقاعد`.
+///
+/// Arabic has a **dual**, so two seats is "مقعدان", never "٢ مقاعد". Screens
+/// must not build this by interpolating a number in front of a fixed noun.
+String formatSeats(int count) => switch (count) {
+      <= 0 => 'لا مقاعد',
+      1 => 'مقعد واحد',
+      2 => 'مقعدان',
+      _ => '${formatCount(count)} مقاعد',
+    };
+
+/// A trip count as an Arabic noun phrase — `رحلة واحدة` / `رحلتان` / `٣ رحلات`.
+///
+/// Same dual rule as [formatSeats]: two trips is "رحلتان", never "٢ رحلات".
+String formatTrips(int count) => switch (count) {
+      <= 0 => 'لا رحلات',
+      1 => 'رحلة واحدة',
+      2 => 'رحلتان',
+      _ => '${formatCount(count)} رحلات',
+    };
+
 /// A rating with one decimal, using the Arabic decimal separator — `4.8` → `٤٫٨`.
 String formatRating(double value) {
   final fixed = value.toStringAsFixed(1);
@@ -110,12 +131,20 @@ String formatRating(double value) {
 /// Iraq is UTC+3 year-round (no DST).
 const Duration _baghdadOffset = Duration(hours: 3);
 
+/// [dt] as Baghdad wall-clock. The single place the offset is applied — anything
+/// that needs to know *which Baghdad day* a timestamp falls on (grouping a
+/// ledger, bucketing trips) must go through here rather than re-deriving it.
+///
+/// The returned value carries UTC flags mechanically; read only its calendar and
+/// clock fields.
+DateTime baghdadTime(DateTime dt) => dt.toUtc().add(_baghdadOffset);
+
 /// `HH:mm` in Baghdad wall-clock, in Arabic-Indic digits — `٠٧:١٥`.
 ///
 /// Set [toBaghdad] to false if [dt] is already local wall-clock and must not be
 /// shifted again.
 String formatTime(DateTime dt, {bool toBaghdad = true}) {
-  final t = toBaghdad ? dt.toUtc().add(_baghdadOffset) : dt;
+  final t = toBaghdad ? baghdadTime(dt) : dt;
   return formatClock(t.hour, t.minute);
 }
 
@@ -151,5 +180,4 @@ String formatDayShort(DateTime date) =>
     '${toArabicDigits(date.day.toString())} ${arabicMonths[date.month - 1]}';
 
 /// [formatDayShort] for the Baghdad calendar day of a UTC/any-zone [dt].
-String formatDayShortBaghdad(DateTime dt) =>
-    formatDayShort(dt.toUtc().add(_baghdadOffset));
+String formatDayShortBaghdad(DateTime dt) => formatDayShort(baghdadTime(dt));

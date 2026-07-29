@@ -9,21 +9,27 @@ class _CenteredMessage extends StatelessWidget {
     required this.icon,
     required this.title,
     this.subtitle,
-    this.tone,
+    this.danger = false,
     this.action,
   });
 
   final IconData icon;
   final String title;
   final String? subtitle;
-  final Color? tone;
+
+  /// Draw the badge in the danger tone (a retryable failure) rather than the
+  /// neutral primary tone (an ordinary empty result).
+  final bool danger;
   final Widget? action;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final space = context.space;
-    final accent = tone ?? colors.primary;
+    // Opaque tonal fills — an alpha tint of the accent measures differently on
+    // the page background than it does inside a card.
+    final accent = danger ? colors.danger : colors.primary;
+    final badge = danger ? colors.dangerTonal : colors.primaryTonal;
 
     return Center(
       child: Padding(
@@ -36,7 +42,7 @@ class _CenteredMessage extends StatelessWidget {
               height: space.xl4 + space.xl2,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: accent.withValues(alpha: 0.12),
+                color: badge,
                 shape: BoxShape.circle,
               ),
               child: Icon(icon, color: accent, size: space.xl2),
@@ -133,7 +139,7 @@ class TripErrorView extends StatelessWidget {
   Widget build(BuildContext context) {
     return _CenteredMessage(
       icon: AppIcons.warning,
-      tone: context.colors.danger,
+      danger: true,
       title: message,
       action: AppButton(
         label: 'إعادة المحاولة',
@@ -157,7 +163,7 @@ class _SkeletonBox extends StatelessWidget {
       height: height,
       decoration: BoxDecoration(
         color: context.colors.surfaceMuted,
-        borderRadius: context.radii.smAll,
+        borderRadius: context.radii.chipAll,
       ),
     );
   }

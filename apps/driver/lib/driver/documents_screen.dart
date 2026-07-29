@@ -35,8 +35,15 @@ class DocumentsScreen extends StatelessWidget {
           Text('ارفع مستمسكاتك',
               style: context.text.h2.copyWith(color: context.colors.textPrimary)),
           SizedBox(height: space.xs),
-          Text('صورة واضحة لكل مستند (صورة أو PDF، حتى 5 ميغابايت).',
+          Text('صورة واضحة لكل مستند (صورة أو PDF، حتى ٥ ميغابايت).',
               style: context.text.body.copyWith(color: context.colors.textSecondary)),
+          SizedBox(height: space.lg),
+          _UploadProgress(
+            uploaded: kRequiredDocs
+                .where((t) => profile?.documentFor(t) != null)
+                .length,
+            total: kRequiredDocs.length,
+          ),
           SizedBox(height: space.lg),
           for (final type in kRequiredDocs) ...[
             _DocRow(
@@ -49,6 +56,62 @@ class DocumentsScreen extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// How much of the upload is done. Three separate uploads with three separate
+/// buttons make it easy to lose count — the bar answers "am I finished?" without
+/// the driver having to scan every card's badge.
+class _UploadProgress extends StatelessWidget {
+  const _UploadProgress({required this.uploaded, required this.total});
+
+  final int uploaded;
+  final int total;
+
+  /// Bar thickness.
+  static const double _track = 6;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final space = context.space;
+    final complete = uploaded >= total && total > 0;
+    final fraction = total == 0 ? 0.0 : (uploaded / total).clamp(0.0, 1.0);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Text(
+              complete ? 'اكتملت المستمسكات' : 'رُفع ${formatCount(uploaded)}',
+              style: context.text.label.copyWith(
+                color: complete ? colors.success : colors.textPrimary,
+              ),
+            ),
+            const Spacer(),
+            Text('من ${formatCount(total)}',
+                style: context.text.caption.copyWith(color: colors.textMuted)),
+          ],
+        ),
+        SizedBox(height: space.sm),
+        ClipRRect(
+          borderRadius: context.radii.pillAll,
+          child: Stack(
+            children: [
+              Container(height: _track, color: colors.surfaceMuted),
+              FractionallySizedBox(
+                widthFactor: fraction,
+                child: Container(
+                  height: _track,
+                  color: complete ? colors.success : colors.primary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

@@ -67,6 +67,15 @@ class _SearchScreenState extends State<SearchScreen> {
     return AppScaffold(
       title: 'ابحث عن رحلة',
       scrollable: true,
+      // Pinned: the form runs past a phone screen once the filters are open,
+      // and the action that ends it should not be something you scroll for.
+      bottomBar: c.corridorsLoading || c.corridorsError != null
+          ? null
+          : AppButton(
+              label: 'ابحث',
+              icon: AppIcons.search,
+              onPressed: c.canSearch ? () => _onSearch(c) : null,
+            ),
       body: _body(context, c, space),
     );
   }
@@ -145,15 +154,15 @@ class _SearchScreenState extends State<SearchScreen> {
           ],
           onChanged: c.setDriverGender,
         ),
-        SizedBox(height: space.xs),
-        Text('السائقات قليلات على هذا المسار حالياً.',
-            style: context.text.caption.copyWith(color: context.colors.textMuted)),
-        SizedBox(height: space.xl2),
-        AppButton(
-          label: 'ابحث',
-          icon: AppIcons.search,
-          onPressed: c.canSearch ? () => _onSearch(c) : null,
-        ),
+        // Only when it applies. Female drivers really are scarce on this
+        // corridor, but printing that under an unset filter reads as an excuse
+        // for an empty result the rider has not asked for yet.
+        if (c.driverGender == Gender.female) ...[
+          SizedBox(height: space.xs),
+          Text('السائقات قليلات على هذا المسار حالياً.',
+              style:
+                  context.text.caption.copyWith(color: context.colors.textMuted)),
+        ],
       ],
     );
   }
@@ -172,61 +181,17 @@ class _RoutePicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = controller;
-    final space = context.space;
-    return Row(
-      children: [
-        Expanded(
-          child: RouteRail(
-            origin: AppCityField(
-              label: 'من',
-              cityKey: c.origin,
-              onChanged: c.setOrigin,
-              excludeKey: c.dest,
-            ),
-            destination: AppCityField(
-              label: 'إلى',
-              cityKey: c.dest,
-              onChanged: c.setDest,
-              excludeKey: c.origin,
-            ),
-          ),
-        ),
-        SizedBox(width: space.sm),
-        _SwapButton(onTap: c.swapCities),
-      ],
+    // One card: rail + both endpoints + swap, per the hand-off.
+    return RouteSearchCard(
+      origin: c.origin,
+      dest: c.dest,
+      onOriginChanged: c.setOrigin,
+      onDestChanged: c.setDest,
+      onSwap: c.swapCities,
     );
   }
 }
 
-class _SwapButton extends StatelessWidget {
-  const _SwapButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final space = context.space;
-    return Semantics(
-      button: true,
-      label: 'اعكس الاتجاه',
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          width: space.xl4,
-          height: space.xl4,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: colors.primary.withValues(alpha: 0.12),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(AppIcons.swap, color: colors.primary, size: space.xl),
-        ),
-      ),
-    );
-  }
-}
 
 /// A tappable filter pill (date / time window), token-styled.
 class _FilterChip extends StatelessWidget {
@@ -246,36 +211,45 @@ class _FilterChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final space = context.space;
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: space.md, vertical: space.md),
-        decoration: BoxDecoration(
-          color: colors.surface,
-          borderRadius: context.radii.mdAll,
-          border: Border.all(color: colors.border),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: space.lg, color: colors.textSecondary),
-            SizedBox(width: space.sm),
-            Expanded(
-              child: Text(
-                label,
-                style: context.text.body.copyWith(color: colors.textPrimary),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+    return Semantics(
+      button: true,
+      label: label,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Container(
+            padding: EdgeInsets.symmetric(
+                horizontal: space.md, vertical: space.md),
+            decoration: BoxDecoration(
+              color: colors.surface,
+              borderRadius: context.radii.fieldLgAll,
+              border: Border.all(color: colors.border),
             ),
-            if (onClear != null)
-              GestureDetector(
-                onTap: onClear,
-                behavior: HitTestBehavior.opaque,
-                child: Icon(AppIcons.close, size: space.lg, color: colors.textMuted),
-              ),
-          ],
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: space.lg, color: colors.textSecondary),
+                SizedBox(width: space.sm),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: context.text.body.copyWith(color: colors.textPrimary),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (onClear != null)
+                  GestureDetector(
+                    onTap: onClear,
+                    behavior: HitTestBehavior.opaque,
+                    child: Icon(AppIcons.close,
+                        size: space.lg, color: colors.textMuted),
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );

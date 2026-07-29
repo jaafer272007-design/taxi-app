@@ -101,7 +101,7 @@ abstract final class AppTheme {
 ///   padding: EdgeInsets.all(context.space.lg),
 ///   decoration: BoxDecoration(
 ///     color: context.colors.surface,
-///     borderRadius: context.radii.mdAll,
+///     borderRadius: context.radii.cardAll,
 ///     boxShadow: context.elevation.card,
 ///   ),
 ///   child: Text('مرحبا', style: context.text.title),

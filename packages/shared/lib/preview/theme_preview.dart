@@ -209,7 +209,7 @@ class _ThemePreviewState extends State<ThemePreview> {
       alignment: Alignment.bottomRight,
       decoration: BoxDecoration(
         color: s.color,
-        borderRadius: context.radii.mdAll,
+        borderRadius: context.radii.fieldLgAll,
         border: Border.all(color: context.colors.border),
       ),
       child: Text(
@@ -303,7 +303,7 @@ class _ThemePreviewState extends State<ThemePreview> {
                   height: 16,
                   decoration: BoxDecoration(
                     color: context.colors.primary,
-                    borderRadius: context.radii.smAll,
+                    borderRadius: context.radii.chipAll,
                   ),
                 ),
               ],
@@ -500,7 +500,7 @@ class _ThemePreviewState extends State<ThemePreview> {
             runSpacing: context.space.sm,
             children: const [
               AppPill(label: 'النجف → كربلاء', tone: AppBadgeTone.info, icon: AppIcons.route),
-              AppPill(label: '3 مقاعد', tone: AppBadgeTone.success, icon: AppIcons.seat),
+              AppPill(label: '٣ مقاعد', tone: AppBadgeTone.success, icon: AppIcons.seat),
             ],
           ),
         ],

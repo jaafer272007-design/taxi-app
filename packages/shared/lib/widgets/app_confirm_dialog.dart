@@ -27,6 +27,7 @@ class AppConfirmDialog extends StatelessWidget {
     final colors = context.colors;
     return AlertDialog(
       backgroundColor: colors.surface,
+      shape: RoundedRectangleBorder(borderRadius: context.radii.cardAll),
       title: Text(title,
           style: context.text.title.copyWith(color: colors.textPrimary)),
       content: Text(message,

@@ -10,6 +10,23 @@ import 'trip_search_controller.dart';
 
 /// Read-only expanded view of a trip. Tapping "احجز مقعد" opens the booking
 /// form (seat count, pickup/dropoff, confirm).
+///
+/// Per the hand-off this screen opens on a **pine hero**: the route rail on a
+/// `primary` field carrying the two cities, the departure time and the day. It
+/// is the one card that answers "is this the trip I want?" before any of the
+/// supporting detail. Everything under it — who is driving, what they drive,
+/// how many seats are left — is confirmation, not discovery.
+///
+/// The price rides in the bottom bar next to the CTA rather than in the detail
+/// list, so the number the rider is agreeing to is never scrolled off screen.
+///
+/// ## Contrast on the pine field
+///
+/// Same rule as the confirmation screen: hierarchy comes from size and weight,
+/// not opacity. Every glyph on the hero is full `onPrimary` (7.93 light / 7.64
+/// dark). The trip-type chip uses the shared [OnPrimaryChip], whose fill is
+/// composited once into an opaque colour (5.33 light / 5.79 dark against its
+/// `onPrimary` ink) rather than applied as a live alpha wash.
 class TripDetailsScreen extends StatelessWidget {
   const TripDetailsScreen({super.key, required this.trip});
 
@@ -54,6 +71,7 @@ class TripDetailsScreen extends StatelessWidget {
     final name = (trip.driverName?.trim().isNotEmpty ?? false)
         ? trip.driverName!.trim()
         : 'سائق';
+    final corridor = _corridor(context);
 
     // Eligibility: a women/family trip only accepts female riders. The rider's
     // gender is always set (profile completion is required to reach this app),
@@ -65,96 +83,243 @@ class TripDetailsScreen extends StatelessWidget {
     return AppScaffold(
       title: 'تفاصيل الرحلة',
       scrollable: true,
-      bottomBar: AppButton(
-        label: eligible ? 'احجز مقعد' : 'رحلة نسائية-عائلية',
-        icon: AppIcons.seat,
-        onPressed: eligible ? () => _openBooking(context) : null,
+      bottomBar: _BookBar(
+        pricePerSeat: trip.pricePerSeat,
+        eligible: eligible,
+        onBook: () => _openBooking(context),
       ),
       body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SizedBox(height: space.md),
-          AppCard(
-            child: Row(
-              children: [
-                AppAvatar(name: name, size: space.xl4 + space.sm),
-                SizedBox(width: space.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(name, style: context.text.h2),
-                      SizedBox(height: space.xs),
-                      Row(
-                        children: [
-                          RatingStars(
-                              value: trip.driverRatingAvg, size: space.lg),
-                          if (trip.driverGender != null) ...[
-                            SizedBox(width: space.sm),
-                            Text(
-                              trip.driverGender == Gender.female
-                                  ? 'سائقة'
-                                  : 'سائق',
-                              style: context.text.caption
-                                  .copyWith(color: context.colors.textMuted),
-                            ),
-                          ],
-                        ],
-                      ),
-                      if (trip.tripType == TripType.womenFamily) ...[
-                        SizedBox(height: space.sm),
-                        const AppPill(
-                          label: 'نسائية/عائلية',
-                          tone: AppBadgeTone.info,
-                          icon: AppIcons.users,
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ),
+          _TripHero(
+            originCity: corridor?.originCity,
+            destCity: corridor?.destCity,
+            departureTime: trip.departureTime,
+            womenFamily: trip.tripType == TripType.womenFamily,
           ),
           if (!eligible) ...[
             SizedBox(height: space.md),
             const _EligibilityNote(),
           ],
           SizedBox(height: space.md),
-          AppCard(
+          _DriverCard(name: name, trip: trip),
+          SizedBox(height: space.md),
+          _FactsCard(trip: trip),
+        ],
+      ),
+    );
+  }
+}
+
+/// The pine hero: the route, the clock and the day, on a `primary` field.
+class _TripHero extends StatelessWidget {
+  const _TripHero({
+    required this.originCity,
+    required this.destCity,
+    required this.departureTime,
+    required this.womenFamily,
+  });
+
+  final String? originCity;
+  final String? destCity;
+  final DateTime departureTime;
+  final bool womenFamily;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final space = context.space;
+    final ink = colors.onPrimary;
+
+    return Container(
+      padding: EdgeInsets.all(space.xl),
+      decoration: BoxDecoration(
+        color: colors.primary,
+        borderRadius: context.radii.cardAll,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          RouteRail(
+            onPrimaryField: true,
+            origin: _HeroEndpoint(
+              city: originCity,
+              trailing: Text(
+                formatTime(departureTime),
+                style: context.text.h1.tabular.copyWith(color: ink),
+              ),
+            ),
+            destination: _HeroEndpoint(
+              city: destCity,
+              trailing: Text(
+                formatDayShortBaghdad(departureTime),
+                style: context.text.body.copyWith(color: ink),
+              ),
+            ),
+          ),
+          if (womenFamily) ...[
+            SizedBox(height: space.lg),
+            const Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: OnPrimaryChip(label: 'نسائية/عائلية', icon: AppIcons.users),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroEndpoint extends StatelessWidget {
+  const _HeroEndpoint({required this.city, required this.trailing});
+
+  final String? city;
+  final Widget trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        Expanded(
+          child: Text(
+            city == null ? 'الرحلة' : cityArName(city!),
+            style: context.text.h2.copyWith(color: context.colors.onPrimary),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        SizedBox(width: context.space.sm),
+        trailing,
+      ],
+    );
+  }
+}
+
+/// Who is driving.
+class _DriverCard extends StatelessWidget {
+  const _DriverCard({required this.name, required this.trip});
+
+  final String name;
+  final TripSummary trip;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final space = context.space;
+
+    return AppCard(
+      child: Row(
+        children: [
+          AppAvatar(name: name, size: space.xl4 + space.sm),
+          SizedBox(width: space.md),
+          Expanded(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                _DetailRow(
-                  icon: AppIcons.clock,
-                  label: 'وقت الانطلاق',
-                  value: formatTime(trip.departureTime),
-                ),
-                if (trip.vehicle != null)
-                  _DetailRow(
-                    icon: AppIcons.car,
-                    label: 'المركبة',
-                    value: '${trip.vehicle!.label} · ${trip.vehicle!.color}',
-                  ),
-                _DetailRow(
-                  icon: AppIcons.seat,
-                  label: 'المقاعد المتاحة',
-                  valueWidget: SeatGlyphs(
-                    total: trip.seatsTotal,
-                    available: trip.seatsAvailable,
-                    compact: true,
-                  ),
-                ),
-                _DetailRow(
-                  icon: AppIcons.cash,
-                  label: 'السعر للمقعد',
-                  value: formatPrice(trip.pricePerSeat),
-                  last: true,
+                Text(name, style: context.text.h2),
+                SizedBox(height: space.xs),
+                Row(
+                  children: [
+                    RatingStars(value: trip.driverRatingAvg, size: space.lg),
+                    if (trip.driverGender != null) ...[
+                      SizedBox(width: space.sm),
+                      Text(
+                        trip.driverGender == Gender.female ? 'سائقة' : 'سائق',
+                        style: context.text.caption
+                            .copyWith(color: colors.textMuted),
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The supporting detail: the car and what is left of it.
+class _FactsCard extends StatelessWidget {
+  const _FactsCard({required this.trip});
+
+  final TripSummary trip;
+
+  @override
+  Widget build(BuildContext context) {
+    final vehicle = trip.vehicle;
+    return AppCard(
+      child: Column(
+        children: [
+          if (vehicle != null)
+            _DetailRow(
+              icon: AppIcons.car,
+              label: 'المركبة',
+              value: '${vehicle.label} · ${vehicle.color}',
+            ),
+          _DetailRow(
+            icon: AppIcons.seat,
+            label: 'المقاعد',
+            last: true,
+            valueWidget: SeatAvailability(
+              total: trip.seatsTotal,
+              available: trip.seatsAvailable,
+              compact: true,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The price and the CTA, together. The rider never has to scroll back up to
+/// check what they are about to agree to.
+class _BookBar extends StatelessWidget {
+  const _BookBar({
+    required this.pricePerSeat,
+    required this.eligible,
+    required this.onBook,
+  });
+
+  final int pricePerSeat;
+  final bool eligible;
+  final VoidCallback onBook;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final space = context.space;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Text('السعر للمقعد',
+                style: context.text.body.copyWith(color: colors.textSecondary)),
+            const Spacer(),
+            Text(
+              formatPrice(pricePerSeat),
+              style: context.text.h1.tabular.copyWith(color: colors.primary),
+            ),
+          ],
+        ),
+        SizedBox(height: space.md),
+        AppButton(
+          label: eligible ? 'احجز مقعد' : 'رحلة نسائية-عائلية',
+          icon: AppIcons.seat,
+          onPressed: eligible ? onBook : null,
+        ),
+      ],
     );
   }
 }
@@ -187,7 +352,8 @@ class _DetailRow extends StatelessWidget {
           children: [
             Icon(icon, size: space.xl, color: colors.textMuted),
             SizedBox(width: space.md),
-            Text(label, style: context.text.body.copyWith(color: colors.textSecondary)),
+            Text(label,
+                style: context.text.body.copyWith(color: colors.textSecondary)),
             const Spacer(),
             valueWidget ??
                 Text(
@@ -218,8 +384,11 @@ class _EligibilityNote extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(space.lg),
       decoration: BoxDecoration(
-        color: colors.info.withValues(alpha: 0.12),
-        borderRadius: context.radii.mdAll,
+        // Opaque tonal, not an alpha tint: the note sits on the page background
+        // here but on a card elsewhere, and a live tint measures differently
+        // on each.
+        color: colors.infoTonal,
+        borderRadius: context.radii.fieldLgAll,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -230,7 +399,7 @@ class _EligibilityNote extends StatelessWidget {
             child: Text(
               'هذه رحلة نسائية-عائلية ومخصّصة للركّاب من النساء، لذلك لا يمكنك '
               'حجزها. اختر رحلة عامة للمتابعة.',
-              style: context.text.body.copyWith(color: colors.textSecondary),
+              style: context.text.body.copyWith(color: colors.info),
             ),
           ),
         ],

@@ -197,7 +197,7 @@ class _AppMapPickerState extends State<AppMapPicker> {
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color: colors.surface.withValues(alpha: 0.82),
-                borderRadius: context.radii.smAll,
+                borderRadius: context.radii.chipAll,
               ),
               child: Padding(
                 padding: EdgeInsets.symmetric(
@@ -306,7 +306,7 @@ class _LocationBanner extends StatelessWidget {
       padding: EdgeInsets.all(space.md),
       decoration: BoxDecoration(
         color: colors.surface,
-        borderRadius: context.radii.mdAll,
+        borderRadius: context.radii.fieldLgAll,
         border: Border.all(color: colors.warning.withValues(alpha: 0.40)),
       ),
       child: Row(
