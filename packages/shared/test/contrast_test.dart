@@ -18,6 +18,9 @@ void main() {
   group('light components', () => _auditComponents(AppColors.light, 'light'));
   group('dark components', () => _auditComponents(AppColors.dark, 'dark'));
 
+  group('light screens', () => _auditScreens(AppColors.light, 'light'));
+  group('dark screens', () => _auditScreens(AppColors.dark, 'dark'));
+
   test('the audit uses the WCAG formula (sanity check on known values)', () {
     // Black on white is the canonical 21:1.
     expect(_contrast(const Color(0xFF000000), const Color(0xFFFFFFFF)),
@@ -208,6 +211,75 @@ void _auditComponents(AppColors c, String label) {
   onEverySurface('TripCard', 'departure time (textPrimary)', c.textPrimary);
   onEverySurface('TripCard', 'price (primary)', c.primary);
   onEverySurface('TripCard', 'caption (textMuted)', c.textMuted);
+}
+
+/// Per-**screen** contrast contracts for the layouts restructured in PR 3.
+///
+/// `packages/shared` cannot import the apps, so the few composed fills the
+/// screens build (a pre-blended tint on a pine field) are reproduced here with
+/// the same constants the screens expose. If a screen changes its blend, the
+/// constant here has to move with it — which is the point: an alpha that drifts
+/// silently is exactly the failure mode the opaque-tonal rule exists to stop.
+void _auditScreens(AppColors c, String label) {
+  void pair(String what, Color ink, Color fill) {
+    test('$label: $what', () {
+      final r = _contrast(ink, fill);
+      expect(r, greaterThanOrEqualTo(_aa),
+          reason: '$what is ${r.toStringAsFixed(2)}:1, below $_aa:1');
+    });
+  }
+
+  // ── Booking screen — the seat picker ──────────────────────────────────────
+  // Three tile states, each an opaque fill. The unavailable tile is a real
+  // recessed surface rather than an opacity wash, so it stays *readable* while
+  // reading as dead.
+  pair('booking seat tile — selected (onPrimary on primary)',
+      c.onPrimary, c.primary);
+  pair('booking seat tile — available (textSecondary on surface)',
+      c.textSecondary, c.surface);
+  pair('booking seat tile — unavailable (textMuted on surfaceMuted)',
+      c.textMuted, c.surfaceMuted);
+
+  // ── Booking screen — the cash note and the error banner ───────────────────
+  pair('booking cash note (warning on warningTonal)', c.warning, c.warningTonal);
+  pair('booking error banner (danger on dangerTonal)', c.danger, c.dangerTonal);
+
+  // ── Confirmation screen — the full-bleed pine field ───────────────────────
+  pair('confirmation hero copy (onPrimary on primary)', c.onPrimary, c.primary);
+  test('$label: confirmation badge (onPrimary on the pre-blended fill)', () {
+    // Mirrors BookingConfirmationScreen's badge: onPrimary at 14% composited
+    // into primary ONCE, so the ratio cannot drift with what sits behind it.
+    final fill =
+        Color.alphaBlend(c.onPrimary.withValues(alpha: 0.14), c.primary);
+    final r = _contrast(c.onPrimary, fill);
+    expect(r, greaterThanOrEqualTo(_aa),
+        reason: 'confirmation badge is ${r.toStringAsFixed(2)}:1');
+  });
+  pair('confirmation recap fare (primary on background)', c.primary,
+      c.background);
+
+  // ── My bookings — the upcoming/past filter ────────────────────────────────
+  // The selected pill inverts: page-background ink on a textPrimary fill, the
+  // highest-contrast pairing the palette has.
+  pair('bookings filter — selected (background on textPrimary)', c.background,
+      c.textPrimary);
+  pair('bookings filter — unselected (textSecondary on surface)',
+      c.textSecondary, c.surface);
+
+  // ── Trip details — the pine hero ──────────────────────────────────────────
+  pair('trip details hero (onPrimary on primary)', c.onPrimary, c.primary);
+  test('$label: trip details hero chip (onPrimary on the pre-blended fill)',
+      () {
+    // Mirrors TripDetailsScreen.heroChipBlend.
+    final fill =
+        Color.alphaBlend(c.onPrimary.withValues(alpha: 0.16), c.primary);
+    final r = _contrast(c.onPrimary, fill);
+    expect(r, greaterThanOrEqualTo(_aa),
+        reason: 'trip details hero chip is ${r.toStringAsFixed(2)}:1');
+  });
+  pair('trip details eligibility note (info on infoTonal)', c.info, c.infoTonal);
+  pair('trip details book bar price (primary on background)', c.primary,
+      c.background);
 }
 
 /// WCAG 2.x contrast ratio. [Color.computeLuminance] is Flutter's

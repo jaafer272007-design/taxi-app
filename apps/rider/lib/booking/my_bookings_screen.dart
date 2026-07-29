@@ -5,9 +5,15 @@ import 'package:shared/shared.dart';
 import 'booking_models.dart';
 import 'my_bookings_controller.dart';
 
-/// "حجوزاتي": the rider's bookings, grouped upcoming/past, each with a status
-/// pill. Upcoming CONFIRMED bookings can be cancelled (with a confirm dialog;
-/// the backend enforces the free-cancel cutoff and its error is surfaced).
+/// "حجوزاتي": the rider's bookings, filtered upcoming/past.
+///
+/// Per the hand-off: upcoming and past are a *filter*, not two stacked
+/// sections — a rider opening this screen almost always wants the next trip,
+/// and shouldn't scroll past history to reach it. Each card carries a status
+/// stripe along its top edge so state is readable before any text is.
+///
+/// Upcoming CONFIRMED bookings can be cancelled (with a confirm dialog; the
+/// backend enforces the free-cancel cutoff and its error is surfaced).
 class MyBookingsScreen extends StatefulWidget {
   const MyBookingsScreen({super.key});
 
@@ -16,6 +22,8 @@ class MyBookingsScreen extends StatefulWidget {
 }
 
 class _MyBookingsScreenState extends State<MyBookingsScreen> {
+  bool _showPast = false;
+
   @override
   void initState() {
     super.initState();
@@ -53,17 +61,30 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
             message: c.error ?? 'حدث خطأ. حاول مرة أخرى.',
             onRetry: c.load,
           ),
-        MyBookingsStatus.loaded =>
-          c.isEmpty ? const _EmptyView() : _BookingsList(controller: c, onCancel: _onCancel),
+        MyBookingsStatus.loaded => c.isEmpty
+            ? const _EmptyView()
+            : _BookingsList(
+                controller: c,
+                showPast: _showPast,
+                onSelectPast: (v) => setState(() => _showPast = v),
+                onCancel: _onCancel,
+              ),
       },
     );
   }
 }
 
 class _BookingsList extends StatelessWidget {
-  const _BookingsList({required this.controller, required this.onCancel});
+  const _BookingsList({
+    required this.controller,
+    required this.showPast,
+    required this.onSelectPast,
+    required this.onCancel,
+  });
 
   final MyBookingsController controller;
+  final bool showPast;
+  final ValueChanged<bool> onSelectPast;
   final Future<void> Function(MyBookingsController, Booking) onCancel;
 
   @override
@@ -71,6 +92,7 @@ class _BookingsList extends StatelessWidget {
     final space = context.space;
     final upcoming = controller.upcoming;
     final past = controller.past;
+    final shown = showPast ? past : upcoming;
 
     return RefreshIndicator(
       color: context.colors.primary,
@@ -78,12 +100,31 @@ class _BookingsList extends StatelessWidget {
       child: ListView(
         padding: EdgeInsets.all(space.lg),
         children: [
-          if (upcoming.isNotEmpty) ...[
-            const _SectionHeader(title: 'رحلات قادمة'),
-            SizedBox(height: space.md),
-            for (final b in upcoming) ...[
+          Row(
+            children: [
+              _FilterPill(
+                label: 'قادمة',
+                count: upcoming.length,
+                selected: !showPast,
+                onTap: () => onSelectPast(false),
+              ),
+              SizedBox(width: space.sm),
+              _FilterPill(
+                label: 'سابقة',
+                count: past.length,
+                selected: showPast,
+                onTap: () => onSelectPast(true),
+              ),
+            ],
+          ),
+          SizedBox(height: space.lg),
+          if (shown.isEmpty)
+            _FilterEmpty(showPast: showPast)
+          else
+            for (final b in shown) ...[
               _BookingCard(
                 booking: b,
+                past: showPast,
                 cancelling: controller.isCancelling(b.id),
                 onCancel: controller.canCancel(b)
                     ? () => onCancel(controller, b)
@@ -91,46 +132,102 @@ class _BookingsList extends StatelessWidget {
               ),
               SizedBox(height: space.md),
             ],
-          ],
-          if (past.isNotEmpty) ...[
-            SizedBox(height: space.sm),
-            const _SectionHeader(title: 'رحلات سابقة'),
-            SizedBox(height: space.md),
-            for (final b in past) ...[
-              _BookingCard(booking: b, cancelling: false, onCancel: null),
-              SizedBox(height: space.md),
-            ],
-          ],
         ],
       ),
     );
   }
 }
 
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title});
+/// Upcoming / past selector. The count rides inside the pill so the rider can
+/// see there *is* history without switching to it.
+class _FilterPill extends StatelessWidget {
+  const _FilterPill({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.onTap,
+  });
 
-  final String title;
+  final String label;
+  final int count;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: context.text.h2.copyWith(color: context.colors.textPrimary),
+    final colors = context.colors;
+    final space = context.space;
+
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '$label ${formatCount(count)}',
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Container(
+            alignment: Alignment.center,
+            padding: EdgeInsets.symmetric(horizontal: space.lg),
+            decoration: BoxDecoration(
+              color: selected ? colors.textPrimary : colors.surface,
+              borderRadius: context.radii.pillAll,
+              border: Border.all(
+                color: selected ? colors.textPrimary : colors.border,
+              ),
+            ),
+            child: Text(
+              '$label ${formatCount(count)}',
+              style: context.text.label.copyWith(
+                // On the inverse pill the ink is the page background, which is
+                // the highest-contrast pairing available (15.39 / 16.93).
+                color: selected ? colors.background : colors.textSecondary,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
 
+class _FilterEmpty extends StatelessWidget {
+  const _FilterEmpty({required this.showPast});
+
+  final bool showPast;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: context.space.xl3),
+      child: Text(
+        showPast ? 'لا توجد رحلات سابقة.' : 'لا توجد رحلات قادمة.',
+        textAlign: TextAlign.center,
+        style: context.text.body.copyWith(color: context.colors.textMuted),
+      ),
+    );
+  }
+}
+
+/// A booking as a card with a status stripe along its top edge, the route on
+/// the rail, and the fare. Past bookings are recessed rather than raised.
 class _BookingCard extends StatelessWidget {
   const _BookingCard({
     required this.booking,
+    required this.past,
     required this.cancelling,
     this.onCancel,
   });
 
   final Booking booking;
+  final bool past;
   final bool cancelling;
   final VoidCallback? onCancel;
+
+  /// Hand-off stripe thickness.
+  static const double _stripe = 4;
 
   @override
   Widget build(BuildContext context) {
@@ -138,86 +235,131 @@ class _BookingCard extends StatelessWidget {
     final colors = context.colors;
     final trip = booking.trip;
     final corridor = trip?.corridor;
-    final route = corridor == null
-        ? 'رحلة'
-        : '${cityArName(corridor.originCity)} إلى ${cityArName(corridor.destCity)}';
+    final tone = _statusTone(booking.status, colors);
 
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  route,
-                  style: context.text.title.copyWith(color: colors.textPrimary),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+    return ClipRRect(
+      borderRadius: context.radii.cardAll,
+      child: AppCard(
+        muted: past,
+        padding: EdgeInsets.zero,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Status, readable before any text is. The stripe is deliberately
+            // NOT held to 4.5:1 — it is decorative and fully redundant with the
+            // status badge on the rail below it, so nothing is conveyed by
+            // colour alone (`completed` even draws it in `borderStrong`).
+            Container(height: _stripe, color: tone),
+            Padding(
+              padding: EdgeInsets.all(space.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  RouteRail(
+                    variant: RouteRailVariant.compact,
+                    origin: _EndpointRow(
+                      city: corridor?.originCity,
+                      trailing: trip == null
+                          ? null
+                          : Text(
+                              formatTime(trip.departureTime),
+                              style: context.text.h2.tabular
+                                  .copyWith(color: colors.textPrimary),
+                            ),
+                    ),
+                    destination: _EndpointRow(
+                      city: corridor?.destCity,
+                      trailing: _statusBadge(booking.status),
+                    ),
+                  ),
+                  SizedBox(height: space.md),
+                  Divider(height: 1, color: colors.border),
+                  SizedBox(height: space.md),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Text('${formatSeats(booking.seatCount)} · نقداً',
+                          style: context.text.body
+                              .copyWith(color: colors.textSecondary)),
+                      const Spacer(),
+                      Text(
+                        formatPrice(booking.fare),
+                        style: context.text.title.tabular
+                            .copyWith(color: colors.primary),
+                      ),
+                    ],
+                  ),
+                  if (onCancel != null) ...[
+                    SizedBox(height: space.md),
+                    AppButton(
+                      label: 'إلغاء الحجز',
+                      // The hand-off's soft danger: a cancel should be findable
+                      // without shouting louder than the booking itself.
+                      variant: AppButtonVariant.dangerTonal,
+                      icon: AppIcons.close,
+                      loading: cancelling,
+                      onPressed: onCancel,
+                    ),
+                  ],
+                ],
               ),
-              SizedBox(width: space.sm),
-              _statusPill(booking.status),
-            ],
-          ),
-          if (trip != null) ...[
-            SizedBox(height: space.md),
-            Row(
-              children: [
-                Icon(AppIcons.clock, size: space.lg, color: colors.textMuted),
-                SizedBox(width: space.sm),
-                Text(
-                  formatTime(trip.departureTime),
-                  style: context.text.body.tabular
-                      .copyWith(color: colors.textSecondary),
-                ),
-              ],
             ),
           ],
-          SizedBox(height: space.md),
-          Divider(height: 1, color: colors.border),
-          SizedBox(height: space.md),
-          Row(
-            children: [
-              Icon(AppIcons.seat, size: space.lg, color: colors.textMuted),
-              SizedBox(width: space.sm),
-              Text('${formatCount(booking.seatCount)} مقعد',
-                  style:
-                      context.text.body.copyWith(color: colors.textSecondary)),
-              const Spacer(),
-              Text(
-                formatPrice(booking.fare),
-                style: context.text.title.tabular.copyWith(color: colors.primary),
-              ),
-            ],
-          ),
-          if (onCancel != null) ...[
-            SizedBox(height: space.md),
-            AppButton(
-              label: 'إلغاء الحجز',
-              variant: AppButtonVariant.danger,
-              icon: AppIcons.close,
-              loading: cancelling,
-              onPressed: onCancel,
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }
 }
 
-Widget _statusPill(BookingStatus status) {
+/// A city on the booking rail with its time / status on the trailing edge.
+class _EndpointRow extends StatelessWidget {
+  const _EndpointRow({required this.city, required this.trailing});
+
+  final String? city;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: Text(
+            city == null ? 'رحلة' : cityArName(city!),
+            style: context.text.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        if (trailing != null) trailing!,
+      ],
+    );
+  }
+}
+
+Color _statusTone(BookingStatus status, AppColors c) => switch (status) {
+      BookingStatus.confirmed => c.success,
+      BookingStatus.onboard => c.info,
+      BookingStatus.completed => c.borderStrong,
+      BookingStatus.cancelled => c.danger,
+      BookingStatus.noShow => c.warning,
+      BookingStatus.unknown => c.borderStrong,
+    };
+
+/// The status as a badge, not a pill: it rides on the rail's trailing edge
+/// beside the destination, so it has to stay narrow enough that the city name
+/// never ellipsises to make room for it.
+Widget _statusBadge(BookingStatus status) {
   final (String label, AppBadgeTone tone, IconData icon) = switch (status) {
     BookingStatus.confirmed => ('مؤكد', AppBadgeTone.success, AppIcons.success),
-    BookingStatus.onboard => ('على متن الرحلة', AppBadgeTone.info, AppIcons.car),
+    BookingStatus.onboard => ('على المتن', AppBadgeTone.info, AppIcons.car),
     BookingStatus.completed => ('مكتملة', AppBadgeTone.neutral, AppIcons.check),
     BookingStatus.cancelled => ('ملغاة', AppBadgeTone.danger, AppIcons.close),
     BookingStatus.noShow => ('لم تحضر', AppBadgeTone.warning, AppIcons.warning),
     BookingStatus.unknown => ('—', AppBadgeTone.neutral, AppIcons.info),
   };
-  return AppPill(label: label, tone: tone, icon: icon);
+  return AppBadge(label: label, tone: tone, icon: icon);
 }
 
 Future<bool?> _confirmCancelDialog(BuildContext context) {
@@ -228,7 +370,7 @@ Future<bool?> _confirmCancelDialog(BuildContext context) {
       final colors = ctx.colors;
       return Dialog(
         backgroundColor: colors.surface,
-        shape: RoundedRectangleBorder(borderRadius: ctx.radii.lgAll),
+        shape: RoundedRectangleBorder(borderRadius: ctx.radii.cardAll),
         child: Padding(
           padding: EdgeInsets.all(space.lg),
           child: Column(
@@ -239,7 +381,7 @@ Future<bool?> _confirmCancelDialog(BuildContext context) {
                   style: ctx.text.h2.copyWith(color: colors.textPrimary)),
               SizedBox(height: space.sm),
               Text(
-                'هل تريد إلغاء هذا الحجز؟ الإلغاء المجاني متاح حتى 15 دقيقة قبل المغادرة.',
+                'هل تريد إلغاء هذا الحجز؟ الإلغاء المجاني متاح حتى ١٥ دقيقة قبل المغادرة.',
                 style: ctx.text.body.copyWith(color: colors.textSecondary),
               ),
               SizedBox(height: space.lg),
@@ -288,10 +430,11 @@ class _EmptyView extends StatelessWidget {
               height: space.xl4 + space.xl2,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: colors.primary.withValues(alpha: 0.12),
+                color: colors.primaryTonal,
                 shape: BoxShape.circle,
               ),
-              child: Icon(AppIcons.seat, color: colors.primary, size: space.xl2),
+              child:
+                  Icon(AppIcons.seat, color: colors.primary, size: space.xl2),
             ),
             SizedBox(height: space.lg),
             Text('لا توجد حجوزات بعد',
@@ -328,14 +471,14 @@ class _ErrorView extends StatelessWidget {
               height: space.xl4 + space.xl2,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: colors.danger.withValues(alpha: 0.12),
+                color: colors.dangerTonal,
                 shape: BoxShape.circle,
               ),
-              child: Icon(AppIcons.warning, color: colors.danger, size: space.xl2),
+              child:
+                  Icon(AppIcons.warning, color: colors.danger, size: space.xl2),
             ),
             SizedBox(height: space.lg),
-            Text(message,
-                style: context.text.title, textAlign: TextAlign.center),
+            Text(message, style: context.text.title, textAlign: TextAlign.center),
             SizedBox(height: space.xl),
             AppButton(
               label: 'إعادة المحاولة',
