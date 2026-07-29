@@ -1,5 +1,6 @@
 import { PrismaClient, UserRole } from '@prisma/client';
 import { normalizeIraqiPhone } from '../src/common/phone.util';
+import { seedSuperAdmin } from '../src/admin-auth/seed-super-admin';
 
 /**
  * Idempotent seed:
@@ -69,6 +70,15 @@ async function seedCorridors() {
 
 async function main() {
   await seedAdmin();
+
+  // The logic lives in src/ so it can be unit-tested; here we just wire it to
+  // the real client and the process environment.
+  const superAdmin = await seedSuperAdmin(prisma, process.env);
+  console.log(
+    `✔ Super admin: ${superAdmin.username} ` +
+      (superAdmin.created ? '(created)' : '(existing — password left unchanged)'),
+  );
+
   await seedCorridors();
 }
 
