@@ -54,7 +54,7 @@ class AppTextField extends StatelessWidget {
     final hasError = error != null && error!.isNotEmpty;
 
     OutlineInputBorder borderOf(Color color, double width) => OutlineInputBorder(
-          borderRadius: radii.mdAll,
+          borderRadius: radii.fieldLgAll,
           borderSide: BorderSide(color: color, width: width),
         );
 

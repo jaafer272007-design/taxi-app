@@ -143,5 +143,13 @@ const List<String> arabicMonths = [
 ];
 
 /// Short Arabic day label with Arabic-Indic digits — `٢٨ تموز`.
+///
+/// [date] is used as-is; pass an already-local date. For a UTC timestamp that
+/// must be shown as a Baghdad calendar day use [formatDayShortBaghdad] — near
+/// midnight the two disagree by a day.
 String formatDayShort(DateTime date) =>
     '${toArabicDigits(date.day.toString())} ${arabicMonths[date.month - 1]}';
+
+/// [formatDayShort] for the Baghdad calendar day of a UTC/any-zone [dt].
+String formatDayShortBaghdad(DateTime dt) =>
+    formatDayShort(dt.toUtc().add(_baghdadOffset));

@@ -5,7 +5,6 @@ import 'package:shared/shared.dart';
 import '../booking/booking_api.dart';
 import '../booking/booking_controller.dart';
 import '../booking/booking_screen.dart';
-import 'trip_format.dart';
 import 'trip_models.dart';
 import 'trip_search_controller.dart';
 
@@ -139,7 +138,11 @@ class TripDetailsScreen extends StatelessWidget {
                 _DetailRow(
                   icon: AppIcons.seat,
                   label: 'المقاعد المتاحة',
-                  value: '${trip.seatsAvailable} من ${trip.seatsTotal}',
+                  valueWidget: SeatGlyphs(
+                    total: trip.seatsTotal,
+                    available: trip.seatsAvailable,
+                    compact: true,
+                  ),
                 ),
                 _DetailRow(
                   icon: AppIcons.cash,
@@ -160,13 +163,18 @@ class _DetailRow extends StatelessWidget {
   const _DetailRow({
     required this.icon,
     required this.label,
-    required this.value,
+    this.value,
+    this.valueWidget,
     this.last = false,
-  });
+  }) : assert(value != null || valueWidget != null);
 
   final IconData icon;
   final String label;
-  final String value;
+  final String? value;
+
+  /// Rendered instead of [value] when the row shows a graphic rather than text
+  /// (the seats row draws [SeatGlyphs]).
+  final Widget? valueWidget;
   final bool last;
 
   @override
@@ -181,10 +189,12 @@ class _DetailRow extends StatelessWidget {
             SizedBox(width: space.md),
             Text(label, style: context.text.body.copyWith(color: colors.textSecondary)),
             const Spacer(),
-            Text(
-              value,
-              style: context.text.bodyStrong.tabular.copyWith(color: colors.textPrimary),
-            ),
+            valueWidget ??
+                Text(
+                  value!,
+                  style: context.text.bodyStrong.tabular
+                      .copyWith(color: colors.textPrimary),
+                ),
           ],
         ),
         if (!last) ...[

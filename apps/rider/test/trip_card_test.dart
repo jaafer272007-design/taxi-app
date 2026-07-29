@@ -22,17 +22,17 @@ void main() {
     await tester.pumpWidget(_host(TripCard(trip: tripFixture(seatsAvailable: 3))));
 
     expect(find.text('علي حسن'), findsOneWidget);
-    expect(find.text('07:30'), findsOneWidget); // 04:30 UTC → Baghdad
+    expect(find.text('٠٧:٣٠'), findsOneWidget); // 04:30 UTC → Baghdad
     expect(find.textContaining('6,000'), findsOneWidget);
     expect(find.textContaining('Toyota Corolla'), findsOneWidget);
-    expect(find.text('3 مقاعد متاحة'), findsOneWidget);
+    expect(find.text('٣ مقاعد متاحة'), findsOneWidget);
   });
 
   testWidgets('last seat shows the warning pill', (tester) async {
     await tester.pumpWidget(_host(TripCard(trip: tripFixture(seatsAvailable: 1))));
 
     expect(find.text('مقعد واحد فقط'), findsOneWidget);
-    expect(find.text('1 مقاعد متاحة'), findsNothing);
+    expect(find.text('١ مقاعد متاحة'), findsNothing);
   });
 
   testWidgets('women/family trip shows a distinct badge', (tester) async {

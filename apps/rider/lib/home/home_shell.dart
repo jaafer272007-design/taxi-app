@@ -27,29 +27,44 @@ class _HomeShellState extends State<HomeShell> {
 
     return Scaffold(
       backgroundColor: colors.background,
-      body: IndexedStack(
-        index: _index,
+      // The pill floats over the content rather than sitting in a bar, so the
+      // body reserves its footprint and the nav is stacked on top.
+      body: Stack(
         children: [
-          const SearchScreen(),
-          ChangeNotifierProvider<MyBookingsController>(
-            create: (ctx) => MyBookingsController(api: ctx.read<BookingApi>()),
-            child: const MyBookingsScreen(),
+          Padding(
+            padding: const EdgeInsets.only(
+              bottom: FloatingPillNav.reservedSpace,
+            ),
+            child: IndexedStack(
+              index: _index,
+              children: [
+                const SearchScreen(),
+                ChangeNotifierProvider<MyBookingsController>(
+                  create: (ctx) =>
+                      MyBookingsController(api: ctx.read<BookingApi>()),
+                  child: const MyBookingsScreen(),
+                ),
+                SettingsScreen(
+                  appVersion: AppConfig.appVersion,
+                  onLogout: () => context.read<AuthController>().logout(),
+                ),
+              ],
+            ),
           ),
-          SettingsScreen(
-            appVersion: AppConfig.appVersion,
-            onLogout: () => context.read<AuthController>().logout(),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: FloatingPillNav(
+              currentIndex: _index,
+              onSelect: (i) => setState(() => _index = i),
+              items: const [
+                FloatingPillNavItem(icon: AppIcons.search, label: 'ابحث'),
+                FloatingPillNavItem(icon: AppIcons.seat, label: 'حجوزاتي'),
+                FloatingPillNavItem(icon: AppIcons.user, label: 'حسابي'),
+              ],
+            ),
           ),
-        ],
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
-        backgroundColor: colors.surface,
-        indicatorColor: colors.primary.withValues(alpha: 0.14),
-        destinations: const [
-          NavigationDestination(icon: Icon(AppIcons.search), label: 'ابحث'),
-          NavigationDestination(icon: Icon(AppIcons.seat), label: 'حجوزاتي'),
-          NavigationDestination(icon: Icon(AppIcons.user), label: 'حسابي'),
         ],
       ),
     );

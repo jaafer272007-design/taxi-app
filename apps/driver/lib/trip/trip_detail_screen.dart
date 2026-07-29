@@ -5,7 +5,6 @@ import 'package:shared/shared.dart';
 import 'driver_trip_models.dart';
 import 'rate_rider_sheet.dart';
 import 'trip_detail_controller.dart';
-import 'trip_format.dart';
 
 /// Driver's view of ONE of their trips: the trip's info, the list of bookings
 /// (rider name, seats, pickup/dropoff, status) and every lifecycle action —
@@ -216,7 +215,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
   String _routeLabel(TripDetailController c) {
     final corridor = c.corridor;
     if (corridor == null) return 'رحلة';
-    return '${cityAr(corridor.originCity)} إلى ${cityAr(corridor.destCity)}';
+    return '${cityArName(corridor.originCity)} إلى ${cityArName(corridor.destCity)}';
   }
 }
 
@@ -265,7 +264,7 @@ class _TripInfoCard extends StatelessWidget {
               SizedBox(width: space.lg),
               _MetaChip(
                   icon: AppIcons.calendar,
-                  label: formatDayBaghdad(trip.departureTime)),
+                  label: formatDayShortBaghdad(trip.departureTime)),
             ],
           ),
           SizedBox(height: space.sm),
@@ -273,7 +272,7 @@ class _TripInfoCard extends StatelessWidget {
             children: [
               _MetaChip(
                 icon: AppIcons.seat,
-                label: '${trip.seatsBooked}/${trip.seatsTotal} محجوز',
+                label: '${formatCount(trip.seatsBooked)}/${formatCount(trip.seatsTotal)} محجوز',
               ),
             ],
           ),
@@ -431,7 +430,7 @@ class _BookingCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis),
                     SizedBox(height: space.xs),
-                    Text('${booking.seatCount} مقعد · ${formatPrice(booking.fare)}',
+                    Text('${formatCount(booking.seatCount)} مقعد · ${formatPrice(booking.fare)}',
                         style: context.text.caption
                             .copyWith(color: colors.textMuted)),
                   ],

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared/shared.dart';
 
-import '../trip/trip_format.dart';
 import 'booking_models.dart';
 import 'my_bookings_controller.dart';
 
@@ -141,7 +140,7 @@ class _BookingCard extends StatelessWidget {
     final corridor = trip?.corridor;
     final route = corridor == null
         ? 'رحلة'
-        : '${cityAr(corridor.originCity)} إلى ${cityAr(corridor.destCity)}';
+        : '${cityArName(corridor.originCity)} إلى ${cityArName(corridor.destCity)}';
 
     return AppCard(
       child: Column(
@@ -183,7 +182,7 @@ class _BookingCard extends StatelessWidget {
             children: [
               Icon(AppIcons.seat, size: space.lg, color: colors.textMuted),
               SizedBox(width: space.sm),
-              Text('${booking.seatCount} مقعد',
+              Text('${formatCount(booking.seatCount)} مقعد',
                   style:
                       context.text.body.copyWith(color: colors.textSecondary)),
               const Spacer(),

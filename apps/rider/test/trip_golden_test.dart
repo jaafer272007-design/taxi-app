@@ -66,6 +66,26 @@ void main() {
     });
   });
 
+  // The floating pill nav lives in HomeShell, which needs the booking providers
+  // to build. This mirrors the shell's Stack + reserved-space layout exactly so
+  // the nav is visible over a real screen without dragging those in.
+  group('search with floating nav', () {
+    testWidgets('light', (t) async {
+      await _golden(t,
+          name: 'search_with_nav_light',
+          brightness: Brightness.light,
+          controller: await _searchController(),
+          child: _withFloatingNav(const SearchScreen()));
+    });
+    testWidgets('dark', (t) async {
+      await _golden(t,
+          name: 'search_with_nav_dark',
+          brightness: Brightness.dark,
+          controller: await _searchController(),
+          child: _withFloatingNav(const SearchScreen()));
+    });
+  });
+
   group('city_picker', () {
     testWidgets('light', (t) async {
       await _golden(t,
@@ -317,5 +337,37 @@ Future<void> _golden(
   await expectLater(
     find.byType(MaterialApp),
     matchesGoldenFile('goldens/$name.png'),
+  );
+}
+
+
+/// The HomeShell layout: body reserves the pill's footprint, pill stacked on top.
+///
+/// The outer Scaffold matters — it is what HomeShell has, and it is what gives
+/// the nav's InkWell a Material ancestor.
+Widget _withFloatingNav(Widget body) {
+  return Scaffold(
+    body: Stack(
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: FloatingPillNav.reservedSpace),
+          child: body,
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: FloatingPillNav(
+            currentIndex: 0,
+            onSelect: (_) {},
+            items: const [
+              FloatingPillNavItem(icon: AppIcons.search, label: 'ابحث'),
+              FloatingPillNavItem(icon: AppIcons.seat, label: 'حجوزاتي'),
+              FloatingPillNavItem(icon: AppIcons.user, label: 'حسابي'),
+            ],
+          ),
+        ),
+      ],
+    ),
   );
 }

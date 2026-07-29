@@ -58,7 +58,7 @@ class AppCityField extends StatelessWidget {
                 EdgeInsets.symmetric(horizontal: space.md, vertical: space.md),
             decoration: BoxDecoration(
               color: colors.surface,
-              borderRadius: context.radii.mdAll,
+              borderRadius: context.radii.chipAll,
               border: Border.all(color: colors.border),
             ),
             child: Row(

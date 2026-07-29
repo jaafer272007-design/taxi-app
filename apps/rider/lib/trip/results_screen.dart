@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:shared/shared.dart';
 
 import 'trip_details_screen.dart';
-import 'trip_format.dart';
 import 'trip_models.dart';
 import 'trip_search_controller.dart';
 import 'widgets/trip_card.dart';
@@ -20,7 +19,7 @@ class ResultsScreen extends StatelessWidget {
     final dest = c.dest;
     final title = (origin == null || dest == null)
         ? 'الرحلات المتاحة'
-        : '${cityAr(origin)} إلى ${cityAr(dest)}';
+        : '${cityArName(origin)} إلى ${cityArName(dest)}';
 
     // Clearing filters only helps when a corridor actually serves this pair; if
     // there's no corridor yet, keep the plain "no route" message (clearing

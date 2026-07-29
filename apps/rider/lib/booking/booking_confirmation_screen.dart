@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared/shared.dart';
 
-import '../trip/trip_format.dart';
 import 'booking_api.dart';
 import 'my_bookings_controller.dart';
 import 'my_bookings_screen.dart';
@@ -124,7 +123,7 @@ class _SummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final route = (originCity != null && destCity != null)
-        ? '${cityAr(originCity!)} إلى ${cityAr(destCity!)}'
+        ? '${cityArName(originCity!)} إلى ${cityArName(destCity!)}'
         : null;
 
     return AppCard(

@@ -15,6 +15,9 @@ void main() {
   group('light palette', () => _auditPalette(AppColors.light, 'light'));
   group('dark palette', () => _auditPalette(AppColors.dark, 'dark'));
 
+  group('light components', () => _auditComponents(AppColors.light, 'light'));
+  group('dark components', () => _auditComponents(AppColors.dark, 'dark'));
+
   test('the audit uses the WCAG formula (sanity check on known values)', () {
     // Black on white is the canonical 21:1.
     expect(_contrast(const Color(0xFF000000), const Color(0xFFFFFFFF)),
@@ -123,6 +126,71 @@ void _auditPalette(AppColors c, String label) {
       expect(secondaryL, greaterThan(mutedL));
     }
   });
+}
+
+/// Per-component contrast contracts for the Masar widgets added in PR 2.
+///
+/// The palette audit above already proves each *token* pair, but these pin the
+/// specific pairing each component relies on. If someone re-points a widget at a
+/// different token, this is what catches it — the palette test would still pass.
+void _auditComponents(AppColors c, String label) {
+  // Every opaque surface a component can be dropped onto.
+  final surfaces = <String, Color>{
+    'background': c.background,
+    'surface': c.surface,
+    'surfaceMuted': c.surfaceMuted,
+  };
+
+  void onEverySurface(String component, String part, Color ink) {
+    for (final s in surfaces.entries) {
+      test('$label: $component — $part on ${s.key}', () {
+        final r = _contrast(ink, s.value);
+        expect(r, greaterThanOrEqualTo(_aa),
+            reason: '$component $part on ${s.key} is '
+                '${r.toStringAsFixed(2)}:1');
+      });
+    }
+  }
+
+  // RouteRail — the two endpoints carry the meaning and are held to AA. The
+  // dashed run between them is decorative (redundant with its endpoints) and is
+  // deliberately excluded.
+  onEverySurface('RouteRail', 'origin dot (primary)', c.primary);
+  onEverySurface('RouteRail', 'destination ring (accentText)', c.accentText);
+
+  test('$label: RouteRail — both endpoints on a primary field', () {
+    // Both the dot and the ring use the on-primary ink here; see the note in
+    // route_rail.dart for why the hand-off's saffron ring cannot survive dark
+    // mode (it measures 1.15:1 on the bright mint primary).
+    final r = _contrast(c.onPrimary, c.primary);
+    expect(r, greaterThanOrEqualTo(_aa),
+        reason: 'route rail on a primary field is ${r.toStringAsFixed(2)}:1');
+  });
+
+  // SeatGlyphs — taken, free and last-free must all be countable.
+  onEverySurface('SeatGlyphs', 'taken (primary)', c.primary);
+  onEverySurface('SeatGlyphs', 'free (textMuted)', c.textMuted);
+  onEverySurface('SeatGlyphs', 'last free (accentText)', c.accentText);
+  onEverySurface('SeatAvailability', 'label (textSecondary)', c.textSecondary);
+  onEverySurface('SeatAvailability', 'scarce label (warning)', c.warning);
+
+  // FloatingPillNav sits on its own `surface` fill, with `primaryTonal` behind
+  // the active tab.
+  test('$label: FloatingPillNav — active tab (primary on primaryTonal)', () {
+    final r = _contrast(c.primary, c.primaryTonal);
+    expect(r, greaterThanOrEqualTo(_aa),
+        reason: 'active nav tab is ${r.toStringAsFixed(2)}:1');
+  });
+  test('$label: FloatingPillNav — inactive tab (textMuted on surface)', () {
+    final r = _contrast(c.textMuted, c.surface);
+    expect(r, greaterThanOrEqualTo(_aa),
+        reason: 'inactive nav tab is ${r.toStringAsFixed(2)}:1');
+  });
+
+  // TripCard headline + secondary price.
+  onEverySurface('TripCard', 'departure time (textPrimary)', c.textPrimary);
+  onEverySurface('TripCard', 'price (primary)', c.primary);
+  onEverySurface('TripCard', 'caption (textMuted)', c.textMuted);
 }
 
 /// WCAG 2.x contrast ratio. [Color.computeLuminance] is Flutter's

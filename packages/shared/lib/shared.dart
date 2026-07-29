@@ -29,17 +29,19 @@ export 'widgets/rating_stars.dart';
 export 'widgets/onboarding_header.dart';
 export 'widgets/otp_input.dart';
 
+// Masar signature components (PR 2): the route-rail motif, seats drawn as
+// seats, and the floating pill nav that replaces Material's bottom bar.
+export 'widgets/route_rail.dart';
+export 'widgets/seat_glyphs.dart';
+export 'widgets/floating_pill_nav.dart';
+
 // Shared domain constants (canonical Iraqi cities, kept in sync with the API).
 export 'constants/iraqi_cities.dart';
 
-// Numeral formatting (Arabic-Indic for display, Western for input) lives in
-//   package:shared/format/numerals.dart
-// and is imported directly rather than re-exported here — ON PURPOSE, for now.
-// The rider and driver apps still carry their own `trip/trip_format.dart` with
-// same-named `formatIqd` / `formatTime` / `formatPrice` / `formatDayShort`
-// helpers; adding them to this barrel would make those names ambiguous in the
-// 11 screens that import both. PR 2 deletes the per-app copies (they become a
-// re-export of these), and this export moves in at that point.
+// Numeral formatting — Arabic-Indic for display, Western for phone/OTP entry.
+// The per-app `trip/trip_format.dart` copies were deleted in PR 2, so these are
+// now the only implementations and screens read them from this barrel.
+export 'format/numerals.dart';
 
 // Shared screens (reused across apps).
 export 'settings/settings_screen.dart';

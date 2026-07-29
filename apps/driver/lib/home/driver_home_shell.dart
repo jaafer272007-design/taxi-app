@@ -47,28 +47,43 @@ class _DriverHomeShellState extends State<DriverHomeShell> {
       ],
       child: Scaffold(
         backgroundColor: colors.background,
-        body: IndexedStack(
-          index: _index,
+        // The pill floats over the content rather than sitting in a bar, so the
+        // body reserves its footprint and the nav is stacked on top.
+        body: Stack(
           children: [
-            PostTripScreen(onPosted: () => setState(() => _index = 1)),
-            const MyTripsScreen(),
-            const EarningsScreen(),
-            SettingsScreen(
-              appVersion: AppConfig.appVersion,
-              onLogout: () => context.read<AuthController>().logout(),
+            Padding(
+              padding: const EdgeInsets.only(
+                bottom: FloatingPillNav.reservedSpace,
+              ),
+              child: IndexedStack(
+                index: _index,
+                children: [
+                  PostTripScreen(onPosted: () => setState(() => _index = 1)),
+                  const MyTripsScreen(),
+                  const EarningsScreen(),
+                  SettingsScreen(
+                    appVersion: AppConfig.appVersion,
+                    onLogout: () => context.read<AuthController>().logout(),
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _index,
-          onDestinationSelected: (i) => setState(() => _index = i),
-          backgroundColor: colors.surface,
-          indicatorColor: colors.primary.withValues(alpha: 0.14),
-          destinations: const [
-            NavigationDestination(icon: Icon(AppIcons.plusCircle), label: 'انشر رحلة'),
-            NavigationDestination(icon: Icon(AppIcons.route), label: 'رحلاتي'),
-            NavigationDestination(icon: Icon(AppIcons.wallet), label: 'أرباحي'),
-            NavigationDestination(icon: Icon(AppIcons.user), label: 'حسابي'),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: FloatingPillNav(
+                currentIndex: _index,
+                onSelect: (i) => setState(() => _index = i),
+                items: const [
+                  FloatingPillNavItem(
+                      icon: AppIcons.plusCircle, label: 'انشر'),
+                  FloatingPillNavItem(icon: AppIcons.route, label: 'رحلاتي'),
+                  FloatingPillNavItem(icon: AppIcons.wallet, label: 'أرباحي'),
+                  FloatingPillNavItem(icon: AppIcons.user, label: 'حسابي'),
+                ],
+              ),
+            ),
           ],
         ),
       ),
