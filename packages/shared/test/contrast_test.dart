@@ -187,6 +187,23 @@ void _auditComponents(AppColors c, String label) {
         reason: 'inactive nav tab is ${r.toStringAsFixed(2)}:1');
   });
 
+  // RouteSearchCard — the single-card route picker. Its contents sit on
+  // `surface` (the card), and the swap control on `primaryTonal`.
+  test('$label: RouteSearchCard — city name on the card', () {
+    expect(_contrast(c.textPrimary, c.surface), greaterThanOrEqualTo(_aa));
+  });
+  test('$label: RouteSearchCard — label + placeholder on the card', () {
+    final r = _contrast(c.textMuted, c.surface);
+    expect(r, greaterThanOrEqualTo(_aa),
+        reason: 'from/to label and "اختر المدينة" placeholder is '
+            '${r.toStringAsFixed(2)}:1');
+  });
+  test('$label: RouteSearchCard — swap icon (primary on primaryTonal)', () {
+    final r = _contrast(c.primary, c.primaryTonal);
+    expect(r, greaterThanOrEqualTo(_aa),
+        reason: 'swap control is ${r.toStringAsFixed(2)}:1');
+  });
+
   // TripCard headline + secondary price.
   onEverySurface('TripCard', 'departure time (textPrimary)', c.textPrimary);
   onEverySurface('TripCard', 'price (primary)', c.primary);

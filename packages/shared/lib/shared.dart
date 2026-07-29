@@ -32,6 +32,7 @@ export 'widgets/otp_input.dart';
 // Masar signature components (PR 2): the route-rail motif, seats drawn as
 // seats, and the floating pill nav that replaces Material's bottom bar.
 export 'widgets/route_rail.dart';
+export 'widgets/route_search_card.dart';
 export 'widgets/seat_glyphs.dart';
 export 'widgets/floating_pill_nav.dart';
 

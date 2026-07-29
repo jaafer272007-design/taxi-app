@@ -172,61 +172,17 @@ class _RoutePicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = controller;
-    final space = context.space;
-    return Row(
-      children: [
-        Expanded(
-          child: RouteRail(
-            origin: AppCityField(
-              label: 'من',
-              cityKey: c.origin,
-              onChanged: c.setOrigin,
-              excludeKey: c.dest,
-            ),
-            destination: AppCityField(
-              label: 'إلى',
-              cityKey: c.dest,
-              onChanged: c.setDest,
-              excludeKey: c.origin,
-            ),
-          ),
-        ),
-        SizedBox(width: space.sm),
-        _SwapButton(onTap: c.swapCities),
-      ],
+    // One card: rail + both endpoints + swap, per the hand-off.
+    return RouteSearchCard(
+      origin: c.origin,
+      dest: c.dest,
+      onOriginChanged: c.setOrigin,
+      onDestChanged: c.setDest,
+      onSwap: c.swapCities,
     );
   }
 }
 
-class _SwapButton extends StatelessWidget {
-  const _SwapButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final space = context.space;
-    return Semantics(
-      button: true,
-      label: 'اعكس الاتجاه',
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          width: space.xl4,
-          height: space.xl4,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: colors.primary.withValues(alpha: 0.12),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(AppIcons.swap, color: colors.primary, size: space.xl),
-        ),
-      ),
-    );
-  }
-}
 
 /// A tappable filter pill (date / time window), token-styled.
 class _FilterChip extends StatelessWidget {

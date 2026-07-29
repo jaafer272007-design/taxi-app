@@ -15,7 +15,16 @@ class AppCityField extends StatelessWidget {
     required this.onChanged,
     this.enabled = true,
     this.excludeKey,
+    this.bare = false,
   });
+
+  /// Drop the field's own container (fill, border, radius) and render just the
+  /// label + city name.
+  ///
+  /// Used inside [RouteSearchCard], where the card is the chrome and the route
+  /// rail — not a border — is what groups the two endpoints. The tap target
+  /// stays >= 48dp either way.
+  final bool bare;
 
   /// Small caption above the value (e.g. "من" / "إلى").
   final String label;
@@ -45,15 +54,39 @@ class AppCityField extends StatelessWidget {
     final colors = context.colors;
     final space = context.space;
     final hasValue = cityKey != null;
-    return Semantics(
-      button: true,
-      label: label,
-      child: GestureDetector(
-        onTap: enabled ? () => _open(context) : null,
-        behavior: HitTestBehavior.opaque,
-        child: Opacity(
-          opacity: enabled ? 1 : 0.5,
-          child: Container(
+
+    final value = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: context.text.caption.copyWith(color: colors.textMuted),
+        ),
+        SizedBox(height: space.xs),
+        Text(
+          hasValue ? cityArName(cityKey!) : 'اختر المدينة',
+          // Inside the route card the city is the headline of the screen, so it
+          // takes h2; the boxed field stays at body weight.
+          style: (bare ? context.text.h2 : context.text.bodyStrong).copyWith(
+            color: hasValue ? colors.textPrimary : colors.textMuted,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    );
+
+    final Widget content = bare
+        ? ConstrainedBox(
+            // Keep the row tappable at >= 48dp even with a short label.
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: value,
+            ),
+          )
+        : Container(
             padding:
                 EdgeInsets.symmetric(horizontal: space.md, vertical: space.md),
             decoration: BoxDecoration(
@@ -63,35 +96,25 @@ class AppCityField extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(AppIcons.mapPin, size: space.lg, color: colors.textSecondary),
+                Icon(AppIcons.mapPin,
+                    size: space.lg, color: colors.textSecondary),
                 SizedBox(width: space.sm),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        label,
-                        style: context.text.caption
-                            .copyWith(color: colors.textMuted),
-                      ),
-                      SizedBox(height: space.xs),
-                      Text(
-                        hasValue ? cityArName(cityKey!) : 'اختر المدينة',
-                        style: context.text.bodyStrong.copyWith(
-                          color:
-                              hasValue ? colors.textPrimary : colors.textMuted,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(AppIcons.chevronLeft, size: space.lg, color: colors.textMuted),
+                Expanded(child: value),
+                Icon(AppIcons.chevronLeft,
+                    size: space.lg, color: colors.textMuted),
               ],
             ),
-          ),
+          );
+
+    return Semantics(
+      button: true,
+      label: label,
+      child: GestureDetector(
+        onTap: enabled ? () => _open(context) : null,
+        behavior: HitTestBehavior.opaque,
+        child: Opacity(
+          opacity: enabled ? 1 : 0.5,
+          child: content,
         ),
       ),
     );

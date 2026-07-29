@@ -98,6 +98,56 @@ void main() {
     });
   });
 
+  group('RouteSearchCard', () {
+    Widget card({
+      String? origin = 'Najaf',
+      String? dest = 'Karbala',
+      VoidCallback? onSwap,
+    }) =>
+        host(SizedBox(
+          width: 358,
+          child: RouteSearchCard(
+            origin: origin,
+            dest: dest,
+            onOriginChanged: (_) {},
+            onDestChanged: (_) {},
+            onSwap: onSwap ?? () {},
+          ),
+        ));
+
+    testWidgets('puts both endpoints and the swap control in ONE card',
+        (tester) async {
+      await tester.pumpWidget(card());
+      // The hand-off's whole point: a single surface, not two bordered fields.
+      expect(find.byType(AppCard), findsOneWidget);
+      expect(find.byType(RouteRail), findsOneWidget);
+      expect(find.text('النجف'), findsOneWidget);
+      expect(find.text('كربلاء'), findsOneWidget);
+      expect(find.text('من'), findsOneWidget);
+      expect(find.text('إلى'), findsOneWidget);
+    });
+
+    testWidgets('swap control fires', (tester) async {
+      var swapped = false;
+      await tester.pumpWidget(card(onSwap: () => swapped = true));
+      await tester.tap(find.byKey(RouteSearchCard.swapKey));
+      expect(swapped, isTrue);
+    });
+
+    testWidgets('swap control keeps a 48dp tap target', (tester) async {
+      await tester.pumpWidget(card());
+      final size = tester.getSize(find.byKey(RouteSearchCard.swapKey));
+      expect(size.width, greaterThanOrEqualTo(48.0));
+      expect(size.height, greaterThanOrEqualTo(48.0));
+    });
+
+    testWidgets('shows the placeholder when a city is unset', (tester) async {
+      await tester.pumpWidget(card(origin: null));
+      expect(find.text('اختر المدينة'), findsOneWidget);
+      expect(find.text('كربلاء'), findsOneWidget);
+    });
+  });
+
   group('FloatingPillNav', () {
     const items = [
       FloatingPillNavItem(icon: AppIcons.search, label: 'ابحث'),
