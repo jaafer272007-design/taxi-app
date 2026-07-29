@@ -294,7 +294,11 @@ class _TripHero extends StatelessWidget {
               ),
               Expanded(
                 child: _HeroStat(
-                  label: moving ? 'نقد متوقع' : 'نقد محجوز',
+                  // "للتحصيل" once moving, matching the CTA word for word: the
+                  // en-route figure counts only riders actually on board, so
+                  // calling it "expected" would imply it includes the confirmed
+                  // rider still standing at the kerb. It does not.
+                  label: moving ? 'للتحصيل' : 'نقد محجوز',
                   value: formatIqd(controller.expectedCash),
                   unit: iqdSuffix,
                 ),
