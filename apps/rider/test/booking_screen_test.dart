@@ -30,15 +30,16 @@ Widget _host(BookingController c) => ChangeNotifierProvider<BookingController>.v
       ),
     );
 
-/// The stepper button ([icon])'s tap callback. Invoking it directly exercises
-/// the real widget→controller→UI wiring without positional hit-testing (which is
+/// A seat tile's tap callback. Invoking it directly exercises the real
+/// widget→controller→UI wiring without positional hit-testing (which is
 /// unreliable through the page-transition/scaffold layers in a widget test).
-VoidCallback? _stepButtonTap(WidgetTester tester, IconData icon) {
+/// Returns null when the tile is unavailable — which is how the cap is asserted.
+VoidCallback? _seatTileTap(WidgetTester tester, String arabicDigit) {
   return tester
       .widget<GestureDetector>(
         find
             .ancestor(
-              of: find.byIcon(icon),
+              of: find.text(arabicDigit),
               matching: find.byType(GestureDetector),
             )
             .first,
@@ -47,37 +48,41 @@ VoidCallback? _stepButtonTap(WidgetTester tester, IconData icon) {
 }
 
 void main() {
-  testWidgets('seat stepper updates the total fare live', (tester) async {
-    await tester.pumpWidget(_host(_controller(price: 6000)));
+  testWidgets('seat picker updates the total fare live', (tester) async {
+    final c = _controller(price: 6000);
+    await tester.pumpWidget(_host(c));
 
-    // Starts at 1 seat → total 6,000; no 12,000 yet.
-    expect(find.text('١'), findsOneWidget);
+    // Starts at 1 seat. The unit price is ٦٬٠٠٠, so ١٢٬٠٠٠ is unambiguously
+    // the running total.
+    expect(c.seatCount, 1);
     expect(find.text('١٢٬٠٠٠ د.ع'), findsNothing);
 
-    _stepButtonTap(tester, AppIcons.plus)!();
+    _seatTileTap(tester, '٢')!();
     await tester.pump();
 
     // 2 seats → total 12,000 د.ع.
-    expect(find.text('٢'), findsOneWidget);
+    expect(c.seatCount, 2);
     expect(find.text('١٢٬٠٠٠ د.ع'), findsOneWidget);
+    expect(find.text('الإجمالي · ٢ مقعد'), findsOneWidget);
 
-    _stepButtonTap(tester, AppIcons.minus)!();
+    _seatTileTap(tester, '١')!();
     await tester.pump();
-    expect(find.text('١'), findsOneWidget);
+    expect(c.seatCount, 1);
     expect(find.text('١٢٬٠٠٠ د.ع'), findsNothing);
   });
 
-  testWidgets('seat stepper never exceeds available seats', (tester) async {
+  testWidgets('seat picker never exceeds available seats', (tester) async {
     final c = _controller(seatsAvailable: 2, price: 6000);
     await tester.pumpWidget(_host(c));
 
-    _stepButtonTap(tester, AppIcons.plus)!(); // 1 → 2 (max)
+    _seatTileTap(tester, '٢')!(); // 1 → 2 (max)
     await tester.pump();
-    expect(find.text('٢'), findsOneWidget);
     expect(c.seatCount, 2);
 
-    // At the cap the increment button is disabled (no onTap).
-    expect(_stepButtonTap(tester, AppIcons.plus), isNull);
+    // Counts above the cap are rendered but dead — no tap callback at all,
+    // which is what makes the ceiling visible instead of merely unreachable.
+    expect(_seatTileTap(tester, '٣'), isNull);
+    expect(_seatTileTap(tester, '٤'), isNull);
     expect(c.seatCount, 2);
   });
 
