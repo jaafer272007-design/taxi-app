@@ -5,6 +5,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
 import { NotificationModule } from './notification/notification.module';
 import { AuthModule } from './auth/auth.module';
+import { AdminAuthModule } from './admin-auth/admin-auth.module';
 import { DriverModule } from './driver/driver.module';
 import { AdminModule } from './admin/admin.module';
 import { DocumentsModule } from './documents/documents.module';
@@ -25,6 +26,7 @@ import { HealthModule } from './health/health.module';
     RedisModule,
     NotificationModule,
     AuthModule,
+    AdminAuthModule,
     DriverModule,
     AdminModule,
     DocumentsModule,

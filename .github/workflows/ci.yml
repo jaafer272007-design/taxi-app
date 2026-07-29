@@ -79,6 +79,40 @@ jobs:
       - name: Test
         run: npm test
 
+  admin:
+    name: apps/admin (lint, build)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: apps/admin
+
+    # The admin panel talks to the API only at RUNTIME (server-side fetch), so
+    # the build needs no live backend — just a syntactically valid base URL for
+    # the module that reads it.
+    env:
+      API_BASE_URL: http://localhost:3000
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/admin/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
   # One Flutter job: analyze the rider app, run all Flutter tests, and
   # generate/compare the UI golden screenshots for BOTH packages/shared and
   # apps/rider. Committing goldens from a single job avoids two jobs racing to

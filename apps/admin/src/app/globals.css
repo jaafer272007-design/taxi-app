@@ -1,90 +1,115 @@
 @import "tailwindcss";
 
 /*
- * Design tokens — mirrored EXACTLY from packages/shared/lib/theme/colors.dart
+ * Design tokens — mirrored from packages/shared/lib/theme/colors.dart
  * (AppColors.light / AppColors.dark), the single source of truth shared by the
- * rider, driver AND admin apps. Do not hand-pick new colors here; if the brand
- * palette changes, change AppColors.dart and update these hex values to match.
+ * rider, driver AND admin apps. This is the "Masar" (مَسار) palette: pine +
+ * saffron on warm paper. Do not hand-pick new colours here; if the brand
+ * changes, change colors.dart and update these hex values to match.
+ *
+ * Every foreground/background pair below is >= 4.5:1, the locked accessibility
+ * rule enforced for the Flutter apps by packages/shared/test/contrast_test.dart.
+ * The pairings used here are the same token pairs that test already covers.
  *
  * Shadcn semantic-slot mapping notes:
- *  - `accent` here is shadcn's usual meaning (subtle hover/highlight surface),
- *    NOT AppColors.accent (the bold amber brand color) — those are different
- *    concepts that happen to share a name. The amber isn't needed by any
- *    screen in this app yet; if a future screen needs it, add a dedicated
- *    `--color-brand-accent` token rather than overloading shadcn's `accent`.
- *  - `success` / `warning` are custom additions (shadcn ships no default for
- *    them) used by the corridor active/inactive badge and form banners.
+ *  - `accent` here is shadcn's meaning (a subtle hover/highlight surface) and
+ *    maps to Masar's `primaryTonal`, NOT to AppColors.accent (the saffron).
+ *    The saffron is a FILL-ONLY token — as ink it measures 2.6:1 — so it is
+ *    exposed separately as `--color-brand-accent` / `--color-brand-accent-ink`
+ *    (the latter is AppColors.accentText, the legible variant).
+ *  - `success` / `warning` are custom additions (shadcn ships no default) used
+ *    by status badges and form banners; their tonal fills come from the opaque
+ *    *Tonal tokens, never an alpha wash — a translucent tint composites over
+ *    whatever is behind it and its measured contrast stops being predictable.
  */
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-  --card: #ffffff;
-  --card-foreground: #0f172a;
+  --background: #f4f1ea;          /* AppColors.light.background — warm paper */
+  --foreground: #141c19;          /* textPrimary */
+  --card: #ffffff;                /* surface */
+  --card-foreground: #141c19;
   --popover: #ffffff;
-  --popover-foreground: #0f172a;
-  --primary: #2563eb;
-  --primary-foreground: #ffffff;
-  --secondary: #f1f5f9;
-  --secondary-foreground: #0f172a;
-  --muted: #f1f5f9;
-  --muted-foreground: #475569;
-  --accent: #f1f5f9;
-  --accent-foreground: #0f172a;
-  --destructive: #dc2626;
+  --popover-foreground: #141c19;
+  --primary: #0e5c4a;             /* pine */
+  --primary-foreground: #ffffff;  /* onPrimary */
+  --secondary: #ece8de;           /* surfaceMuted */
+  --secondary-foreground: #141c19;
+  --muted: #ece8de;
+  --muted-foreground: #4f5b56;    /* textSecondary */
+  --accent: #eaf1ee;              /* primaryTonal — shadcn's hover surface */
+  --accent-foreground: #0e5c4a;
+  --destructive: #b33a2e;         /* danger */
   --destructive-foreground: #ffffff;
-  --success: #16a34a;
+  --destructive-tonal: #f7e7e5;   /* dangerTonal (opaque) */
+  --success: #1d764d;
   --success-foreground: #ffffff;
-  --warning: #d97706;
+  --success-tonal: #e2f0e9;
+  --warning: #8e5a0f;
   --warning-foreground: #ffffff;
-  --border: #e2e8f0;
-  --input: #e2e8f0;
-  --ring: #2563eb;
-  --radius: 0.75rem;
+  --warning-tonal: #f8eedd;
+  --info: #1f5f7a;
+  --info-foreground: #ffffff;
+  --info-tonal: #e4eef3;
+  --brand-accent: #de8f27;        /* saffron — FILLS ONLY */
+  --brand-accent-ink: #8a5410;    /* accentText — the legible saffron */
+  --border: #e4dfd4;
+  --input: #e4dfd4;
+  --ring: #0e5c4a;
+  --radius: 1.25rem;              /* AppRadii.card = 20 */
 
   --sidebar: #ffffff;
-  --sidebar-foreground: #0f172a;
-  --sidebar-primary: #2563eb;
+  --sidebar-foreground: #141c19;
+  --sidebar-primary: #0e5c4a;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f1f5f9;
-  --sidebar-accent-foreground: #0f172a;
-  --sidebar-border: #e2e8f0;
-  --sidebar-ring: #2563eb;
+  --sidebar-accent: #eaf1ee;
+  --sidebar-accent-foreground: #0e5c4a;
+  --sidebar-border: #e4dfd4;
+  --sidebar-ring: #0e5c4a;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0b1220;
-    --foreground: #f1f5f9;
-    --card: #111a2e;
-    --card-foreground: #f1f5f9;
-    --popover: #111a2e;
-    --popover-foreground: #f1f5f9;
-    --primary: #3b82f6;
-    --primary-foreground: #ffffff;
-    --secondary: #1e293b;
-    --secondary-foreground: #f1f5f9;
-    --muted: #1e293b;
-    --muted-foreground: #94a3b8;
-    --accent: #1e293b;
-    --accent-foreground: #f1f5f9;
-    --destructive: #f87171;
-    --destructive-foreground: #2a0606;
-    --success: #22c55e;
-    --success-foreground: #04120a;
-    --warning: #f59e0b;
-    --warning-foreground: #231400;
-    --border: #24324a;
-    --input: #24324a;
-    --ring: #3b82f6;
+    --background: #0a100e;
+    --foreground: #ecf2ef;
+    --card: #141d1a;              /* surface */
+    --card-foreground: #ecf2ef;
+    --popover: #141d1a;
+    --popover-foreground: #ecf2ef;
+    --primary: #45c6a2;           /* bright mint — the dark-mode pine */
+    --primary-foreground: #06251d;
+    --secondary: #1d2925;         /* surfaceMuted */
+    --secondary-foreground: #ecf2ef;
+    --muted: #1d2925;
+    --muted-foreground: #9aa8a2;  /* textSecondary */
+    --accent: #14312a;            /* primaryTonal */
+    --accent-foreground: #45c6a2;
+    --destructive: #ee8478;
+    --destructive-foreground: #2a0a06;
+    --destructive-tonal: #321512;
+    --success: #43c287;
+    --success-foreground: #04160e;
+    --success-tonal: #102e22;
+    --warning: #e5a54a;
+    --warning-foreground: #1e1405;
+    --warning-tonal: #2a2114;
+    --info: #66b6db;
+    --info-foreground: #04161e;
+    --info-tonal: #12262e;
+    --brand-accent: #efb35f;
+    /* On dark surfaces the saffron is already 9.25:1 as ink, so the fill
+       colour doubles as the text colour — no darker variant is needed. */
+    --brand-accent-ink: #efb35f;
+    --border: #233029;
+    --input: #233029;
+    --ring: #45c6a2;
 
-    --sidebar: #111a2e;
-    --sidebar-foreground: #f1f5f9;
-    --sidebar-primary: #3b82f6;
-    --sidebar-primary-foreground: #ffffff;
-    --sidebar-accent: #1e293b;
-    --sidebar-accent-foreground: #f1f5f9;
-    --sidebar-border: #24324a;
-    --sidebar-ring: #3b82f6;
+    --sidebar: #141d1a;
+    --sidebar-foreground: #ecf2ef;
+    --sidebar-primary: #45c6a2;
+    --sidebar-primary-foreground: #06251d;
+    --sidebar-accent: #14312a;
+    --sidebar-accent-foreground: #45c6a2;
+    --sidebar-border: #233029;
+    --sidebar-ring: #45c6a2;
   }
 }
 
@@ -109,6 +134,14 @@
   --color-success-foreground: var(--success-foreground);
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-success-tonal: var(--success-tonal);
+  --color-warning-tonal: var(--warning-tonal);
+  --color-destructive-tonal: var(--destructive-tonal);
+  --color-info-tonal: var(--info-tonal);
+  --color-brand-accent: var(--brand-accent);
+  --color-brand-accent-ink: var(--brand-accent-ink);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);

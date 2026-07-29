@@ -205,4 +205,38 @@ model DeviceToken {
   @@index([userId])
 }
 
+// Phase 1 amendment (Step 7): admin accounts.
+//
+// Admins authenticate with USERNAME + PASSWORD, not phone + WhatsApp OTP, and
+// they live in their OWN table — deliberately NOT in `User`. Three reasons:
+//
+//  1. An admin is not a rider. `User.phone` is the identity key for the whole
+//     rider/driver domain; giving admins a synthetic phone row would put
+//     non-passengers into every query that reasons about passengers.
+//  2. Only this table ever carries a password hash. Keeping it out of `User`
+//     means no rider/driver query can accidentally select or leak one.
+//  3. OTP is blocked on WhatsApp credentials; admin is a small internal group
+//     that needs to work now. The two auth paths stay independent.
+//
+// Both roles share every operational permission (corridors, driver approval,
+// dashboard). SUPER_ADMIN's ONLY extra power is managing admin accounts.
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+}
+
+model AdminUser {
+  id       String    @id @default(cuid())
+  username String    @unique
+  /// bcrypt hash. NEVER selected into an API response — see AdminUsersService.
+  passwordHash String
+  role     AdminRole @default(ADMIN)
+  /// Disabled accounts keep their history but cannot log in.
+  active   Boolean   @default(true)
+  createdAt DateTime @default(now())
+  /// AdminUser.id of the super admin who created this account; null for the
+  /// env-seeded super admin itself.
+  createdBy String?
+}
+
 // SeatRequest = Phase 2 (لا يُبنى الآن)
