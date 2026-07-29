@@ -23,7 +23,8 @@ void main() {
 
     expect(find.text('علي حسن'), findsOneWidget);
     expect(find.text('٠٧:٣٠'), findsOneWidget); // 04:30 UTC → Baghdad
-    expect(find.textContaining('6,000'), findsOneWidget);
+    // Arabic-Indic with the Arabic thousands separator (U+066C), not "6,000".
+    expect(find.textContaining('٦٬٠٠٠'), findsOneWidget);
     expect(find.textContaining('Toyota Corolla'), findsOneWidget);
     expect(find.text('٣ مقاعد متاحة'), findsOneWidget);
   });
