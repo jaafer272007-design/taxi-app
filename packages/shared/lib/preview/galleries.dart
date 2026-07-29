@@ -92,7 +92,7 @@ class ColorTokensGallery extends StatelessWidget {
       alignment: Alignment.bottomRight,
       decoration: BoxDecoration(
         color: s.color,
-        borderRadius: context.radii.mdAll,
+        borderRadius: context.radii.fieldLgAll,
         border: Border.all(color: context.colors.border),
       ),
       child: Text(

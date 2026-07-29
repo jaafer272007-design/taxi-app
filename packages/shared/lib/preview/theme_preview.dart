@@ -209,7 +209,7 @@ class _ThemePreviewState extends State<ThemePreview> {
       alignment: Alignment.bottomRight,
       decoration: BoxDecoration(
         color: s.color,
-        borderRadius: context.radii.mdAll,
+        borderRadius: context.radii.fieldLgAll,
         border: Border.all(color: context.colors.border),
       ),
       child: Text(
@@ -303,7 +303,7 @@ class _ThemePreviewState extends State<ThemePreview> {
                   height: 16,
                   decoration: BoxDecoration(
                     color: context.colors.primary,
-                    borderRadius: context.radii.smAll,
+                    borderRadius: context.radii.chipAll,
                   ),
                 ),
               ],

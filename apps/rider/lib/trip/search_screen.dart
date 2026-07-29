@@ -67,6 +67,15 @@ class _SearchScreenState extends State<SearchScreen> {
     return AppScaffold(
       title: 'ابحث عن رحلة',
       scrollable: true,
+      // Pinned: the form runs past a phone screen once the filters are open,
+      // and the action that ends it should not be something you scroll for.
+      bottomBar: c.corridorsLoading || c.corridorsError != null
+          ? null
+          : AppButton(
+              label: 'ابحث',
+              icon: AppIcons.search,
+              onPressed: c.canSearch ? () => _onSearch(c) : null,
+            ),
       body: _body(context, c, space),
     );
   }
@@ -145,15 +154,15 @@ class _SearchScreenState extends State<SearchScreen> {
           ],
           onChanged: c.setDriverGender,
         ),
-        SizedBox(height: space.xs),
-        Text('السائقات قليلات على هذا المسار حالياً.',
-            style: context.text.caption.copyWith(color: context.colors.textMuted)),
-        SizedBox(height: space.xl2),
-        AppButton(
-          label: 'ابحث',
-          icon: AppIcons.search,
-          onPressed: c.canSearch ? () => _onSearch(c) : null,
-        ),
+        // Only when it applies. Female drivers really are scarce on this
+        // corridor, but printing that under an unset filter reads as an excuse
+        // for an empty result the rider has not asked for yet.
+        if (c.driverGender == Gender.female) ...[
+          SizedBox(height: space.xs),
+          Text('السائقات قليلات على هذا المسار حالياً.',
+              style:
+                  context.text.caption.copyWith(color: context.colors.textMuted)),
+        ],
       ],
     );
   }
@@ -202,36 +211,45 @@ class _FilterChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final space = context.space;
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: space.md, vertical: space.md),
-        decoration: BoxDecoration(
-          color: colors.surface,
-          borderRadius: context.radii.mdAll,
-          border: Border.all(color: colors.border),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: space.lg, color: colors.textSecondary),
-            SizedBox(width: space.sm),
-            Expanded(
-              child: Text(
-                label,
-                style: context.text.body.copyWith(color: colors.textPrimary),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+    return Semantics(
+      button: true,
+      label: label,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Container(
+            padding: EdgeInsets.symmetric(
+                horizontal: space.md, vertical: space.md),
+            decoration: BoxDecoration(
+              color: colors.surface,
+              borderRadius: context.radii.fieldLgAll,
+              border: Border.all(color: colors.border),
             ),
-            if (onClear != null)
-              GestureDetector(
-                onTap: onClear,
-                behavior: HitTestBehavior.opaque,
-                child: Icon(AppIcons.close, size: space.lg, color: colors.textMuted),
-              ),
-          ],
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: space.lg, color: colors.textSecondary),
+                SizedBox(width: space.sm),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: context.text.body.copyWith(color: colors.textPrimary),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (onClear != null)
+                  GestureDetector(
+                    onTap: onClear,
+                    behavior: HitTestBehavior.opaque,
+                    child: Icon(AppIcons.close,
+                        size: space.lg, color: colors.textMuted),
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );
