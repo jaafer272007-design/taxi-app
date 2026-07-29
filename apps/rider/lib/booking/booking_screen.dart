@@ -103,11 +103,11 @@ class _BookingScreenState extends State<BookingScreen> {
           SizedBox(height: space.md),
           _TripSummaryCard(controller: c),
           SizedBox(height: space.xl),
-          _SectionLabel('اختر مقاعدك'),
+          const _SectionLabel('اختر مقاعدك'),
           SizedBox(height: space.sm),
           _SeatPicker(controller: c),
           SizedBox(height: space.xl),
-          _SectionLabel('من الباب إلى الباب'),
+          const _SectionLabel('من الباب إلى الباب'),
           SizedBox(height: space.sm),
           _DoorToDoorCard(
             controller: c,
@@ -484,7 +484,7 @@ class _ConfirmBar extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
-              Text('الإجمالي · ${formatCount(seatCount)} مقعد',
+              Text('الإجمالي · ${formatSeats(seatCount)}',
                   style: context.text.label
                       .copyWith(color: colors.textSecondary)),
               const Spacer(),

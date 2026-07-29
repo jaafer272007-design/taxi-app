@@ -101,6 +101,17 @@ String formatPrice(int amount) => formatIqd(amount, withSuffix: true);
 /// A plain whole number in Arabic-Indic digits — seat counts, trip counts.
 String formatCount(int value) => toArabicDigits(value.toString());
 
+/// A seat count as an Arabic noun phrase — `مقعد واحد` / `مقعدان` / `٣ مقاعد`.
+///
+/// Arabic has a **dual**, so two seats is "مقعدان", never "٢ مقاعد". Screens
+/// must not build this by interpolating a number in front of a fixed noun.
+String formatSeats(int count) => switch (count) {
+      <= 0 => 'لا مقاعد',
+      1 => 'مقعد واحد',
+      2 => 'مقعدان',
+      _ => '${formatCount(count)} مقاعد',
+    };
+
 /// A rating with one decimal, using the Arabic decimal separator — `4.8` → `٤٫٨`.
 String formatRating(double value) {
   final fixed = value.toStringAsFixed(1);

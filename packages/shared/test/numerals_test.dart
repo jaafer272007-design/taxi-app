@@ -78,6 +78,15 @@ void main() {
       expect(formatCount(71), '٧١');
     });
 
+    test('formatSeats uses the Arabic dual', () {
+      expect(formatSeats(0), 'لا مقاعد');
+      expect(formatSeats(1), 'مقعد واحد');
+      // The dual — "٢ مقاعد" is wrong Arabic.
+      expect(formatSeats(2), 'مقعدان');
+      expect(formatSeats(3), '٣ مقاعد');
+      expect(formatSeats(4), '٤ مقاعد');
+    });
+
     test('formatRating uses the Arabic decimal separator', () {
       expect(formatRating(4.8), '٤٫٨');
       expect(formatRating(5), '٥٫٠');

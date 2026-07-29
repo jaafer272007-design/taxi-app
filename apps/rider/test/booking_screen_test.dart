@@ -63,7 +63,7 @@ void main() {
     // 2 seats → total 12,000 د.ع.
     expect(c.seatCount, 2);
     expect(find.text('١٢٬٠٠٠ د.ع'), findsOneWidget);
-    expect(find.text('الإجمالي · ٢ مقعد'), findsOneWidget);
+    expect(find.text('الإجمالي · مقعدان'), findsOneWidget);
 
     _seatTileTap(tester, '١')!();
     await tester.pump();
