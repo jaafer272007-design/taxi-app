@@ -1,5 +1,3 @@
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:shared/shared.dart';
 
 /// A scriptable fake of [AuthApi] for tests — no real network.
