@@ -70,6 +70,19 @@ Pine + saffron on warm paper. Light `primary #0E5C4A` / `bg #F4F1EA`; dark
 - `toWesternDigits` is the inbound direction: normalise anything pasted
   (Arabic-Indic or Persian digits) before parsing or sending to the API — the
   wire format is always Western.
+- **Never put a dot-like separator next to an Arabic-Indic numeral.** `٠` IS a
+  dot, so `'... · ${formatSeats(3)}'` renders as «٣٠ مقاعد» — thirty — and
+  `'${formatSeats(n)} · ${formatPrice(fare)}'` fused the dot onto the fare so
+  ٦٬٠٠٠ read as ٦٬٠٠٠٠ on the driver's cash screens. `·` is also **bidi-neutral**,
+  so it can be reordered onto the far side of the number. Join with a strong
+  Arabic word or letter instead (`بـ` / `لـ` / `الساعة`), or split into two
+  widgets. Safe: a separator between two Arabic **words**, or between two digit
+  runs (`٣٬٠٠٠ – ١٢٬٠٠٠` renders correctly — same directional run).
+  > This class of bug hides in goldens: `formatSeats`/`formatTrips` return the
+  > Arabic **dual** («مقعدان») at 2, which carries no digit at all, so a fixture
+  > using 1 or 2 renders clean while 3+ is broken. Fixture a count of **3** when
+  > a screen shows one. Screen tests should sweep every rendered `Text` for
+  > `·` adjacent to `[٠-٩]` — see `apps/driver/test/post_trip_screen_test.dart`.
 
 ### Theme mode (light / dark / system)
 - Apps ship **light + dark** (both built in `/packages/shared/theme`).
