@@ -83,6 +83,25 @@ Pine + saffron on warm paper. Light `primary #0E5C4A` / `bg #F4F1EA`; dark
   > using 1 or 2 renders clean while 3+ is broken. Fixture a count of **3** when
   > a screen shows one. Screen tests should sweep every rendered `Text` for
   > `·` adjacent to `[٠-٩]` — see `apps/driver/test/post_trip_screen_test.dart`.
+- **The hazard applies on the WEB too — measured in Chromium, not assumed.**
+  The admin panel shipped `plate · ${formatSeats(4)}`, and the browser painted
+  it exactly like the Flutter bug: bidi resolves the `·` to the **right** of the
+  digit, which is precisely where a `٠` sits (digits run left-to-right inside an
+  RTL line), and Cairo draws `·` and `٠` as the same small mid-height dot. The
+  separation was **3px against a 7px digit** — `E2E-1001 · ٤ مقاعد` and
+  `E2E-1001 ٤٠ مقاعد` (four seats vs forty) were all but indistinguishable.
+  So the rule is one rule, not a Flutter rule: **same hazard, same fixes**
+  (join with a strong Arabic word/letter, or split into separate elements and
+  let layout do the separating — on web, a flex `gap` rather than a character).
+  - **A string assertion cannot catch this, on any platform.** `innerText` and
+    `find.text` return **logical** order; the reordering happens at layout. The
+    text check «`٤ مقاعد` present, `٤٠ مقاعد` absent» passed against the broken
+    page. The guard has to measure **painted glyph positions** — see
+    `apps/admin/e2e/numerals.spec.ts`, which walks every character's client rect,
+    sorts by x to recover visual order, and fails when a dot-like glyph lands
+    within 6px of an Arabic-Indic digit. It runs on every panel page in CI.
+  - Exempt from that sweep, deliberately: `٬` (U+066C) and `٫` (U+066B) are
+    *part* of the number and are supposed to touch the digits.
 
 ### Theme mode (light / dark / system)
 - Apps ship **light + dark** (both built in `/packages/shared/theme`).

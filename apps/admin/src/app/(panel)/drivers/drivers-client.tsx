@@ -182,11 +182,22 @@ export function DriversClient({
                     </span>
                     <span>{formatTrips(driver.tripsDone)}</span>
                     {driver.vehicle && (
-                      <span>
-                        {driver.vehicle.make} {driver.vehicle.model} · {driver.vehicle.color} ·{" "}
-                        <span dir="ltr">{driver.vehicle.plate}</span> ·{" "}
-                        {formatSeats(driver.vehicle.seats)}
-                      </span>
+                      <>
+                        <span>
+                          {driver.vehicle.make} {driver.vehicle.model} · {driver.vehicle.color} ·{" "}
+                          <span dir="ltr">{driver.vehicle.plate}</span>
+                        </span>
+                        {/* The seat count is its OWN flex item, not appended to
+                            the line after a `·`. In RTL the separator resolves
+                            to the right of the digit — exactly where a `٠`
+                            would sit — and Cairo draws `·` and `٠` as the same
+                            small mid-height dot, so `· ٤ مقاعد` reads as
+                            «٤٠ مقاعد»: forty seats instead of four. Measured in
+                            Chromium, not assumed; see CLAUDE.md. Separation is
+                            the parent's `gap-x-6`, so no character sits next to
+                            the digit at all. */}
+                        <span>{formatSeats(driver.vehicle.seats)}</span>
+                      </>
                     )}
                   </div>
 
