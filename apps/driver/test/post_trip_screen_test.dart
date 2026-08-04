@@ -78,20 +78,31 @@ void main() {
     testWidgets('never puts a dot beside an Arabic-Indic numeral', (tester) async {
       // `٠` IS a dot, so "· ٣" reads as "٣٠" — a driver offering 3 seats saw
       // "٣٠ مقاعد". Being bidi-neutral, the dot can also be reordered onto the
-      // wrong side of the number. Guard every rendered string on this screen.
+      // wrong side of the number. Guard every rendered string, in BOTH departure
+      // modes: the scheduled chip renders a zero-padded clock ("٠٧:٣٠") that
+      // only exists on this screen once "جدولة" is picked.
       final c = await controller();
-      c.setSeatCount(3);
+      c
+        ..setSeatCount(3)
+        ..setMode(DepartMode.scheduled)
+        ..setScheduledAt(DateTime(2026, 7, 20, 7, 30));
       await tester.pumpWidget(host(c));
 
-      final offenders = tester
+      List<String> offendersOnScreen() => tester
           .widgetList<Text>(find.byType(Text))
           .map((t) => t.data)
           .whereType<String>()
           .where((s) => RegExp(r'·\s*[٠-٩]|[٠-٩]\s*·').hasMatch(s))
           .toList();
 
-      expect(offenders, isEmpty,
-          reason: 'a middle dot touches an Arabic-Indic digit in: $offenders');
+      expect(offendersOnScreen(), isEmpty,
+          reason: 'a middle dot touches an Arabic-Indic digit (scheduled)');
+
+      c.setMode(DepartMode.now);
+      await tester.pump();
+
+      expect(offendersOnScreen(), isEmpty,
+          reason: 'a middle dot touches an Arabic-Indic digit (now)');
     });
 
     testWidgets('the seat line reads as 3 seats, not 30', (tester) async {

@@ -325,9 +325,13 @@ class _ScheduleChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final space = context.space;
+    // "الساعة" rather than " · " between the date and the time: the clock is
+    // zero-padded Arabic-Indic ("٠٧:٣٠"), and a middle dot beside it reads as
+    // another ٠. A strong Arabic word also pins the bidi order, which a
+    // neutral separator does not.
     final label = at == null
         ? 'اختر التاريخ والوقت'
-        : '${formatDayShort(at!)} · ${_hm(at!)}';
+        : '${formatDayShort(at!)} الساعة ${_hm(at!)}';
     return Semantics(
       button: true,
       label: 'موعد الانطلاق',
