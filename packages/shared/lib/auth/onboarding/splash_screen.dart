@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:shared/shared.dart';
+
+import '../../theme/app_theme.dart';
+import '../../widgets/app_icons.dart';
+import '../../widgets/app_scaffold.dart';
 
 /// Shown while the session is being restored on launch.
 class SplashScreen extends StatelessWidget {

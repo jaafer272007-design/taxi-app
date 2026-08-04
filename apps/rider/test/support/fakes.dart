@@ -1,5 +1,3 @@
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:shared/shared.dart';
 
 /// A scriptable fake of [AuthApi] for tests — no real network.
@@ -67,17 +65,3 @@ AuthUser fakeUser({String? name, Gender? gender}) => AuthUser(
       profileComplete:
           (name?.trim().isNotEmpty ?? false) && gender != null,
     );
-
-/// Wraps [child] with the design-system theme + RTL so onboarding screens can
-/// render in a widget test. Default (English) Material localizations satisfy the
-/// Material widgets; the Arabic copy is in the widgets' own strings.
-Widget wrapApp(Widget child, AuthController auth) {
-  return ChangeNotifierProvider<AuthController>.value(
-    value: auth,
-    child: MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
-      home: Directionality(textDirection: TextDirection.rtl, child: child),
-    ),
-  );
-}

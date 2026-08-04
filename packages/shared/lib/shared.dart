@@ -66,10 +66,21 @@ export 'net/token_store.dart';
 export 'net/iraqi_phone.dart';
 
 // Auth: the OTP session controller + API + user model, shared by both apps.
-// Each app keeps its own thin onboarding screens (app-specific copy).
 export 'auth/auth_user.dart';
 export 'auth/auth_api.dart';
 export 'auth/auth_controller.dart';
+
+// Onboarding screens — ONE implementation for both apps. They used to be
+// duplicated per app, which meant every fix had to be applied twice and a fix
+// that landed in only one was invisible until it bit. The four sentences that
+// genuinely differ are passed in as OnboardingCopy; nothing here knows whether
+// it is running in the rider or the driver app.
+export 'auth/onboarding/onboarding_copy.dart';
+export 'auth/onboarding/phone_screen.dart';
+export 'auth/onboarding/otp_screen.dart';
+export 'auth/onboarding/name_screen.dart';
+export 'auth/onboarding/onboarding_flow.dart';
+export 'auth/onboarding/splash_screen.dart';
 
 // Theme preview / gallery (dev + design QA surface).
 export 'preview/theme_preview.dart';

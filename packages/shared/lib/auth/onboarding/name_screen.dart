@@ -1,12 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared/shared.dart';
+
+import '../../theme/app_theme.dart';
+import '../../widgets/app_button.dart';
+import '../../widgets/app_icons.dart';
+import '../../widgets/app_scaffold.dart';
+import '../../widgets/app_segmented_control.dart';
+import '../../widgets/app_text_field.dart';
+import '../../widgets/onboarding_header.dart';
+import '../auth_controller.dart';
+import '../auth_user.dart';
+import 'onboarding_copy.dart';
 
 /// Step 3 — profile completion (name + gender). Shown to brand-new users and to
 /// any existing user whose profile is still incomplete (e.g. a pre-gender user
 /// who has a name but no gender). Both fields are required before the app opens.
 class NameScreen extends StatefulWidget {
-  const NameScreen({super.key});
+  const NameScreen({super.key, required this.copy});
+
+  /// The app-specific header + gender-helper strings. See [OnboardingCopy].
+  final OnboardingCopy copy;
 
   @override
   State<NameScreen> createState() => _NameScreenState();
@@ -68,12 +81,12 @@ class _NameScreenState extends State<NameScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(height: space.xl2),
-          const OnboardingHeader(
+          OnboardingHeader(
             step: 3,
             totalSteps: 3,
             icon: AppIcons.user,
             title: 'عرّفنا بنفسك',
-            subtitle: 'اسمك وجنسك يظهران للركّاب في رحلاتك.',
+            subtitle: widget.copy.profileSubtitle,
           ),
           SizedBox(height: space.xl3),
           AppTextField(
@@ -108,9 +121,7 @@ class _NameScreenState extends State<NameScreen> {
           ),
           SizedBox(height: space.xs),
           Text(
-            _genderMissing
-                ? 'اختر الجنس للمتابعة.'
-                : 'يظهر جنسك للركّاب عند اختيار الرحلة.',
+            _genderMissing ? 'اختر الجنس للمتابعة.' : widget.copy.genderHelper,
             style: context.text.caption.copyWith(
               color: _genderMissing ? colors.danger : colors.textMuted,
             ),

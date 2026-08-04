@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared/shared.dart';
 
-import 'auth/onboarding_flow.dart';
-import 'auth/splash_screen.dart';
+import 'auth/onboarding_copy.dart';
 import 'booking/booking_api.dart';
 import 'config/app_config.dart';
 import 'home/home_shell.dart';
@@ -88,7 +87,7 @@ class _RiderRouter extends StatelessWidget {
     final status = context.watch<AuthController>().status;
     return switch (status) {
       AuthStatus.unknown => const SplashScreen(),
-      AuthStatus.onboarding => const OnboardingFlow(),
+      AuthStatus.onboarding => const OnboardingFlow(copy: riderOnboardingCopy),
       AuthStatus.authenticated => const HomeShell(),
     };
   }
