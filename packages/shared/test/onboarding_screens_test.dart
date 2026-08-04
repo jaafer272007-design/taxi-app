@@ -92,8 +92,12 @@ void main() {
       api: api,
       tokenStore: InMemoryTokenStore(token),
     );
-    // AuthController starts a periodic resend-cooldown timer; disposing it here
-    // (not in addTearDown of the caller) keeps the pending-timer check happy.
+    // Cleanup only. NOTE: addTearDown runs *after* flutter_test's "a Timer is
+    // still pending" invariant, so it cannot rescue a test that leaves the
+    // resend-cooldown timer running — that has to be handled inside the test
+    // body (see the drain in 'a valid phone is normalised and sent'). Same
+    // reasoning as the `auth?.dispose()` closing apps/rider/test/
+    // trip_golden_test.dart's `_golden` helper.
     addTearDown(auth.dispose);
     return auth;
   }
@@ -125,6 +129,18 @@ void main() {
 
       expect(api.requestOtpCalls, 1);
       expect(api.lastPhone, '+9647701234567');
+      expect(auth.step, OnboardingStep.otp);
+
+      // Reaching the OTP step starts the 60-second resend cooldown — a periodic
+      // timer. Run it out inside the test body: it cancels itself on the last
+      // tick, and a timer that outlives the tree trips flutter_test's
+      // `!timersPending` assertion before any tearDown gets a turn.
+      expect(auth.canResend, isFalse);
+      await tester.pump(
+        const Duration(seconds: AuthController.resendCooldownSeconds),
+      );
+      expect(auth.resendSeconds, 0);
+      expect(auth.canResend, isTrue);
     });
 
     testWidgets('the phone field keeps WESTERN digits — the locked input rule',
