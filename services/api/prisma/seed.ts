@@ -1,34 +1,20 @@
 import { PrismaClient, UserRole } from '@prisma/client';
 import { normalizeIraqiPhone } from '../src/common/phone.util';
 import { seedSuperAdmin } from '../src/admin-auth/seed-super-admin';
+import { seedCorridorGrid } from '../src/corridor/seed-corridors';
 
 /**
  * Idempotent seed:
  *  - ONE ADMIN user (from ADMIN_PHONE) so admin endpoints are testable. The admin
  *    logs in through the normal WhatsApp OTP flow and receives an ADMIN-role JWT.
- *  - A few real corridors (both directions) with a placeholder price band so
- *    multi-corridor search is testable: Najaf↔Karbala, Najaf↔Baghdad,
- *    Karbala↔Baghdad. Admin sets real prices / adds more via /corridors.
+ *  - The FULL corridor grid: every ordered pair of the 18 governorate hubs
+ *    (18 x 17 = 306), priced from distance. See src/corridor/corridor-grid.ts
+ *    for the coordinates and the fare formula. Existing corridors are NEVER
+ *    touched, so a price the admin tuned survives every future deploy.
  *
  * Run: ADMIN_PHONE=+9647700000000 npm run prisma:seed
  */
 const prisma = new PrismaClient();
-
-// Placeholder pricing in IQD (integers). The driver picks the actual price per
-// seat inside [MIN, MAX]; SUGGESTED is what the post-a-trip form prefills.
-// Same 50% / 200% band the driver-set-pricing migration backfills with, so a
-// freshly seeded database and a migrated one behave identically.
-const PLACEHOLDER_SUGGESTED_PRICE_IQD = 5000;
-const PLACEHOLDER_MIN_PRICE_IQD = 2500;
-const PLACEHOLDER_MAX_PRICE_IQD = 10000;
-const CORRIDORS = [
-  { originCity: 'Najaf', destCity: 'Karbala' },
-  { originCity: 'Karbala', destCity: 'Najaf' },
-  { originCity: 'Najaf', destCity: 'Baghdad' },
-  { originCity: 'Baghdad', destCity: 'Najaf' },
-  { originCity: 'Karbala', destCity: 'Baghdad' },
-  { originCity: 'Baghdad', destCity: 'Karbala' },
-];
 
 async function seedAdmin() {
   const raw = process.env.ADMIN_PHONE;
@@ -52,27 +38,15 @@ async function seedAdmin() {
 }
 
 async function seedCorridors() {
-  for (const c of CORRIDORS) {
-    // Idempotent via the (originCity, destCity) unique index. `update: {}` keeps
-    // any admin-adjusted pricing on re-seed.
-    const corridor = await prisma.corridor.upsert({
-      where: {
-        originCity_destCity: { originCity: c.originCity, destCity: c.destCity },
-      },
-      update: {},
-      create: {
-        originCity: c.originCity,
-        destCity: c.destCity,
-        suggestedPricePerSeat: PLACEHOLDER_SUGGESTED_PRICE_IQD,
-        minPricePerSeat: PLACEHOLDER_MIN_PRICE_IQD,
-        maxPricePerSeat: PLACEHOLDER_MAX_PRICE_IQD,
-        active: true,
-      },
-    });
-    console.log(
-      `✔ Corridor ${corridor.originCity}→${corridor.destCity} ` +
-        `(suggested ${corridor.suggestedPricePerSeat} IQD, ` +
-        `allowed ${corridor.minPricePerSeat}–${corridor.maxPricePerSeat})`,
+  const result = await seedCorridorGrid(prisma);
+  console.log(
+    `✔ Corridors: ${result.created} created, ` +
+      `${result.total - result.created} already present (left untouched) — ` +
+      `${result.total}/${result.expected} total`,
+  );
+  if (result.total < result.expected) {
+    throw new Error(
+      `Corridor grid incomplete: ${result.total} rows, expected ${result.expected}.`,
     );
   }
 }

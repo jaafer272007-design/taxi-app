@@ -135,8 +135,16 @@ class TripSearchController extends ChangeNotifier {
     try {
       _corridors = await _api.getCorridors();
       if (_origin == null && _dest == null && _corridors.isNotEmpty) {
-        _origin = _corridors.first.originCity;
-        _dest = _corridors.first.destCity;
+        // Prefer the flagship pair over whichever corridor happens to sort
+        // first — with all 306 pairs served, "first" is alphabetical accident.
+        final preferred = _corridors.firstWhere(
+          (c) =>
+              c.originCity == kDefaultOriginCity &&
+              c.destCity == kDefaultDestCity,
+          orElse: () => _corridors.first,
+        );
+        _origin = preferred.originCity;
+        _dest = preferred.destCity;
       }
     } on ApiException catch (e) {
       _corridorsError = e.message;

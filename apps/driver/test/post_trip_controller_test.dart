@@ -10,7 +10,7 @@ PostTripController _controller(FakeDriverTripApi api, {int maxSeats = 4}) =>
 
 void main() {
   group('PostTripController', () {
-    test('loadCorridors filters inactive corridors and defaults from/to first',
+    test('loadCorridors filters inactive corridors and picks the default pair',
         () async {
       final api = FakeDriverTripApi()
         ..corridors = const [
@@ -378,6 +378,90 @@ void main() {
       expect(await c.submit(), isFalse);
       expect(c.error, contains('غير مفعّل'));
       expect(c.priceError, isNull);
+    });
+  });
+
+  group('default city pair at full-grid scale', () {
+    test('opens on the flagship pair, not whichever sorts first', () async {
+      // 306 corridors means the API's first row is alphabetical accident.
+      final api = FakeDriverTripApi()
+        ..corridors = const [
+          Corridor(
+            id: 'c-amarah',
+            originCity: 'Amarah',
+            destCity: 'Baghdad',
+            active: true,
+            suggestedPricePerSeat: 30000,
+            minPricePerSeat: 18000,
+            maxPricePerSeat: 48000,
+          ),
+          najafKarbala,
+          karbalaNajaf,
+        ];
+      final c = _controller(api);
+
+      await c.loadCorridors();
+
+      expect(c.origin, 'Najaf');
+      expect(c.dest, 'Karbala');
+      // …and the price prefills from the flagship corridor, not the accident.
+      expect(c.priceInput, '6000');
+    });
+
+    test('falls back to the first active corridor when the flagship is gone',
+        () async {
+      final api = FakeDriverTripApi()
+        ..corridors = const [
+          Corridor(
+            id: 'c-amarah',
+            originCity: 'Amarah',
+            destCity: 'Baghdad',
+            active: true,
+            suggestedPricePerSeat: 30000,
+            minPricePerSeat: 18000,
+            maxPricePerSeat: 48000,
+          ),
+        ];
+      final c = _controller(api);
+
+      await c.loadCorridors();
+
+      expect(c.origin, 'Amarah');
+      expect(c.dest, 'Baghdad');
+      expect(c.priceInput, '30000');
+      expect(c.canSubmit, isTrue);
+    });
+
+    test('a deactivated flagship is skipped, not selected', () async {
+      // loadCorridors filters inactive first, so an admin disabling
+      // Najaf→Karbala must not leave the form pointing at a dead corridor.
+      final api = FakeDriverTripApi()
+        ..corridors = const [
+          Corridor(
+            id: 'c1',
+            originCity: 'Najaf',
+            destCity: 'Karbala',
+            active: false,
+            suggestedPricePerSeat: 12000,
+            minPricePerSeat: 7000,
+            maxPricePerSeat: 19000,
+          ),
+          Corridor(
+            id: 'c-amarah',
+            originCity: 'Amarah',
+            destCity: 'Baghdad',
+            active: true,
+            suggestedPricePerSeat: 30000,
+            minPricePerSeat: 18000,
+            maxPricePerSeat: 48000,
+          ),
+        ];
+      final c = _controller(api);
+
+      await c.loadCorridors();
+
+      expect(c.origin, 'Amarah');
+      expect(c.matchedCorridor?.active, isTrue);
     });
   });
 }
