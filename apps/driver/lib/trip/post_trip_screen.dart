@@ -516,12 +516,22 @@ class _PriceGuidance extends StatelessWidget {
   Widget build(BuildContext context) {
     final style =
         context.text.caption.copyWith(color: context.colors.textSecondary);
-    return Text(
-      min == max
-          ? 'السعر على هذا المسار ثابت: ${formatPrice(min)}'
-          : 'المعتاد على هذا المسار: ${formatIqd(suggested)}'
-              ' · المسموح: ${formatIqd(min)} – ${formatPrice(max)}',
-      style: style,
+
+    if (min == max) {
+      return Text('السعر على هذا المسار ثابت: ${formatPrice(min)}', style: style);
+    }
+
+    // Two lines rather than one joined by " · ". A middle dot next to an
+    // Arabic-Indic numeral is unreadable: `٠` IS a dot, so "· ٦٬٠٠٠" reads as
+    // "٠٦٬٠٠٠", and being a bidi-neutral it can be reordered onto the wrong
+    // side of the number as well. Two lines also scan better than one long one.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('المعتاد على هذا المسار: ${formatPrice(suggested)}', style: style),
+        Text('المسموح: ${formatIqd(min)} – ${formatPrice(max)}', style: style),
+      ],
     );
   }
 }
@@ -580,7 +590,10 @@ class _FullCarRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.baseline,
       textBaseline: TextBaseline.alphabetic,
       children: [
-        Text('إذا امتلأت · ${formatSeats(seatCount)}',
+        // No " · " before the seat count: for 3+ seats formatSeats starts with
+        // an Arabic-Indic digit, and a middle dot beside one reads as ٠ — a
+        // driver offering 3 seats saw "٣٠ مقاعد".
+        Text('إذا امتلأت ${formatSeats(seatCount)}',
             style: context.text.body.copyWith(color: colors.textSecondary)),
         const Spacer(),
         if (value == null)

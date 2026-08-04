@@ -75,6 +75,33 @@ void main() {
       expect(find.textContaining('المسموح: ٣٬٠٠٠ – ١٢٬٠٠٠'), findsOneWidget);
     });
 
+    testWidgets('never puts a dot beside an Arabic-Indic numeral', (tester) async {
+      // `٠` IS a dot, so "· ٣" reads as "٣٠" — a driver offering 3 seats saw
+      // "٣٠ مقاعد". Being bidi-neutral, the dot can also be reordered onto the
+      // wrong side of the number. Guard every rendered string on this screen.
+      final c = await controller();
+      c.setSeatCount(3);
+      await tester.pumpWidget(host(c));
+
+      final offenders = tester
+          .widgetList<Text>(find.byType(Text))
+          .map((t) => t.data)
+          .whereType<String>()
+          .where((s) => RegExp(r'·\s*[٠-٩]|[٠-٩]\s*·').hasMatch(s))
+          .toList();
+
+      expect(offenders, isEmpty,
+          reason: 'a middle dot touches an Arabic-Indic digit in: $offenders');
+    });
+
+    testWidgets('the seat line reads as 3 seats, not 30', (tester) async {
+      final c = await controller();
+      c.setSeatCount(3);
+      await tester.pumpWidget(host(c));
+
+      expect(find.text('إذا امتلأت ٣ مقاعد'), findsOneWidget);
+    });
+
     testWidgets('the full-car total follows what is typed, live',
         (tester) async {
       final c = await controller();
