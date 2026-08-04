@@ -508,7 +508,13 @@ class _BookingCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis),
                     SizedBox(height: space.xs),
-                    Text('${formatSeats(booking.seatCount)} · ${formatPrice(booking.fare)}',
+                    // "بـ" and not " · ": formatPrice always STARTS with an
+                    // Arabic-Indic digit, and `٠` is a dot — the separator
+                    // fused onto the fare, so ٦٬٠٠٠ read as ٦٬٠٠٠٠ on the very
+                    // screen where the driver counts cash against a passenger.
+                    // A strong Arabic letter can neither be mistaken for a
+                    // digit nor be reordered by bidi.
+                    Text('${formatSeats(booking.seatCount)} بـ${formatPrice(booking.fare)}',
                         style: context.text.caption
                             .copyWith(color: colors.textMuted)),
                   ],

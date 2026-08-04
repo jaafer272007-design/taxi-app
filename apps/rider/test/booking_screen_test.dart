@@ -63,7 +63,7 @@ void main() {
     // 2 seats → total 12,000 د.ع.
     expect(c.seatCount, 2);
     expect(find.text('١٢٬٠٠٠ د.ع'), findsOneWidget);
-    expect(find.text('الإجمالي · مقعدان'), findsOneWidget);
+    expect(find.text('الإجمالي لـمقعدان'), findsOneWidget);
 
     _seatTileTap(tester, '١')!();
     await tester.pump();
@@ -107,5 +107,28 @@ void main() {
     // Chosen labels replace the prompts.
     expect(find.text('حي السلام'), findsOneWidget);
     expect(find.text('قرب المستشفى'), findsOneWidget);
+  });
+
+  testWidgets('the total line reads as 3 seats, not 30', (tester) async {
+    // `٠` IS a dot, so the old "الإجمالي · ٣ مقاعد" read as "٣٠ مقاعد". It was
+    // invisible at 1 and 2 seats, because the Arabic dual ("مقعدان") carries no
+    // digit for a separator to fuse with — which is exactly why the golden,
+    // fixtured at 2 seats, never caught it.
+    final c = _controller(seatsAvailable: 4);
+    await tester.pumpWidget(_host(c));
+
+    c.setSeatCount(3);
+    await tester.pump();
+
+    expect(find.text('الإجمالي لـ٣ مقاعد'), findsOneWidget);
+
+    final offenders = tester
+        .widgetList<Text>(find.byType(Text))
+        .map((t) => t.data)
+        .whereType<String>()
+        .where((s) => RegExp(r'·\s*[٠-٩]|[٠-٩]\s*·').hasMatch(s))
+        .toList();
+    expect(offenders, isEmpty,
+        reason: 'a middle dot touches an Arabic-Indic digit in: $offenders');
   });
 }
