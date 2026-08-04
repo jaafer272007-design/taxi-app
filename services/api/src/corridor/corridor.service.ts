@@ -23,13 +23,20 @@ export class CorridorService {
 
   async create(dto: CreateCorridorDto): Promise<Corridor> {
     this.assertDistinct(dto.originCity, dto.destCity);
+    this.assertPriceBand(
+      dto.minPricePerSeat,
+      dto.suggestedPricePerSeat,
+      dto.maxPricePerSeat,
+    );
     await this.assertPairFree(dto.originCity, dto.destCity);
     try {
       return await this.prisma.corridor.create({
         data: {
           originCity: dto.originCity,
           destCity: dto.destCity,
-          pricePerSeat: dto.pricePerSeat,
+          suggestedPricePerSeat: dto.suggestedPricePerSeat,
+          minPricePerSeat: dto.minPricePerSeat,
+          maxPricePerSeat: dto.maxPricePerSeat,
           active: true,
         },
       });
@@ -43,6 +50,15 @@ export class CorridorService {
     if (!existing) {
       throw new NotFoundException('الممر غير موجود.');
     }
+
+    // A partial price update has to be validated against the MERGED row, not
+    // against the payload: raising only `minPricePerSeat` can still push it past
+    // a `suggestedPricePerSeat` that isn't in this request at all.
+    this.assertPriceBand(
+      dto.minPricePerSeat ?? existing.minPricePerSeat,
+      dto.suggestedPricePerSeat ?? existing.suggestedPricePerSeat,
+      dto.maxPricePerSeat ?? existing.maxPricePerSeat,
+    );
 
     // If the city pair is being changed, re-validate it (distinct + not already
     // taken by ANOTHER corridor). Price / active toggles skip these checks.
@@ -66,6 +82,29 @@ export class CorridorService {
       throw new BadRequestException(
         'لا يمكن أن تكون مدينة الانطلاق والوصول متطابقتين.',
       );
+    }
+  }
+
+  /**
+   * The corridor's pricing invariant: `0 < min <= suggested <= max`.
+   *
+   * Positivity is already covered per-field by the DTOs; it is re-asserted here
+   * because `update` merges the payload with the stored row, and a row written
+   * before this rule existed must not slip through. The messages name WHICH
+   * bound is wrong so the admin panel can point at the offending field.
+   */
+  private assertPriceBand(min: number, suggested: number, max: number): void {
+    if (min < 1 || suggested < 1 || max < 1) {
+      throw new BadRequestException('الأسعار يجب أن تكون أكبر من صفر.');
+    }
+    if (min > max) {
+      throw new BadRequestException('أدنى سعر يجب أن يكون أقل من أعلى سعر أو مساوياً له.');
+    }
+    if (suggested < min) {
+      throw new BadRequestException('السعر المقترح يجب ألّا يقل عن أدنى سعر.');
+    }
+    if (suggested > max) {
+      throw new BadRequestException('السعر المقترح يجب ألّا يزيد على أعلى سعر.');
     }
   }
 

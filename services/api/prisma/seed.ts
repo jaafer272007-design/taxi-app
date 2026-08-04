@@ -6,7 +6,7 @@ import { seedSuperAdmin } from '../src/admin-auth/seed-super-admin';
  * Idempotent seed:
  *  - ONE ADMIN user (from ADMIN_PHONE) so admin endpoints are testable. The admin
  *    logs in through the normal WhatsApp OTP flow and receives an ADMIN-role JWT.
- *  - A few real corridors (both directions) with a placeholder price so
+ *  - A few real corridors (both directions) with a placeholder price band so
  *    multi-corridor search is testable: Najaf↔Karbala, Najaf↔Baghdad,
  *    Karbala↔Baghdad. Admin sets real prices / adds more via /corridors.
  *
@@ -14,8 +14,13 @@ import { seedSuperAdmin } from '../src/admin-auth/seed-super-admin';
  */
 const prisma = new PrismaClient();
 
-// Placeholder fare in IQD (integer). Admin adjusts it later.
-const PLACEHOLDER_PRICE_IQD = 5000;
+// Placeholder pricing in IQD (integers). The driver picks the actual price per
+// seat inside [MIN, MAX]; SUGGESTED is what the post-a-trip form prefills.
+// Same 50% / 200% band the driver-set-pricing migration backfills with, so a
+// freshly seeded database and a migrated one behave identically.
+const PLACEHOLDER_SUGGESTED_PRICE_IQD = 5000;
+const PLACEHOLDER_MIN_PRICE_IQD = 2500;
+const PLACEHOLDER_MAX_PRICE_IQD = 10000;
 const CORRIDORS = [
   { originCity: 'Najaf', destCity: 'Karbala' },
   { originCity: 'Karbala', destCity: 'Najaf' },
@@ -49,7 +54,7 @@ async function seedAdmin() {
 async function seedCorridors() {
   for (const c of CORRIDORS) {
     // Idempotent via the (originCity, destCity) unique index. `update: {}` keeps
-    // any admin-adjusted price on re-seed.
+    // any admin-adjusted pricing on re-seed.
     const corridor = await prisma.corridor.upsert({
       where: {
         originCity_destCity: { originCity: c.originCity, destCity: c.destCity },
@@ -58,12 +63,16 @@ async function seedCorridors() {
       create: {
         originCity: c.originCity,
         destCity: c.destCity,
-        pricePerSeat: PLACEHOLDER_PRICE_IQD,
+        suggestedPricePerSeat: PLACEHOLDER_SUGGESTED_PRICE_IQD,
+        minPricePerSeat: PLACEHOLDER_MIN_PRICE_IQD,
+        maxPricePerSeat: PLACEHOLDER_MAX_PRICE_IQD,
         active: true,
       },
     });
     console.log(
-      `✔ Corridor ${corridor.originCity}→${corridor.destCity} (${corridor.pricePerSeat} IQD)`,
+      `✔ Corridor ${corridor.originCity}→${corridor.destCity} ` +
+        `(suggested ${corridor.suggestedPricePerSeat} IQD, ` +
+        `allowed ${corridor.minPricePerSeat}–${corridor.maxPricePerSeat})`,
     );
   }
 }

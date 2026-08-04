@@ -83,7 +83,11 @@ model Corridor {
   originCity String  // "Najaf" — من قائمة المدن الرسمية (18 محافظة)
   destCity   String  // "Karbala"
   active     Boolean @default(true)
-  pricePerSeat Int    // ثابت يحدده الأدمن (IQD)
+  // Phase 1 amendment (تسعير يحدده السائق): الأدمن ما عاد يحدد الأجرة؛ يحدد
+  // اقتراحاً + حدّين. القيد: 0 < min <= suggested <= max (يفرضه CorridorService).
+  suggestedPricePerSeat Int // السعر المعتاد على هذا المسار (IQD)
+  minPricePerSeat       Int // أدنى سعر مسموح للسائق (IQD)
+  maxPricePerSeat       Int // أعلى سعر مسموح للسائق (IQD)
   trips      Trip[]
   @@unique([originCity, destCity]) // ممر واحد لكل زوج (اتجاه)؛ يمنع التكرار
 }
@@ -101,7 +105,7 @@ model Trip {
   departNow     Boolean       @default(false)
   seatsTotal    Int
   seatsAvailable Int
-  pricePerSeat  Int
+  pricePerSeat  Int           // Phase 1 amendment: يحدده **السائق** عند النشر ضمن حدود الممر
   status        TripStatus    @default(OPEN)
   createdBy     TripCreatedBy @default(DRIVER)
   tripType      TripType      @default(GENERAL) // Phase 1 amendment: عامة / نسائية-عائلية
@@ -215,12 +219,12 @@ model AdminUser {
 **قبول:** سائق يرفع مستمسكاته → أدمن يعتمده → يقدر يعلن رحلة.
 
 ### `corridor` (أدمن)
-- `GET /corridors` (أي مستخدم مُصادَق) · `POST /corridors` `{ originCity, destCity, pricePerSeat }` · `PATCH /corridors/:id` (سعر/تفعيل/تعطيل). الإنشاء/التعديل **admin فقط** (RolesGuard).
+- `GET /corridors` (أي مستخدم مُصادَق — يرجّع `suggestedPricePerSeat` و `minPricePerSeat` و `maxPricePerSeat`) · `POST /corridors` `{ originCity, destCity, suggestedPricePerSeat, minPricePerSeat, maxPricePerSeat }` · `PATCH /corridors/:id` (أسعار/تفعيل/تعطيل). الإنشاء/التعديل **admin فقط** (RolesGuard). **Phase 1 amendment:** الأسعار الثلاثة أعداد صحيحة موجبة، ويُرفض أي طلب يكسر `min <= suggested <= max` بـ `400` عربي يسمّي الحدّ المخالف — وبالتعديل الجزئي يُدمج المُرسَل مع الصف المخزون قبل الفحص.
 - **Phase 1 amendment (مدن كل المحافظات):** `originCity`/`destCity` يجب أن تكونا من قائمة المدن الرسمية (18) وإلا **400**؛ نفس المدينة للطرفين **400**؛ تكرار زوج `(origin,dest)` **409** (مع فهرس فريد بالـ DB). الأدمن ينشئ ممراً بين أي مدينتين فيصبح قابلاً للبحث/النشر فوراً.
 **قبول:** ممر النجف↔كربلاء (اتجاهين) موجود بسعر/مقعد محدد؛ يمكن إضافة ممرات أخرى (مثل نجف↔بغداد).
 
 ### `trip` (جانب السائق)
-- `POST /trips` `{ corridorId, departureTime | departNow, seatsTotal, tripType? }` (يأخذ pricePerSeat من الممر). **Phase 1 amendment:** `tripType` (`GENERAL` افتراضياً · `WOMEN_FAMILY`).
+- `POST /trips` `{ corridorId, departureTime | departNow, seatsTotal, pricePerSeat, tripType? }`. **Phase 1 amendment:** `tripType` (`GENERAL` افتراضياً · `WOMEN_FAMILY`). **Phase 1 amendment (تسعير يحدده السائق):** `pricePerSeat` **مطلوب** ويحدده السائق (عدد صحيح موجب، IQD)؛ يُفحص على الخادم مقابل `[minPricePerSeat, maxPricePerSeat]` للممر، وخارجها → `400` يحمل رسالة عربية تذكر المدى مع `code: "TRIP_PRICE_OUT_OF_RANGE"` و `minPricePerSeat`/`maxPricePerSeat` كأرقام (حتى يعيد تطبيق السائق عرض المدى بالأرقام العربية-الهندية). السعر يُخزَّن لقطةً على الرحلة، فتغيير الأدمن للممر لاحقاً لا يمسّ رحلة منشورة ولا أجرة حجز قائم.
 - `GET /trips/mine` · `POST /trips/:id/start` → EN_ROUTE (يقفل) · `POST /trips/:id/complete` → COMPLETED (+ EarningsRecord) · `POST /trips/:id/cancel`.
 **قواعد:** `seatsTotal ≤ vehicle.seats`. سائق مُعتمد فقط. `departNow=true` → departureTime=now، ونافذة صلاحية افتراضية 30 دقيقة (قابلة للتمديد). **سائق أي جنس يقدر يعلن رحلة `WOMEN_FAMILY`** (تقييد الركّاب يُفرض عند الحجز، لا عند النشر).
 **قبول:** سائق مُعتمد يعلن رحلة نجف→كربلاء بمقاعد؛ تظهر OPEN.
@@ -260,7 +264,9 @@ model AdminUser {
 
 ## 6. قواعد تجارية مهمة
 - **مخزون المقاعد:** transactional حصراً (قسم booking).
-- **التسعير:** ثابت لكل ممر من الأدمن؛ `fare = pricePerSeat × seatCount`.
+- **التسعير (Phase 1 amendment — يحدده السائق):** **السائق** يحدد سعر المقعد عند نشر الرحلة؛ الممر يعطي **اقتراحاً** (`suggestedPricePerSeat`) وحدّين (`min`/`max`) يضبطهما الأدمن. الأجرة تبقى `fare = trip.pricePerSeat × seatCount` بلا تغيير.
+  - **لماذا:** هيك تشتغل الكراجات العراقية فعلياً (السائق يعلن سعره)؛ السعر الواحد الثابت ما ينفع لمسارات تختلف مسافاتها اختلافاً كبيراً؛ ويصير بإمكان الراكب يقارن أسعار السائقين على نفس المسار.
+  - **الحدود** تحمي من الخطأ المطبعي ومن الاستغلال، بلا ما تلغي حرية السائق. الترحيل اشتق حدوداً واسعة عمداً (٥٠٪ – ٢٠٠٪ من السعر القديم، مقرّبة لأقرب ٢٥٠ IQD) حتى لا يتحوّل ترحيل بيانات إلى قرار منتج صامت؛ الأدمن يضيّقها لكل ممر من اللوحة.
 - **قفل الرحلة:** تلقائي عند `seatsAvailable=0` أو عند `departureTime`؛ أو يدوي ببدء السائق.
 - **No-show:** السائق يعلّمها → تؤثر على سمعة الراكب (لا خصم مالي بالـ MVP).
 - **إلغاء السائق للرحلة:** كل الحجوزات CANCELLED + إشعار الركّاب فوراً.
