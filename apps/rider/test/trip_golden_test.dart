@@ -3,9 +3,7 @@ import 'package:flutter/services.dart' show rootBundle, FontLoader;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import 'package:rider/auth/name_screen.dart';
-import 'package:rider/auth/otp_screen.dart';
-import 'package:rider/auth/phone_screen.dart';
+import 'package:rider/auth/onboarding_copy.dart';
 import 'package:rider/trip/results_screen.dart';
 import 'package:rider/trip/search_screen.dart';
 import 'package:rider/trip/trip_details_screen.dart';
@@ -40,14 +38,14 @@ void main() {
           name: 'onboarding_phone_light',
           brightness: Brightness.light,
           auth: _freshAuth(),
-          child: const PhoneScreen());
+          child: const PhoneScreen(copy: riderOnboardingCopy));
     });
     testWidgets('dark', (t) async {
       await _golden(t,
           name: 'onboarding_phone_dark',
           brightness: Brightness.dark,
           auth: _freshAuth(),
-          child: const PhoneScreen());
+          child: const PhoneScreen(copy: riderOnboardingCopy));
     });
   });
 
@@ -74,14 +72,14 @@ void main() {
           name: 'rider_profile_light',
           brightness: Brightness.light,
           auth: _freshAuth(),
-          child: const NameScreen());
+          child: const NameScreen(copy: riderOnboardingCopy));
     });
     testWidgets('dark', (t) async {
       await _golden(t,
           name: 'rider_profile_dark',
           brightness: Brightness.dark,
           auth: _freshAuth(),
-          child: const NameScreen());
+          child: const NameScreen(copy: riderOnboardingCopy));
     });
   });
 

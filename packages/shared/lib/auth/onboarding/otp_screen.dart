@@ -1,9 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared/shared.dart';
 
+import '../../format/numerals.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/app_button.dart';
+import '../../widgets/app_icons.dart';
+import '../../widgets/app_scaffold.dart';
+import '../../widgets/onboarding_header.dart';
+import '../../widgets/otp_input.dart';
+import '../auth_controller.dart';
 
 /// Step 2 — OTP verification.
+///
+/// Takes no [OnboardingCopy]: every string here is the same for a rider and a
+/// driver, and an unused parameter for symmetry would be a lie about what
+/// varies.
 class OtpScreen extends StatefulWidget {
   const OtpScreen({super.key});
 

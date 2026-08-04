@@ -1,4 +1,4 @@
-import 'package:driver/auth/name_screen.dart';
+import 'package:driver/auth/onboarding_copy.dart';
 import 'package:driver/driver/become_driver_screen.dart';
 import 'package:driver/driver/documents_screen.dart';
 import 'package:driver/driver/driver_controller.dart';
@@ -80,7 +80,7 @@ Future<Widget> _profile() async {
   final auth =
       AuthController(api: FakeAuthApi(), tokenStore: InMemoryTokenStore());
   return ChangeNotifierProvider<AuthController>.value(
-      value: auth, child: const NameScreen());
+      value: auth, child: const NameScreen(copy: driverOnboardingCopy));
 }
 
 Future<DriverController> _driver(DriverProfile? profile) async {

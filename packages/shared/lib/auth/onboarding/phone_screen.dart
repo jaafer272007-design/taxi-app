@@ -1,11 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:shared/shared.dart';
 
-/// Step 1 — phone entry (driver login).
+import '../../net/iraqi_phone.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/app_button.dart';
+import '../../widgets/app_icons.dart';
+import '../../widgets/app_scaffold.dart';
+import '../../widgets/app_text_field.dart';
+import '../../widgets/onboarding_header.dart';
+import '../auth_controller.dart';
+import 'onboarding_copy.dart';
+
+/// Step 1 — phone entry. Shared by both apps; only the header copy differs.
 class PhoneScreen extends StatefulWidget {
-  const PhoneScreen({super.key});
+  const PhoneScreen({super.key, required this.copy});
+
+  /// The app-specific header strings. See [OnboardingCopy].
+  final OnboardingCopy copy;
 
   @override
   State<PhoneScreen> createState() => _PhoneScreenState();
@@ -51,12 +63,12 @@ class _PhoneScreenState extends State<PhoneScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(height: space.xl2),
-          const OnboardingHeader(
+          OnboardingHeader(
             step: 1,
             totalSteps: 3,
             icon: AppIcons.car,
-            title: 'سائق تكسي مشترك',
-            subtitle: 'سجّل دخولك برقم موبايلك لإعلان رحلاتك بين المحافظات.',
+            title: widget.copy.phoneTitle,
+            subtitle: widget.copy.phoneSubtitle,
           ),
           SizedBox(height: space.xl3),
           AppTextField(
