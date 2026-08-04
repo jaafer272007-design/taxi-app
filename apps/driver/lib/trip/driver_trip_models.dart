@@ -1,26 +1,45 @@
 /// A corridor (one direction, e.g. Najaf → Karbala). GET /corridors returns both
 /// directions; `active: false` corridors can't be posted on.
+///
+/// The corridor does NOT set the fare — the driver does, when posting. What the
+/// admin publishes here is a suggestion ([suggestedPricePerSeat]) and the band
+/// the driver's price has to land in ([minPricePerSeat] … [maxPricePerSeat]).
+/// The backend guarantees `0 < min <= suggested <= max`.
 class Corridor {
   const Corridor({
     required this.id,
     required this.originCity,
     required this.destCity,
     required this.active,
-    required this.pricePerSeat,
+    required this.suggestedPricePerSeat,
+    required this.minPricePerSeat,
+    required this.maxPricePerSeat,
   });
 
   final String id;
   final String originCity;
   final String destCity;
   final bool active;
-  final int pricePerSeat;
+
+  /// The usual price on this route, in IQD — what the post-a-trip form prefills.
+  final int suggestedPricePerSeat;
+
+  /// Inclusive bounds on what the driver may charge per seat, in IQD.
+  final int minPricePerSeat;
+  final int maxPricePerSeat;
+
+  /// True when the admin pinned this route to a single price (min == max), so
+  /// the form can say "ثابت" instead of offering a range.
+  bool get isFixedPrice => minPricePerSeat == maxPricePerSeat;
 
   factory Corridor.fromJson(Map<String, dynamic> json) => Corridor(
         id: json['id'] as String,
         originCity: json['originCity'] as String,
         destCity: json['destCity'] as String,
         active: json['active'] as bool? ?? true,
-        pricePerSeat: (json['pricePerSeat'] as num).toInt(),
+        suggestedPricePerSeat: (json['suggestedPricePerSeat'] as num).toInt(),
+        minPricePerSeat: (json['minPricePerSeat'] as num).toInt(),
+        maxPricePerSeat: (json['maxPricePerSeat'] as num).toInt(),
       );
 }
 

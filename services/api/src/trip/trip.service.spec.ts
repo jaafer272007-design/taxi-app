@@ -16,6 +16,14 @@ import { TripService } from './trip.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DriverService } from '../driver/driver.service';
 import { CorridorService } from '../corridor/corridor.service';
+import { TRIP_PRICE_OUT_OF_RANGE } from './trip-errors';
+
+/**
+ * The admin-set band every corridor fixture carries. 7000 (the price the tests
+ * post at) sits inside it, so the range check is satisfied everywhere except in
+ * the tests that deliberately probe it.
+ */
+const BAND = { suggestedPricePerSeat: 6000, minPricePerSeat: 3000, maxPricePerSeat: 12000 };
 
 describe('TripService.createTrip', () => {
   let prisma: { vehicle: { findUnique: jest.Mock }; trip: { create: jest.Mock } };
@@ -46,7 +54,7 @@ describe('TripService.createTrip', () => {
   it('propagates the approved-driver gate (403) and never creates a trip', async () => {
     drivers.assertApprovedDriver.mockRejectedValue(new ForbiddenException('not approved'));
     await expect(
-      service.createTrip('u1', { corridorId: 'c1', departNow: true, seatsTotal: 3 }),
+      service.createTrip('u1', { corridorId: 'c1', departNow: true, seatsTotal: 3, pricePerSeat: 7000 }),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(prisma.trip.create).not.toHaveBeenCalled();
   });
@@ -54,16 +62,16 @@ describe('TripService.createTrip', () => {
   it('rejects seatsTotal greater than the vehicle capacity', async () => {
     prisma.vehicle.findUnique.mockResolvedValue({ id: 'v1', seats: 4 });
     await expect(
-      service.createTrip('u1', { corridorId: 'c1', departNow: true, seatsTotal: 5 }),
+      service.createTrip('u1', { corridorId: 'c1', departNow: true, seatsTotal: 5, pricePerSeat: 7000 }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(prisma.trip.create).not.toHaveBeenCalled();
   });
 
-  it('creates an OPEN trip, snapshots corridor price, seatsAvailable = seatsTotal', async () => {
+  it("creates an OPEN trip at the DRIVER's price, seatsAvailable = seatsTotal", async () => {
     prisma.vehicle.findUnique.mockResolvedValue({ id: 'v1', seats: 4 });
-    corridors.findById.mockResolvedValue({ id: 'c1', active: true, pricePerSeat: 7000 });
+    corridors.findById.mockResolvedValue({ id: 'c1', active: true, ...BAND });
 
-    await service.createTrip('u1', { corridorId: 'c1', departNow: true, seatsTotal: 4 });
+    await service.createTrip('u1', { corridorId: 'c1', departNow: true, seatsTotal: 4, pricePerSeat: 7000 });
 
     const data = prisma.trip.create.mock.calls[0][0].data;
     expect(data).toMatchObject({
@@ -81,9 +89,9 @@ describe('TripService.createTrip', () => {
 
   it('rejects an inactive corridor', async () => {
     prisma.vehicle.findUnique.mockResolvedValue({ id: 'v1', seats: 4 });
-    corridors.findById.mockResolvedValue({ id: 'c1', active: false, pricePerSeat: 5000 });
+    corridors.findById.mockResolvedValue({ id: 'c1', active: false, ...BAND });
     await expect(
-      service.createTrip('u1', { corridorId: 'c1', departNow: true, seatsTotal: 2 }),
+      service.createTrip('u1', { corridorId: 'c1', departNow: true, seatsTotal: 2, pricePerSeat: 7000 }),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
@@ -91,50 +99,141 @@ describe('TripService.createTrip', () => {
     prisma.vehicle.findUnique.mockResolvedValue({ id: 'v1', seats: 4 });
     corridors.findById.mockResolvedValue(null);
     await expect(
-      service.createTrip('u1', { corridorId: 'nope', departNow: true, seatsTotal: 2 }),
+      service.createTrip('u1', { corridorId: 'nope', departNow: true, seatsTotal: 2, pricePerSeat: 7000 }),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('rejects a scheduled trip whose departureTime is in the past', async () => {
     prisma.vehicle.findUnique.mockResolvedValue({ id: 'v1', seats: 4 });
-    corridors.findById.mockResolvedValue({ id: 'c1', active: true, pricePerSeat: 5000 });
+    corridors.findById.mockResolvedValue({ id: 'c1', active: true, ...BAND });
     const past = new Date(Date.now() - 60_000).toISOString();
     await expect(
-      service.createTrip('u1', { corridorId: 'c1', departureTime: past, seatsTotal: 2 }),
+      service.createTrip('u1', { corridorId: 'c1', departureTime: past, seatsTotal: 2, pricePerSeat: 7000 }),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('rejects sending BOTH departNow and departureTime (EITHER/OR contract)', async () => {
     prisma.vehicle.findUnique.mockResolvedValue({ id: 'v1', seats: 4 });
-    corridors.findById.mockResolvedValue({ id: 'c1', active: true, pricePerSeat: 5000 });
+    corridors.findById.mockResolvedValue({ id: 'c1', active: true, ...BAND });
     const future = new Date(Date.now() + 3_600_000).toISOString();
     await expect(
-      service.createTrip('u1', { corridorId: 'c1', departNow: true, departureTime: future, seatsTotal: 2 }),
+      service.createTrip('u1', { corridorId: 'c1', departNow: true, departureTime: future, seatsTotal: 2, pricePerSeat: 7000 }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(prisma.trip.create).not.toHaveBeenCalled();
   });
 
   it('defaults tripType to GENERAL when omitted', async () => {
     prisma.vehicle.findUnique.mockResolvedValue({ id: 'v1', seats: 4 });
-    corridors.findById.mockResolvedValue({ id: 'c1', active: true, pricePerSeat: 6000 });
+    corridors.findById.mockResolvedValue({ id: 'c1', active: true, ...BAND });
 
-    await service.createTrip('u1', { corridorId: 'c1', departNow: true, seatsTotal: 3 });
+    await service.createTrip('u1', { corridorId: 'c1', departNow: true, seatsTotal: 3, pricePerSeat: 7000 });
 
     expect(prisma.trip.create.mock.calls[0][0].data.tripType).toBe(TripType.GENERAL);
   });
 
   it('posts a WOMEN_FAMILY trip when requested (the driver may be any gender)', async () => {
     prisma.vehicle.findUnique.mockResolvedValue({ id: 'v1', seats: 4 });
-    corridors.findById.mockResolvedValue({ id: 'c1', active: true, pricePerSeat: 6000 });
+    corridors.findById.mockResolvedValue({ id: 'c1', active: true, ...BAND });
 
     await service.createTrip('u1', {
       corridorId: 'c1',
       departNow: true,
       seatsTotal: 3,
+      pricePerSeat: 7000,
       tripType: TripType.WOMEN_FAMILY,
     });
 
     expect(prisma.trip.create.mock.calls[0][0].data.tripType).toBe(TripType.WOMEN_FAMILY);
+  });
+
+  describe('driver-set price, bracketed by the corridor', () => {
+    beforeEach(() => {
+      prisma.vehicle.findUnique.mockResolvedValue({ id: 'v1', seats: 4 });
+      corridors.findById.mockResolvedValue({ id: 'c1', active: true, ...BAND });
+    });
+
+    const post = (pricePerSeat: number) =>
+      service.createTrip('u1', {
+        corridorId: 'c1',
+        departNow: true,
+        seatsTotal: 3,
+        pricePerSeat,
+      });
+
+    it('stores the price the DRIVER named, not the corridor suggestion', async () => {
+      await post(9500);
+
+      expect(prisma.trip.create.mock.calls[0][0].data.pricePerSeat).toBe(9500);
+      // The suggestion is exactly that — never written to the trip.
+      expect(prisma.trip.create.mock.calls[0][0].data.pricePerSeat).not.toBe(
+        BAND.suggestedPricePerSeat,
+      );
+    });
+
+    it.each([
+      ['at the minimum', BAND.minPricePerSeat],
+      ['at the maximum', BAND.maxPricePerSeat],
+      ['below the suggestion', 4000],
+      ['above the suggestion', 11000],
+    ])('accepts a price %s', async (_label, price) => {
+      await post(price);
+      expect(prisma.trip.create.mock.calls[0][0].data.pricePerSeat).toBe(price);
+    });
+
+    it.each([
+      ['under the minimum', BAND.minPricePerSeat - 1],
+      ['over the maximum', BAND.maxPricePerSeat + 1],
+    ])('rejects a price %s (400) without creating', async (_label, price) => {
+      await expect(post(price)).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.trip.create).not.toHaveBeenCalled();
+    });
+
+    it('names the allowed range in the 400 body, in Arabic and as numbers', async () => {
+      // Two audiences in one payload: `message` is what any client shows
+      // verbatim, `code` + bounds are what the driver app uses to re-render the
+      // range in Arabic-Indic numerals.
+      const err = await post(999).catch((e) => e);
+
+      expect(err).toBeInstanceOf(BadRequestException);
+      const body = err.getResponse();
+      expect(body.code).toBe(TRIP_PRICE_OUT_OF_RANGE);
+      expect(body.minPricePerSeat).toBe(3000);
+      expect(body.maxPricePerSeat).toBe(12000);
+      expect(body.message).toContain('3000');
+      expect(body.message).toContain('12000');
+      // Arabic, ready to show as-is.
+      expect(body.message).toMatch(/[؀-ۿ]/);
+    });
+
+    it('checks the price BEFORE any of the expensive work', async () => {
+      // Ordering matters for the inactive-corridor case below it: a rejected
+      // price must not depend on which check happens to run first.
+      await expect(post(999)).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.trip.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects an inactive corridor even when the price is valid', async () => {
+      corridors.findById.mockResolvedValue({ id: 'c1', active: false, ...BAND });
+      await expect(post(6000)).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.trip.create).not.toHaveBeenCalled();
+    });
+
+    it('honours a degenerate band (min == suggested == max)', async () => {
+      corridors.findById.mockResolvedValue({
+        id: 'c1',
+        active: true,
+        suggestedPricePerSeat: 6000,
+        minPricePerSeat: 6000,
+        maxPricePerSeat: 6000,
+      });
+
+      await post(6000);
+      expect(prisma.trip.create.mock.calls[0][0].data.pricePerSeat).toBe(6000);
+
+      prisma.trip.create.mockClear();
+      await expect(post(6001)).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.trip.create).not.toHaveBeenCalled();
+    });
   });
 });
 

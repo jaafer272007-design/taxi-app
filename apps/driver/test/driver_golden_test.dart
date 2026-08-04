@@ -44,9 +44,11 @@ void main() {
   _screen('vehicle_form', _vehicleForm);
   _screen('documents', _documents);
   _screen('pending_review', _pending);
-  _screen('post_trip', _postTrip);
+  // Scrolled to the price card — the section these two shots exist to show.
+  _screen('post_trip', _postTrip, scrollBy: 320);
   _screen('post_trip_women', _postTripWomen);
   _screen('post_trip_no_corridor', _postTripNoCorridor);
+  _screen('post_trip_price_error', _postTripPriceError, scrollBy: 320);
   _screen('my_trips', _myTrips);
   _screen('trip_detail', _tripDetailOpen);
   _screen('trip_detail_enroute', _tripDetailEnRoute);
@@ -55,13 +57,21 @@ void main() {
   _screen('rate_rider', _rateRider);
 }
 
-void _screen(String name, Future<Widget> Function() build) {
+void _screen(String name, Future<Widget> Function() build, {double scrollBy = 0}) {
   group(name, () {
     testWidgets('light', (t) async {
-      await _golden(t, name: '${name}_light', brightness: Brightness.light, child: await build());
+      await _golden(t,
+          name: '${name}_light',
+          brightness: Brightness.light,
+          scrollBy: scrollBy,
+          child: await build());
     });
     testWidgets('dark', (t) async {
-      await _golden(t, name: '${name}_dark', brightness: Brightness.dark, child: await build());
+      await _golden(t,
+          name: '${name}_dark',
+          brightness: Brightness.dark,
+          scrollBy: scrollBy,
+          child: await build());
     });
   });
 }
@@ -128,6 +138,24 @@ Future<Widget> _postTripWomen() async {
   await c.loadCorridors();
   c.setSeatCount(2);
   c.setTripType(TripType.womenFamily);
+  return ChangeNotifierProvider<PostTripController>.value(
+    value: c,
+    child: PostTripScreen(onPosted: () {}),
+  );
+}
+
+/// A price outside the corridor's band, after the driver has left the field:
+/// the error names the allowed range, the "if it fills" total is withheld
+/// rather than computed from a price the server will reject, and the one-tap
+/// "use the usual price" shortcut is offered.
+Future<Widget> _postTripPriceError() async {
+  final api = FakeDriverTripApi()..corridors = const [najafKarbala, karbalaNajaf];
+  final c = PostTripController(api: api, maxSeats: 4);
+  await c.loadCorridors();
+  c
+    ..setSeatCount(3)
+    ..setPriceInput('999')
+    ..markPriceTouched();
   return ChangeNotifierProvider<PostTripController>.value(
     value: c,
     child: PostTripScreen(onPosted: () {}),
@@ -337,6 +365,7 @@ Future<void> _golden(
   required String name,
   required Brightness brightness,
   required Widget child,
+  double scrollBy = 0,
 }) async {
   const width = 390.0;
   const height = 844.0;
@@ -359,6 +388,16 @@ Future<void> _golden(
 
   await tester.pump(const Duration(milliseconds: 32));
   await tester.pump(const Duration(milliseconds: 32));
+
+  // Some screens are taller than the 844pt frame. Scrolling to the section
+  // under review is the only way the screenshot can actually show it — a
+  // golden that stops at the fold reviews nothing.
+  if (scrollBy != 0) {
+    await tester.drag(
+        find.byType(SingleChildScrollView).first, Offset(0, -scrollBy));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 32));
+  }
 
   await expectLater(
     find.byType(MaterialApp),

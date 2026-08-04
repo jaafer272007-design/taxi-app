@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -59,22 +59,14 @@ export function CorridorFormDialog({
 
   const form = useForm<CorridorFormValues>({
     resolver: zodResolver(corridorFormSchema),
-    defaultValues: {
-      originCity: corridor?.originCity ?? "",
-      destCity: corridor?.destCity ?? "",
-      pricePerSeat: corridor?.pricePerSeat ?? ("" as unknown as number),
-    },
+    defaultValues: defaultsFor(corridor),
   });
 
   // Reset the form whenever the dialog is (re-)opened for a (possibly
   // different) corridor, so stale values from a previous edit don't linger.
   useEffect(() => {
     if (open) {
-      form.reset({
-        originCity: corridor?.originCity ?? "",
-        destCity: corridor?.destCity ?? "",
-        pricePerSeat: corridor?.pricePerSeat ?? ("" as unknown as number),
-      });
+      form.reset(defaultsFor(corridor));
       setActive(corridor?.active ?? true);
       setFormError(null);
     }
@@ -107,8 +99,8 @@ export function CorridorFormDialog({
           <DialogTitle>{isEdit ? "تعديل الممر" : "أنشئ ممراً جديداً"}</DialogTitle>
           <DialogDescription>
             {isEdit
-              ? "عدّل السعر أو المسار، أو بدّل حالة التفعيل."
-              : "اختر مدينتي الانطلاق والوصول، ثم حدّد السعر للمقعد (IQD)."}
+              ? "عدّل الأسعار أو المسار، أو بدّل حالة التفعيل."
+              : "اختر مدينتي الانطلاق والوصول، ثم حدّد السعر المقترح وحدّي السماح."}
           </DialogDescription>
         </DialogHeader>
 
@@ -164,27 +156,31 @@ export function CorridorFormDialog({
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="pricePerSeat"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>السعر للمقعد (IQD)</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      inputMode="numeric"
-                      min={1}
-                      step={1}
-                      dir="ltr"
-                      className="text-start"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <fieldset className="grid gap-4 rounded-md border border-border p-3">
+              <legend className="px-1 text-sm font-medium text-muted-foreground">
+                التسعير (IQD)
+              </legend>
+              <p className="text-xs text-muted-foreground">
+                السائق يحدد سعر المقعد عند نشر الرحلة. المقترح هو ما يُملأ له
+                مسبقاً، والحدّان هما ما لا يستطيع تجاوزه.
+              </p>
+
+              <PriceField
+                control={form.control}
+                name="minPricePerSeat"
+                label="أدنى سعر"
+              />
+              <PriceField
+                control={form.control}
+                name="suggestedPricePerSeat"
+                label="السعر المقترح"
+              />
+              <PriceField
+                control={form.control}
+                name="maxPricePerSeat"
+                label="أعلى سعر"
+              />
+            </fieldset>
 
             {isEdit && (
               <div className="flex items-center justify-between rounded-md border border-border px-3 py-3">
@@ -221,5 +217,56 @@ export function CorridorFormDialog({
         </Form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** The form's shape for a corridor, or blank fields for a new one. */
+function defaultsFor(corridor?: Corridor): CorridorFormValues {
+  const blank = "" as unknown as number;
+  return {
+    originCity: (corridor?.originCity ?? "") as CorridorFormValues["originCity"],
+    destCity: (corridor?.destCity ?? "") as CorridorFormValues["destCity"],
+    minPricePerSeat: corridor?.minPricePerSeat ?? blank,
+    suggestedPricePerSeat: corridor?.suggestedPricePerSeat ?? blank,
+    maxPricePerSeat: corridor?.maxPricePerSeat ?? blank,
+  };
+}
+
+/**
+ * One of the three price inputs. `dir="ltr"` keeps digits running the way a
+ * numeric keyboard produces them inside the RTL form — the same Western-input
+ * rule the phone and OTP fields follow in the apps.
+ */
+function PriceField({
+  control,
+  name,
+  label,
+}: {
+  control: Control<CorridorFormValues>;
+  name: "minPricePerSeat" | "suggestedPricePerSeat" | "maxPricePerSeat";
+  label: string;
+}) {
+  return (
+    <FormField
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel>{label}</FormLabel>
+          <FormControl>
+            <Input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              step={1}
+              dir="ltr"
+              className="text-start"
+              {...field}
+            />
+          </FormControl>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
   );
 }

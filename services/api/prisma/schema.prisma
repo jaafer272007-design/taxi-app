@@ -126,13 +126,21 @@ model Document {
   reviewedBy String?
 }
 
+// Phase 1 amendment (driver-set pricing): the corridor no longer dictates the
+// fare. The admin publishes a SUGGESTED price plus a MIN/MAX band; the driver
+// picks the actual price per seat when posting a trip, inside that band. See
+// docs/PHASE1_BUILD_BRIEF.md §2 "تسعير يحدده السائق".
+// Invariant enforced by CorridorService (create + update):
+//   0 < minPricePerSeat <= suggestedPricePerSeat <= maxPricePerSeat
 model Corridor {
-  id           String  @id @default(cuid())
-  originCity   String // "Najaf"
-  destCity     String // "Karbala"
-  active       Boolean @default(true)
-  pricePerSeat Int // ثابت يحدده الأدمن (IQD)
-  trips        Trip[]
+  id                    String  @id @default(cuid())
+  originCity            String // "Najaf"
+  destCity              String // "Karbala"
+  active                Boolean @default(true)
+  suggestedPricePerSeat Int // السعر المعتاد الذي يقترحه الأدمن (IQD)
+  minPricePerSeat       Int // أدنى سعر مسموح للسائق (IQD)
+  maxPricePerSeat       Int // أعلى سعر مسموح للسائق (IQD)
+  trips                 Trip[]
 
   // One corridor per directed city pair — the admin can't create a duplicate
   // (Najaf→Karbala twice). Reverse direction is a separate pair, so both remain.
@@ -149,6 +157,10 @@ model Trip {
   departNow      Boolean       @default(false)
   seatsTotal     Int
   seatsAvailable Int
+  /// Set by the DRIVER at post time, validated into the corridor's
+  /// [minPricePerSeat, maxPricePerSeat] band. Snapshotted here, so an admin
+  /// re-pricing the corridor later never changes an already-posted trip — or
+  /// the fare of a booking already made against it.
   pricePerSeat   Int
   status         TripStatus    @default(OPEN)
   createdBy      TripCreatedBy @default(DRIVER)

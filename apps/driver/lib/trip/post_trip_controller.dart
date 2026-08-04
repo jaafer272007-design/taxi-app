@@ -30,6 +30,27 @@ class PostTripController extends ChangeNotifier {
   int _seatCount = 1;
   TripType _tripType = TripType.general;
 
+  // ── price (the driver sets it; the corridor only brackets it) ──
+  /// Exactly what the driver typed, in WESTERN digits. Kept as a string so the
+  /// field never fights the keyboard: a half-typed "1" of "12000" stays "1"
+  /// rather than being reformatted mid-keystroke.
+  String _priceInput = '';
+
+  /// The corridor the current [_priceInput] was prefilled for. A different
+  /// corridor means a different route, so the price is re-prefilled — carrying a
+  /// Najaf→Baghdad price over to Najaf→Karbala would be meaningless.
+  String? _pricedCorridorId;
+
+  /// False until the driver leaves the field or presses submit. Flagging "out of
+  /// range" while they are still typing the first digit of a valid price is the
+  /// classic inline-validation mistake, so the error stays hidden until then.
+  bool _priceTouched = false;
+
+  /// A range rejection that came back from the server (the admin may have
+  /// re-priced the corridor since this form loaded). Cleared the moment the
+  /// driver edits the price, since it describes a value they've now changed.
+  String? _serverPriceError;
+
   bool _submitting = false;
   String? _error;
   DriverTrip? _posted;
@@ -67,8 +88,64 @@ class PostTripController extends ChangeNotifier {
       _origin != _dest &&
       matchedCorridor == null;
 
-  /// Read-only, system-set price for the matched corridor (per seat, IQD).
-  int get pricePerSeat => matchedCorridor?.pricePerSeat ?? 0;
+  /// The raw text in the price field (Western digits — the locked input rule).
+  String get priceInput => _priceInput;
+
+  /// The driver's price as a number, or null when the field is empty or not a
+  /// positive whole number of dinars.
+  int? get enteredPrice {
+    final digits = toWesternDigits(_priceInput).trim();
+    if (digits.isEmpty) return null;
+    final value = int.tryParse(digits);
+    if (value == null || value <= 0) return null;
+    return value;
+  }
+
+  /// The admin's suggestion for the matched corridor (IQD), or 0 if none.
+  int get suggestedPrice => matchedCorridor?.suggestedPricePerSeat ?? 0;
+
+  /// Inclusive bounds the driver's price must fall in (IQD).
+  int get minPrice => matchedCorridor?.minPricePerSeat ?? 0;
+  int get maxPrice => matchedCorridor?.maxPricePerSeat ?? 0;
+
+  /// True once the price is a positive integer inside the corridor's band.
+  bool get priceValid {
+    final price = enteredPrice;
+    if (price == null || matchedCorridor == null) return false;
+    return price >= minPrice && price <= maxPrice;
+  }
+
+  /// The Arabic error under the price field, or null when there is nothing to
+  /// say YET — the field is untouched, or the price is fine.
+  ///
+  /// The out-of-range text names the actual range, in Arabic-Indic numerals: an
+  /// error that only says "invalid" leaves the driver guessing at the fix.
+  String? get priceError {
+    if (_serverPriceError != null) return _serverPriceError;
+    if (!_priceTouched || matchedCorridor == null) return null;
+    final price = enteredPrice;
+    if (price == null) return 'أدخل سعر المقعد بالدينار.';
+    if (price < minPrice || price > maxPrice) {
+      return _rangeMessage(minPrice, maxPrice);
+    }
+    return null;
+  }
+
+  /// The one phrasing of "your price is outside the allowed range", used by both
+  /// the client-side check and the server's rejection so the driver never sees
+  /// the same problem described two different ways.
+  String _rangeMessage(int min, int max) => min == max
+      ? 'السعر على هذا المسار ثابت: ${formatPrice(min)}.'
+      : 'السعر يجب أن يكون بين ${formatIqd(min)} و${formatPrice(max)}.';
+
+  /// True when a one-tap "use the usual price" shortcut would actually change
+  /// something — hidden when the field already holds the suggestion.
+  bool get canUseSuggestedPrice =>
+      matchedCorridor != null && enteredPrice != suggestedPrice;
+
+  /// What a full car pays at the entered price, or null while the price is not
+  /// usable. A total computed from a rejected price is worse than no total.
+  int? get fullCarTotal => priceValid ? enteredPrice! * _seatCount : null;
 
   bool get canDecrement => _seatCount > 1;
   bool get canIncrement => _seatCount < _maxSeats;
@@ -76,6 +153,7 @@ class PostTripController extends ChangeNotifier {
   bool get canSubmit =>
       !_submitting &&
       matchedCorridor != null &&
+      priceValid &&
       (_mode == DepartMode.now || _scheduledAt != null);
 
   /// Load active corridors once (idempotent); defaults the from/to cities to the
@@ -92,6 +170,9 @@ class PostTripController extends ChangeNotifier {
         _origin = _corridors.first.originCity;
         _dest = _corridors.first.destCity;
       }
+      // Corridors only just arrived, so this is the first moment the default
+      // route resolves to a corridor with a suggestion to prefill.
+      _syncPriceToCorridor();
       _corridorsLoad = CorridorsLoad.ready;
     } on ApiException catch (e) {
       _corridorsError = e.message;
@@ -106,11 +187,13 @@ class PostTripController extends ChangeNotifier {
 
   void setOrigin(String city) {
     _origin = city;
+    _syncPriceToCorridor();
     notifyListeners();
   }
 
   void setDest(String city) {
     _dest = city;
+    _syncPriceToCorridor();
     notifyListeners();
   }
 
@@ -119,7 +202,49 @@ class PostTripController extends ChangeNotifier {
     final o = _origin;
     _origin = _dest;
     _dest = o;
+    _syncPriceToCorridor();
     notifyListeners();
+  }
+
+  /// The driver types a price. Western digits only — see [priceInput].
+  ///
+  /// Deliberately does NOT set [_priceTouched]: the error appears on blur or
+  /// submit, never mid-keystroke. The "if the car fills" total still recomputes
+  /// live, because feedback and validation are different things.
+  void setPriceInput(String raw) {
+    if (_priceInput == raw) return;
+    _priceInput = raw;
+    _serverPriceError = null; // it described the value they just changed
+    notifyListeners();
+  }
+
+  /// The driver left the price field — now it is fair to show an error.
+  void markPriceTouched() {
+    if (_priceTouched) return;
+    _priceTouched = true;
+    notifyListeners();
+  }
+
+  /// One tap to take the admin's suggestion, so the safe choice is the cheapest
+  /// one to make.
+  void useSuggestedPrice() {
+    final corridor = matchedCorridor;
+    if (corridor == null) return;
+    _priceInput = '${corridor.suggestedPricePerSeat}';
+    _priceTouched = false; // a value we chose for them can't be their mistake
+    _serverPriceError = null;
+    notifyListeners();
+  }
+
+  /// Re-prefill the price whenever the matched corridor changes (including to
+  /// none). Called by every mutation that can change which corridor is matched.
+  void _syncPriceToCorridor() {
+    final corridor = matchedCorridor;
+    if (corridor?.id == _pricedCorridorId) return;
+    _pricedCorridorId = corridor?.id;
+    _priceInput = corridor == null ? '' : '${corridor.suggestedPricePerSeat}';
+    _priceTouched = false;
+    _serverPriceError = null;
   }
 
   void setMode(DepartMode mode) {
@@ -150,8 +275,17 @@ class PostTripController extends ChangeNotifier {
   void decrementSeat() => setSeatCount(_seatCount - 1);
 
   /// Submit the trip. Returns true on success ([posted] then set).
+  ///
+  /// Pressing submit counts as touching the price, so a driver who never
+  /// entered the field still gets told what is wrong instead of watching a
+  /// disabled button do nothing.
   Future<bool> submit() async {
-    if (_submitting || !canSubmit) return false;
+    if (_submitting) return false;
+    if (!canSubmit) {
+      _priceTouched = true;
+      notifyListeners();
+      return false;
+    }
     _submitting = true;
     _error = null;
     notifyListeners();
@@ -159,13 +293,26 @@ class PostTripController extends ChangeNotifier {
       _posted = await _api.postTrip(
         corridorId: matchedCorridor!.id,
         seatsTotal: _seatCount,
+        pricePerSeat: enteredPrice!,
         departNow: _mode == DepartMode.now,
         departureTime: _mode == DepartMode.scheduled ? _scheduledAt : null,
         tripType: _tripType,
       );
       return true;
     } on ApiException catch (e) {
-      _error = e.message;
+      // The server is the authority on the range — the corridor may have been
+      // re-priced by the admin since this form loaded. Show its rejection under
+      // the price field (where the fix is), phrased exactly like the client-side
+      // one, and with the bounds re-rendered in Arabic-Indic numerals.
+      if (e.code == _kPriceOutOfRange) {
+        _serverPriceError = _rangeMessage(
+          e.detailInt('minPricePerSeat') ?? minPrice,
+          e.detailInt('maxPricePerSeat') ?? maxPrice,
+        );
+        _priceTouched = true;
+      } else {
+        _error = e.message;
+      }
       return false;
     } catch (_) {
       _error = 'حدث خطأ غير متوقع. حاول مرة أخرى.';
@@ -176,3 +323,7 @@ class PostTripController extends ChangeNotifier {
     }
   }
 }
+
+/// The backend's code for a price outside the corridor's band (see
+/// `services/api/src/trip/trip-errors.ts`).
+const String _kPriceOutOfRange = 'TRIP_PRICE_OUT_OF_RANGE';

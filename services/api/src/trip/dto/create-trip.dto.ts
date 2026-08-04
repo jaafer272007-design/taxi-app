@@ -34,4 +34,12 @@ export class CreateTripDto {
   @IsInt({ message: 'عدد المقاعد يجب أن يكون رقماً.' })
   @Min(1, { message: 'عدد المقاعد يجب أن يكون 1 على الأقل.' })
   seatsTotal!: number;
+
+  /**
+   * The DRIVER's price per seat (IQD, integer). Required — the corridor only
+   * suggests. The range check needs the corridor row, so it runs in TripService.
+   */
+  @IsInt({ message: 'السعر يجب أن يكون رقماً صحيحاً (IQD).' })
+  @Min(1, { message: 'السعر يجب أن يكون أكبر من صفر.' })
+  pricePerSeat!: number;
 }

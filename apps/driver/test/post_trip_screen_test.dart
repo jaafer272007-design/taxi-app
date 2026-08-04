@@ -53,4 +53,132 @@ void main() {
     expect(c.tripType, TripType.womenFamily);
     expect(find.textContaining('كل الركّاب يجب أن يكنّ نساءً'), findsOneWidget);
   });
+
+  group('the price the driver sets', () {
+    testWidgets('prefills the suggestion in WESTERN digits', (tester) async {
+      final c = await controller();
+      await tester.pumpWidget(host(c));
+
+      // The field the driver types in: `6000`, never `٦٠٠٠`.
+      expect(find.widgetWithText(TextField, '6000'), findsOneWidget);
+    });
+
+    testWidgets('shows the suggestion and range without being asked',
+        (tester) async {
+      final c = await controller();
+      await tester.pumpWidget(host(c));
+
+      expect(
+        find.textContaining('المعتاد على هذا المسار: ٦٬٠٠٠'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('المسموح: ٣٬٠٠٠ – ١٢٬٠٠٠'), findsOneWidget);
+    });
+
+    testWidgets('never puts a dot beside an Arabic-Indic numeral', (tester) async {
+      // `٠` IS a dot, so "· ٣" reads as "٣٠" — a driver offering 3 seats saw
+      // "٣٠ مقاعد". Being bidi-neutral, the dot can also be reordered onto the
+      // wrong side of the number. Guard every rendered string, in BOTH departure
+      // modes: the scheduled chip renders a zero-padded clock ("٠٧:٣٠") that
+      // only exists on this screen once "جدولة" is picked.
+      final c = await controller();
+      c
+        ..setSeatCount(3)
+        ..setMode(DepartMode.scheduled)
+        ..setScheduledAt(DateTime(2026, 7, 20, 7, 30));
+      await tester.pumpWidget(host(c));
+
+      List<String> offendersOnScreen() => tester
+          .widgetList<Text>(find.byType(Text))
+          .map((t) => t.data)
+          .whereType<String>()
+          .where((s) => RegExp(r'·\s*[٠-٩]|[٠-٩]\s*·').hasMatch(s))
+          .toList();
+
+      expect(offendersOnScreen(), isEmpty,
+          reason: 'a middle dot touches an Arabic-Indic digit (scheduled)');
+
+      c.setMode(DepartMode.now);
+      await tester.pump();
+
+      expect(offendersOnScreen(), isEmpty,
+          reason: 'a middle dot touches an Arabic-Indic digit (now)');
+    });
+
+    testWidgets('the seat line reads as 3 seats, not 30', (tester) async {
+      final c = await controller();
+      c.setSeatCount(3);
+      await tester.pumpWidget(host(c));
+
+      expect(find.text('إذا امتلأت ٣ مقاعد'), findsOneWidget);
+    });
+
+    testWidgets('the full-car total follows what is typed, live',
+        (tester) async {
+      final c = await controller();
+      c.setSeatCount(3);
+      await tester.pumpWidget(host(c));
+
+      await tester.enterText(find.byType(TextField), '9000');
+      await tester.pump();
+
+      // 9,000 × 3 seats, in Arabic-Indic — no blur needed to see it.
+      expect(find.text('٢٧٬٠٠٠ د.ع'), findsOneWidget);
+    });
+
+    testWidgets('stays quiet mid-typing, then names the range on blur',
+        (tester) async {
+      final c = await controller();
+      await tester.pumpWidget(host(c));
+
+      await tester.enterText(find.byType(TextField), '9');
+      await tester.pump();
+      // 9 IQD is out of range, but they are clearly still typing.
+      expect(find.textContaining('السعر يجب أن يكون بين'), findsNothing);
+
+      // Blur. enterText focuses the field, so dropping focus is the real
+      // "driver moved on" signal the validation waits for.
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pump();
+
+      expect(
+        find.textContaining('السعر يجب أن يكون بين ٣٬٠٠٠ و١٢٬٠٠٠'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('withholds the total while the price is unusable',
+        (tester) async {
+      final c = await controller();
+      c.setSeatCount(3);
+      await tester.pumpWidget(host(c));
+
+      await tester.enterText(find.byType(TextField), '9');
+      await tester.pump();
+
+      // An em dash, not a confident number derived from a rejected price.
+      expect(find.text('—'), findsOneWidget);
+    });
+
+    testWidgets('"use the usual price" restores the suggestion',
+        (tester) async {
+      final c = await controller();
+      await tester.pumpWidget(host(c));
+
+      await tester.enterText(find.byType(TextField), '11000');
+      await tester.pump();
+
+      // The card sits at the bottom of a scroll view on a 800×600 test surface.
+      final shortcut = find.textContaining('استخدم السعر المعتاد');
+      await tester.ensureVisible(shortcut);
+      await tester.pump();
+      await tester.tap(shortcut);
+      await tester.pump();
+
+      expect(c.enteredPrice, 6000);
+      expect(find.widgetWithText(TextField, '6000'), findsOneWidget);
+      // Nothing left to restore → the shortcut goes away.
+      expect(find.textContaining('استخدم السعر المعتاد'), findsNothing);
+    });
+  });
 }

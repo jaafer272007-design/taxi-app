@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared/shared.dart';
 
@@ -8,7 +9,8 @@ import 'post_trip_controller.dart';
 import 'driver_trip_models.dart';
 
 /// Post-a-trip form (APPROVED drivers only): corridor + departure (now/scheduled)
-/// + seat count (capped at the vehicle) + read-only corridor price.
+/// + seat count (capped at the vehicle) + the price per seat the DRIVER sets,
+/// prefilled with the corridor's suggestion and bounded by its allowed range.
 class PostTripScreen extends StatelessWidget {
   const PostTripScreen({super.key, required this.onPosted});
 
@@ -26,7 +28,10 @@ class PostTripScreen extends StatelessWidget {
       ..setSeatCount(1)
       ..setMode(DepartMode.now)
       ..setScheduledAt(null)
-      ..setTripType(TripType.general);
+      ..setTripType(TripType.general)
+      // Back to the suggestion, so the next post starts from a known-good
+      // price rather than inheriting the last one silently.
+      ..useSuggestedPrice();
     context.read<MyTripsController>().load();
     onPosted();
   }
@@ -164,7 +169,7 @@ class _Form extends StatelessWidget {
         ),
         if (c.matchedCorridor != null) ...[
           SizedBox(height: space.xl),
-          _PriceCard(pricePerSeat: c.pricePerSeat, seatCount: c.seatCount),
+          _PriceCard(controller: c),
         ],
         if (c.error != null) ...[
           SizedBox(height: space.lg),
@@ -320,9 +325,13 @@ class _ScheduleChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final space = context.space;
+    // "الساعة" rather than " · " between the date and the time: the clock is
+    // zero-padded Arabic-Indic ("٠٧:٣٠"), and a middle dot beside it reads as
+    // another ٠. A strong Arabic word also pins the bidi order, which a
+    // neutral separator does not.
     final label = at == null
         ? 'اختر التاريخ والوقت'
-        : '${formatDayShort(at!)} · ${_hm(at!)}';
+        : '${formatDayShort(at!)} الساعة ${_hm(at!)}';
     return Semantics(
       button: true,
       label: 'موعد الانطلاق',
@@ -365,67 +374,239 @@ class _ScheduleChip extends StatelessWidget {
   static String _hm(DateTime t) => formatClock(t.hour, t.minute);
 }
 
-/// What the trip is worth: the system-set seat price, and what a full car pays.
+/// The price the DRIVER sets, and what a full car pays at it.
 ///
-/// The driver is choosing how many seats to offer, so the number that decides
-/// that choice is the *potential take* — showing only the per-seat price makes
-/// them do the arithmetic themselves. It is labelled "إذا امتلأت" rather than
-/// stated flatly, because it is a ceiling, not a promise.
+/// Three decisions worth naming:
+///
+/// * The suggestion and the allowed range are **always visible**, not only
+///   after a mistake. The driver is being asked to name a number on a route
+///   they may not run often; the answer belongs next to the question.
+/// * The range error appears on **blur or submit, never per keystroke** —
+///   flagging "out of range" while they have typed the `1` of `12000` teaches
+///   them to distrust the field. The "if it fills" total DOES update live,
+///   because showing consequences is feedback, not judgement.
+/// * When the price is unusable the total is **withheld**, not computed anyway.
+///   A confident number derived from a value the server will reject is worse
+///   than no number.
+///
+/// The input keeps WESTERN digits (the locked rule — the keyboard emits them);
+/// every number around it is Arabic-Indic.
 class _PriceCard extends StatelessWidget {
-  const _PriceCard({required this.pricePerSeat, required this.seatCount});
+  const _PriceCard({required this.controller});
 
-  final int pricePerSeat;
-  final int seatCount;
+  final PostTripController controller;
 
   @override
   Widget build(BuildContext context) {
+    final c = controller;
     final colors = context.colors;
     final space = context.space;
+    final corridor = c.matchedCorridor!;
 
     return AppCard(
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Icon(AppIcons.cash, size: space.lg, color: colors.textMuted),
               SizedBox(width: space.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text('السعر للمقعد',
-                        style: context.text.bodyStrong
-                            .copyWith(color: colors.textPrimary)),
-                    Text('يحدده النظام',
-                        style: context.text.caption
-                            .copyWith(color: colors.textMuted)),
-                  ],
-                ),
-              ),
-              Text(formatPrice(pricePerSeat),
-                  style: context.text.title.tabular
+              Text('سعر المقعد',
+                  style: context.text.bodyStrong
                       .copyWith(color: colors.textPrimary)),
+              const Spacer(),
+              Text('أنت تحدده',
+                  style:
+                      context.text.caption.copyWith(color: colors.textMuted)),
             ],
           ),
+          SizedBox(height: space.md),
+          _PriceField(controller: c),
+          SizedBox(height: space.sm),
+          _PriceGuidance(
+            suggested: corridor.suggestedPricePerSeat,
+            min: corridor.minPricePerSeat,
+            max: corridor.maxPricePerSeat,
+          ),
+          if (c.canUseSuggestedPrice) ...[
+            SizedBox(height: space.sm),
+            _UseSuggestedButton(
+              suggested: corridor.suggestedPricePerSeat,
+              onTap: c.useSuggestedPrice,
+            ),
+          ],
           SizedBox(height: space.md),
           Divider(height: 1, color: colors.border),
           SizedBox(height: space.md),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text('إذا امتلأت · ${formatSeats(seatCount)}',
-                  style:
-                      context.text.body.copyWith(color: colors.textSecondary)),
-              const Spacer(),
-              Text(formatPrice(pricePerSeat * seatCount),
-                  style:
-                      context.text.h1.tabular.copyWith(color: colors.primary)),
-            ],
-          ),
+          _FullCarRow(seatCount: c.seatCount, total: c.fullCarTotal),
         ],
       ),
+    );
+  }
+}
+
+/// The price input itself. Stateful only to own the [TextEditingController];
+/// the value lives in [PostTripController].
+class _PriceField extends StatefulWidget {
+  const _PriceField({required this.controller});
+
+  final PostTripController controller;
+
+  @override
+  State<_PriceField> createState() => _PriceFieldState();
+}
+
+class _PriceFieldState extends State<_PriceField> {
+  late final TextEditingController _text =
+      TextEditingController(text: widget.controller.priceInput);
+  late final FocusNode _focus = FocusNode()..addListener(_onFocusChange);
+
+  void _onFocusChange() {
+    // Leaving the field is the moment it becomes fair to point out a problem.
+    if (!_focus.hasFocus) widget.controller.markPriceTouched();
+  }
+
+  @override
+  void dispose() {
+    _focus.removeListener(_onFocusChange);
+    _focus.dispose();
+    _text.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.controller;
+
+    // The controller re-prefills the price when the route changes (and on the
+    // "use the usual price" tap). Push that back into the field WITHOUT
+    // clobbering what the driver is mid-way through typing.
+    if (_text.text != c.priceInput) {
+      _text.value = TextEditingValue(
+        text: c.priceInput,
+        selection: TextSelection.collapsed(offset: c.priceInput.length),
+      );
+    }
+
+    return AppTextField(
+      label: 'المبلغ بالدينار',
+      controller: _text,
+      focusNode: _focus,
+      keyboardType: TextInputType.number,
+      // Digits only: an IQD price has no fractions and no separators. This is
+      // also what keeps the field WESTERN — the locked input rule.
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      maxLength: 7, // 9,999,999 IQD — far past any real fare, stops paste-bombs
+      onChanged: c.setPriceInput,
+      onSubmitted: (_) => c.markPriceTouched(),
+      error: c.priceError,
+    );
+  }
+}
+
+/// The suggestion and the allowed band, always on screen.
+class _PriceGuidance extends StatelessWidget {
+  const _PriceGuidance({
+    required this.suggested,
+    required this.min,
+    required this.max,
+  });
+
+  final int suggested;
+  final int min;
+  final int max;
+
+  @override
+  Widget build(BuildContext context) {
+    final style =
+        context.text.caption.copyWith(color: context.colors.textSecondary);
+
+    if (min == max) {
+      return Text('السعر على هذا المسار ثابت: ${formatPrice(min)}', style: style);
+    }
+
+    // Two lines rather than one joined by " · ". A middle dot next to an
+    // Arabic-Indic numeral is unreadable: `٠` IS a dot, so "· ٦٬٠٠٠" reads as
+    // "٠٦٬٠٠٠", and being a bidi-neutral it can be reordered onto the wrong
+    // side of the number as well. Two lines also scan better than one long one.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('المعتاد على هذا المسار: ${formatPrice(suggested)}', style: style),
+        Text('المسموح: ${formatIqd(min)} – ${formatPrice(max)}', style: style),
+      ],
+    );
+  }
+}
+
+/// One tap back to the admin's suggestion — the safe choice, made cheap.
+class _UseSuggestedButton extends StatelessWidget {
+  const _UseSuggestedButton({required this.suggested, required this.onTap});
+
+  final int suggested;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final space = context.space;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: context.radii.pillAll,
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: space.md,
+          vertical: space.xs,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(AppIcons.check, size: 16, color: colors.primary),
+            SizedBox(width: space.xs),
+            Text(
+              'استخدم السعر المعتاد ${formatPrice(suggested)}',
+              style: context.text.caption.copyWith(color: colors.primary),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The potential take. The driver is choosing how many seats to offer, so the
+/// number that decides it is what a full car pays — not the per-seat price they
+/// just typed. "إذا امتلأت" because it is a ceiling, not a promise.
+class _FullCarRow extends StatelessWidget {
+  const _FullCarRow({required this.seatCount, required this.total});
+
+  final int seatCount;
+
+  /// Null while the price is unusable — then no total is shown at all.
+  final int? total;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final value = total;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        // No " · " before the seat count: for 3+ seats formatSeats starts with
+        // an Arabic-Indic digit, and a middle dot beside one reads as ٠ — a
+        // driver offering 3 seats saw "٣٠ مقاعد".
+        Text('إذا امتلأت ${formatSeats(seatCount)}',
+            style: context.text.body.copyWith(color: colors.textSecondary)),
+        const Spacer(),
+        if (value == null)
+          Text('—',
+              style: context.text.h1.tabular.copyWith(color: colors.textMuted))
+        else
+          Text(formatPrice(value),
+              style: context.text.h1.tabular.copyWith(color: colors.primary)),
+      ],
     );
   }
 }

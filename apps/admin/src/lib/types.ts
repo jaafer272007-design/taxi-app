@@ -1,9 +1,17 @@
+/**
+ * A corridor (one direction). The admin does NOT set the fare — the driver does
+ * when posting a trip. What lives here is the suggestion drivers see prefilled
+ * and the band their price has to fall inside. The API guarantees
+ * `0 < min <= suggested <= max`.
+ */
 export interface Corridor {
   id: string;
   originCity: string;
   destCity: string;
   active: boolean;
-  pricePerSeat: number;
+  suggestedPricePerSeat: number;
+  minPricePerSeat: number;
+  maxPricePerSeat: number;
 }
 
 // ── Admin accounts ───────────────────────────────────────────────────────

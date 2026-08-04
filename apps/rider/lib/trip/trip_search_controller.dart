@@ -6,6 +6,20 @@ import 'package:shared/shared.dart';
 
 enum TripSearchStatus { initial, loading, results, empty, error }
 
+/// How the results list is ordered.
+///
+/// Now that each driver sets their own price, two trips on the same route can
+/// cost different amounts — so "which is cheapest" is a real question a rider
+/// can ask, and [TripSort.price] is the answer.
+enum TripSort {
+  /// Earliest departure first. The default: most riders are choosing when to
+  /// travel, not shopping.
+  departure,
+
+  /// Cheapest per seat first.
+  price,
+}
+
 /// Holds the search form (corridor, date, time window) and the results/loading/
 /// empty/error state for browsing driver-posted trips.
 class TripSearchController extends ChangeNotifier {
@@ -36,6 +50,7 @@ class TripSearchController extends ChangeNotifier {
   List<TripSummary> _results = const [];
   TripSearchStatus _status = TripSearchStatus.initial;
   String? _error;
+  TripSort _sort = TripSort.departure;
 
   List<Corridor> get corridors => _corridors;
   bool get corridorsLoading => _corridorsLoading;
@@ -73,6 +88,42 @@ class TripSearchController extends ChangeNotifier {
   List<TripSummary> get results => _results;
   TripSearchStatus get status => _status;
   String? get error => _error;
+
+  /// The current result ordering. Defaults to [TripSort.departure].
+  TripSort get sort => _sort;
+
+  /// Re-order the results already on screen. Sorting is a local operation — it
+  /// must never cost a round trip, so this does NOT re-run the search.
+  void setSort(TripSort sort) {
+    if (_sort == sort) return;
+    _sort = sort;
+    _results = _sorted(_results);
+    notifyListeners();
+  }
+
+  /// Order a result list by the current [sort].
+  ///
+  /// Both orderings fall back to the other key so the list is deterministic:
+  /// with two trips at the same price, the earlier one comes first, which is
+  /// what a rider comparing them would expect.
+  List<TripSummary> _sorted(List<TripSummary> trips) {
+    final out = List<TripSummary>.of(trips);
+    switch (_sort) {
+      case TripSort.departure:
+        out.sort((a, b) {
+          final byTime = a.departureTime.compareTo(b.departureTime);
+          return byTime != 0 ? byTime : a.pricePerSeat.compareTo(b.pricePerSeat);
+        });
+      case TripSort.price:
+        out.sort((a, b) {
+          final byPrice = a.pricePerSeat.compareTo(b.pricePerSeat);
+          return byPrice != 0
+              ? byPrice
+              : a.departureTime.compareTo(b.departureTime);
+        });
+    }
+    return out;
+  }
 
   /// Load corridors once (idempotent). Defaults the from/to cities to the first
   /// served corridor so the initial state is immediately searchable.
@@ -153,7 +204,8 @@ class TripSearchController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Run the search for the current form. Results are sorted by departure time.
+  /// Run the search for the current form. Results come back in the current
+  /// [sort] order.
   Future<void> search() async {
     if (!canSearch) return;
     final corridor = matchedCorridor;
@@ -183,9 +235,9 @@ class TripSearchController extends ChangeNotifier {
         to = DateTime(day.year, day.month, day.day, _toTime!.hour, _toTime!.minute);
       }
 
-      // Copy before sorting — never mutate the list the API handed us (it may
-      // be unmodifiable).
-      final results = List<TripSummary>.of(
+      // _sorted copies before sorting — never mutate the list the API handed us
+      // (it may be unmodifiable).
+      _results = _sorted(
         await _api.searchTrips(
           corridorId: corridor.id,
           date: day,
@@ -195,11 +247,8 @@ class TripSearchController extends ChangeNotifier {
           driverGender: _driverGender,
         ),
       );
-      results.sort((a, b) => a.departureTime.compareTo(b.departureTime));
-
-      _results = results;
       _status =
-          results.isEmpty ? TripSearchStatus.empty : TripSearchStatus.results;
+          _results.isEmpty ? TripSearchStatus.empty : TripSearchStatus.results;
     } on ApiException catch (e) {
       _error = e.message;
       _status = TripSearchStatus.error;

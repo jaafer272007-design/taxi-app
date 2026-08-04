@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:shared/shared.dart';
 
 import 'trip_details_screen.dart';
-import 'trip_models.dart';
 import 'trip_search_controller.dart';
 import 'widgets/trip_card.dart';
 import 'widgets/trip_state_views.dart';
@@ -45,7 +44,7 @@ class ResultsScreen extends StatelessWidget {
                   }
                 : null,
           ),
-        TripSearchStatus.results => _ResultsList(trips: c.results),
+        TripSearchStatus.results => _ResultsList(controller: c),
         TripSearchStatus.initial => const SizedBox.shrink(),
       },
     );
@@ -63,26 +62,86 @@ class _Padded extends StatelessWidget {
       );
 }
 
+/// The result cards, under a sort control.
+///
+/// The sort bar sits INSIDE the scroll view, not pinned above it: with a
+/// typical handful of trips per route it would otherwise eat permanent vertical
+/// space on a 390×844 phone to solve a problem that doesn't exist. It scrolls
+/// away with the first card and is one flick back.
 class _ResultsList extends StatelessWidget {
-  const _ResultsList({required this.trips});
+  const _ResultsList({required this.controller});
 
-  final List<TripSummary> trips;
+  final TripSearchController controller;
 
   @override
   Widget build(BuildContext context) {
     final space = context.space;
+    final trips = controller.results;
+
     return ListView.separated(
       padding: EdgeInsets.all(space.lg),
-      itemCount: trips.length,
+      // One extra leading item: the sort bar.
+      itemCount: trips.length + 1,
       separatorBuilder: (_, __) => SizedBox(height: space.md),
-      itemBuilder: (context, i) => TripCard(
-        trip: trips[i],
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => TripDetailsScreen(trip: trips[i]),
+      itemBuilder: (context, i) {
+        if (i == 0) {
+          return _SortBar(
+            value: controller.sort,
+            onChanged: controller.setSort,
+            count: trips.length,
+          );
+        }
+        final trip = trips[i - 1];
+        return TripCard(
+          trip: trip,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => TripDetailsScreen(trip: trip),
+            ),
           ),
+        );
+      },
+    );
+  }
+}
+
+/// "N trips · [by time | cheapest]".
+///
+/// Sorting by price only became meaningful once drivers set their own prices —
+/// before that every trip on a route cost the same. The count is on the same
+/// line because it answers the question the rider asks first ("how many?")
+/// without a second row of chrome.
+class _SortBar extends StatelessWidget {
+  const _SortBar({
+    required this.value,
+    required this.onChanged,
+    required this.count,
+  });
+
+  final TripSort value;
+  final ValueChanged<TripSort> onChanged;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final space = context.space;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          formatTrips(count),
+          style: context.text.label.copyWith(color: context.colors.textSecondary),
         ),
-      ),
+        SizedBox(height: space.sm),
+        AppSegmentedControl<TripSort>(
+          value: value,
+          segments: const [
+            AppSegment(value: TripSort.departure, label: 'الأقرب موعداً'),
+            AppSegment(value: TripSort.price, label: 'الأرخص'),
+          ],
+          onChanged: onChanged,
+        ),
+      ],
     );
   }
 }

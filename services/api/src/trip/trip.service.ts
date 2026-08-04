@@ -22,6 +22,7 @@ import { CorridorService } from '../corridor/corridor.service';
 import { NotificationService, NotificationPayload } from '../notification/notification.service';
 import { CreateTripDto } from './dto/create-trip.dto';
 import { UpdateTripDto } from './dto/update-trip.dto';
+import { TRIP_PRICE_OUT_OF_RANGE } from './trip-errors';
 
 /**
  * A departNow trip departs immediately and is meant to stay valid for this
@@ -78,6 +79,9 @@ export class TripService {
       throw new BadRequestException('هذا الممر غير مفعّل حالياً.');
     }
 
+    // The driver names the price; the corridor only brackets it.
+    this.assertPriceInBand(dto.pricePerSeat, corridor);
+
     // Enforce the DTO's EITHER/OR contract: don't silently discard a scheduled
     // time when departNow is also set.
     if (dto.departNow === true && dto.departureTime !== undefined) {
@@ -103,7 +107,7 @@ export class TripService {
         departNow,
         seatsTotal: dto.seatsTotal,
         seatsAvailable: dto.seatsTotal,
-        pricePerSeat: corridor.pricePerSeat, // snapshot from the corridor
+        pricePerSeat: dto.pricePerSeat, // the driver's price, validated above
         status: TripStatus.OPEN,
         createdBy: TripCreatedBy.DRIVER,
         tripType: dto.tripType ?? TripType.GENERAL,
@@ -320,6 +324,31 @@ export class TripService {
       data: { type: 'trip.completed', tripId },
     });
     return settled;
+  }
+
+  /**
+   * The driver's price must land inside the corridor's admin-set band.
+   *
+   * The 400 body carries BOTH a complete Arabic sentence (shown as-is by any
+   * client) and the machine-readable bounds, so the driver app can re-render the
+   * range in Arabic-Indic numerals instead of the Western digits on the wire.
+   */
+  private assertPriceInBand(
+    price: number,
+    corridor: { minPricePerSeat: number; maxPricePerSeat: number },
+  ): void {
+    const { minPricePerSeat: min, maxPricePerSeat: max } = corridor;
+    if (price >= min && price <= max) {
+      return;
+    }
+    throw new BadRequestException({
+      statusCode: 400,
+      error: 'Bad Request',
+      code: TRIP_PRICE_OUT_OF_RANGE,
+      message: `السعر يجب أن يكون بين ${min} و ${max} دينار للمقعد.`,
+      minPricePerSeat: min,
+      maxPricePerSeat: max,
+    });
   }
 
   private async getOwnedTrip(

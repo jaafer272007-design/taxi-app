@@ -131,4 +131,31 @@ void main() {
 
     expect(find.text('لا توجد حجوزات على هذه الرحلة بعد'), findsOneWidget);
   });
+
+  testWidgets('a passenger fare never has a dot fused onto it', (t) async {
+    // `٠` IS a dot and formatPrice ALWAYS starts with one of those digits, so
+    // the old "مقعدان · ٦٬٠٠٠ د.ع" rendered the separator flush against the
+    // fare — ٦٬٠٠٠ read as ٦٬٠٠٠٠, a ten-times error on the screen where the
+    // driver reconciles cash with each passenger. Unlike the seat-count cases
+    // this one fired at EVERY seat count, which is why six committed goldens
+    // carried it.
+    final api = FakeDriverTripApi()
+      ..tripBookingsResult = [
+        bookingFixture(id: 'b1', seatCount: 2, fare: 12000),
+      ];
+    final c = await _loaded(api, TripStatus.open);
+    await t.pumpWidget(_host(c));
+    await t.pump();
+
+    expect(find.text('مقعدان بـ١٢٬٠٠٠ د.ع'), findsOneWidget);
+
+    final offenders = t
+        .widgetList<Text>(find.byType(Text))
+        .map((w) => w.data)
+        .whereType<String>()
+        .where((s) => RegExp(r'·\s*[٠-٩]|[٠-٩]\s*·').hasMatch(s))
+        .toList();
+    expect(offenders, isEmpty,
+        reason: 'a middle dot touches an Arabic-Indic digit in: $offenders');
+  });
 }

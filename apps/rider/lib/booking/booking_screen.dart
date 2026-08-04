@@ -380,7 +380,11 @@ class _ConfirmBar extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
-              Text('الإجمالي · ${formatSeats(seatCount)}',
+              // "لـ" and not " · ": at 3+ seats formatSeats starts with an
+              // Arabic-Indic digit, and `٠` is a dot — "· ٣ مقاعد" reads as
+              // "٣٠ مقاعد". Safe at 1 and 2 only because the Arabic dual
+              // ("مقعدان") has no digit at all, which is why the golden missed it.
+              Text('الإجمالي لـ${formatSeats(seatCount)}',
                   style: context.text.label
                       .copyWith(color: colors.textSecondary)),
               const Spacer(),

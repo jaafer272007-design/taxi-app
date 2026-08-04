@@ -10,9 +10,14 @@ abstract interface class DriverTripApi {
   /// POST /trips. Provide EITHER [departNow] = true OR a future [departureTime]
   /// — never both, never neither (the backend rejects both cases). [tripType]
   /// selects the audience (general vs women/family); defaults to general.
+  ///
+  /// [pricePerSeat] is the DRIVER's price in IQD. The backend rejects anything
+  /// outside the corridor's band with a 400 carrying
+  /// `TRIP_PRICE_OUT_OF_RANGE`.
   Future<DriverTrip> postTrip({
     required String corridorId,
     required int seatsTotal,
+    required int pricePerSeat,
     bool departNow = false,
     DateTime? departureTime,
     TripType tripType = TripType.general,
@@ -72,6 +77,7 @@ class DioDriverTripApi implements DriverTripApi {
   Future<DriverTrip> postTrip({
     required String corridorId,
     required int seatsTotal,
+    required int pricePerSeat,
     bool departNow = false,
     DateTime? departureTime,
     TripType tripType = TripType.general,
@@ -82,6 +88,7 @@ class DioDriverTripApi implements DriverTripApi {
       final data = <String, dynamic>{
         'corridorId': corridorId,
         'seatsTotal': seatsTotal,
+        'pricePerSeat': pricePerSeat,
         'tripType': tripType.apiValue,
       };
       if (departNow) {
