@@ -25,3 +25,6 @@ coverage/
 
 # uploaded driver documents (dev)
 uploads/
+
+# playwright artifacts when the e2e suite starts this API
+/test-results/
