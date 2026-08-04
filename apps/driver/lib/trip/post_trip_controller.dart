@@ -167,8 +167,16 @@ class PostTripController extends ChangeNotifier {
       final all = await _api.getCorridors();
       _corridors = all.where((c) => c.active).toList();
       if (_origin == null && _dest == null && _corridors.isNotEmpty) {
-        _origin = _corridors.first.originCity;
-        _dest = _corridors.first.destCity;
+        // Prefer the flagship pair over whichever corridor happens to sort
+        // first — with all 306 pairs served, "first" is alphabetical accident.
+        final preferred = _corridors.firstWhere(
+          (c) =>
+              c.originCity == kDefaultOriginCity &&
+              c.destCity == kDefaultDestCity,
+          orElse: () => _corridors.first,
+        );
+        _origin = preferred.originCity;
+        _dest = preferred.destCity;
       }
       // Corridors only just arrived, so this is the first moment the default
       // route resolves to a corridor with a suggestion to prefill.

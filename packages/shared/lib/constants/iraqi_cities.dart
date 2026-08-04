@@ -30,6 +30,19 @@ const List<IraqiCity> kIraqiCities = [
   IraqiCity(key: 'Tikrit', ar: 'تكريت'),
 ];
 
+/// The city pair both apps open on before the user picks anything.
+///
+/// Once every ordered pair of the 18 governorates has a corridor, "the first
+/// corridor the API returned" is alphabetical accident — it would default both
+/// apps to العمارة→بغداد. The opening pair is a product decision, so it is
+/// stated here rather than emerging from list order: النجف↔كربلاء is the
+/// flagship route and the busiest in the pilot.
+///
+/// Both controllers fall back to the first served corridor if this pair is
+/// missing or deactivated, so the default can never strand the form.
+const String kDefaultOriginCity = 'Najaf';
+const String kDefaultDestCity = 'Karbala';
+
 final Map<String, String> _cityArByKey = {
   for (final c in kIraqiCities) c.key: c.ar,
 };

@@ -267,4 +267,83 @@ void main() {
       expect(notifications, 1);
     });
   });
+
+  group('default city pair at full-grid scale', () {
+    // Every ordered pair of the 18 governorates is now a corridor (306 rows),
+    // so the API's first row is alphabetical accident — العمارة→بغداد.
+    List<Corridor> fullGrid() => [
+          const Corridor(
+              id: 'c-amarah',
+              originCity: 'Amarah',
+              destCity: 'Baghdad',
+              suggestedPricePerSeat: 30000),
+          najafKarbala,
+          karbalaNajaf,
+        ];
+
+    test('opens on the flagship pair, not whichever sorts first', () async {
+      api.corridors = fullGrid();
+      final c = make();
+
+      await c.ensureCorridorsLoaded();
+
+      expect(c.origin, 'Najaf');
+      expect(c.dest, 'Karbala');
+      expect(c.matchedCorridor, najafKarbala);
+    });
+
+    test('falls back to the first corridor when the flagship is absent',
+        () async {
+      // Deactivating Najaf→Karbala must not strand the form on a blank pair.
+      api.corridors = [
+        const Corridor(
+            id: 'c-amarah',
+            originCity: 'Amarah',
+            destCity: 'Baghdad',
+            suggestedPricePerSeat: 30000),
+      ];
+      final c = make();
+
+      await c.ensureCorridorsLoaded();
+
+      expect(c.origin, 'Amarah');
+      expect(c.dest, 'Baghdad');
+      expect(c.canSearch, isTrue);
+    });
+
+    test('handles a 306-corridor payload without breaking resolution', () async {
+      // Guards the linear scan in matchedCorridor at real size.
+      const cities = [
+        'Baghdad', 'Basra', 'Najaf', 'Karbala', 'Erbil', 'Mosul',
+        'Kirkuk', 'Sulaymaniyah', 'Duhok', 'Ramadi', 'Baqubah', 'Kut',
+        'Amarah', 'Nasiriyah', 'Samawah', 'Diwaniyah', 'Hilla', 'Tikrit',
+      ];
+      final grid = <Corridor>[];
+      for (final o in cities) {
+        for (final d in cities) {
+          if (o == d) continue;
+          grid.add(Corridor(
+              id: '\$o-\$d',
+              originCity: o,
+              destCity: d,
+              suggestedPricePerSeat: 12000));
+        }
+      }
+      expect(grid, hasLength(306));
+
+      api.corridors = grid;
+      final c = make();
+      await c.ensureCorridorsLoaded();
+
+      expect(c.corridors, hasLength(306));
+      expect(c.origin, 'Najaf');
+      expect(c.dest, 'Karbala');
+
+      // Any pair the rider picks resolves — that is the whole point of the grid.
+      c.setOrigin('Duhok');
+      c.setDest('Basra');
+      expect(c.matchedCorridor, isNotNull);
+      expect(c.canSearch, isTrue);
+    });
+  });
 }
