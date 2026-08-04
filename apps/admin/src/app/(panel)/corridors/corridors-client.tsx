@@ -16,7 +16,7 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { cityAr } from "@/lib/cities";
-import { formatPrice } from "@/lib/format";
+import { formatIqd, formatPrice } from "@/lib/format";
 import type { Corridor } from "@/lib/types";
 import { CorridorFormDialog } from "./corridor-form-dialog";
 import { toggleCorridorActiveAction } from "./actions";
@@ -61,7 +61,8 @@ export function CorridorsClient({ corridors }: { corridors: Corridor[] }) {
         <div>
           <h1 className="text-xl font-semibold">الممرات والتسعير</h1>
           <p className="text-sm text-muted-foreground">
-            كل ممر يحدّد مساراً قابلاً للبحث والنشر بسعر ثابت للمقعد.
+            كل ممر يحدّد مساراً قابلاً للبحث والنشر. السائق يحدد سعر المقعد ضمن
+            المدى المسموح، والمقترح هو ما يُملأ له مسبقاً.
           </p>
         </div>
         <Button onClick={openCreate}>
@@ -93,7 +94,8 @@ export function CorridorsClient({ corridors }: { corridors: Corridor[] }) {
               <TableRow>
                 <TableHead>من</TableHead>
                 <TableHead>إلى</TableHead>
-                <TableHead>السعر للمقعد</TableHead>
+                <TableHead>السعر المقترح</TableHead>
+                <TableHead>المدى المسموح</TableHead>
                 <TableHead>الحالة</TableHead>
                 <TableHead className="w-12" />
               </TableRow>
@@ -108,7 +110,17 @@ export function CorridorsClient({ corridors }: { corridors: Corridor[] }) {
                     {cityAr(corridor.destCity)}
                   </TableCell>
                   <TableCell className="tabular-nums-ar" dir="ltr">
-                    {formatPrice(corridor.pricePerSeat)}
+                    {formatPrice(corridor.suggestedPricePerSeat)}
+                  </TableCell>
+                  <TableCell
+                    className="tabular-nums-ar whitespace-nowrap text-muted-foreground"
+                    dir="ltr"
+                  >
+                    {corridor.minPricePerSeat === corridor.maxPricePerSeat
+                      ? "ثابت"
+                      : `${formatIqd(corridor.minPricePerSeat)} – ${formatPrice(
+                          corridor.maxPricePerSeat,
+                        )}`}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">

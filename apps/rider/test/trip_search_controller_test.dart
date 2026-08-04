@@ -180,4 +180,91 @@ void main() {
       expect(c.driverGender, isNull);
     });
   });
+
+  group('sort (each driver sets their own price, so cheapest is a real question)',
+      () {
+    // Three trips on ONE route at three prices — impossible before drivers set
+    // their own. Departure order and price order are deliberately opposites.
+    void seed() {
+      api.corridors = const [najafKarbala];
+      api.searchResults = [
+        tripFixture(id: 'early_dear', hourUtc: 4, price: 12000),
+        tripFixture(id: 'mid', hourUtc: 5, price: 9000),
+        tripFixture(id: 'late_cheap', hourUtc: 6, price: 6000),
+      ];
+    }
+
+    test('defaults to departure order', () async {
+      seed();
+      final c = make();
+      await c.ensureCorridorsLoaded();
+      await c.search();
+
+      expect(c.sort, TripSort.departure);
+      expect(c.results.map((t) => t.id), ['early_dear', 'mid', 'late_cheap']);
+    });
+
+    test('sorting by price reorders cheapest first', () async {
+      seed();
+      final c = make();
+      await c.ensureCorridorsLoaded();
+      await c.search();
+
+      c.setSort(TripSort.price);
+
+      expect(c.results.map((t) => t.id), ['late_cheap', 'mid', 'early_dear']);
+    });
+
+    test('re-sorting costs no round trip', () async {
+      seed();
+      final c = make();
+      await c.ensureCorridorsLoaded();
+      await c.search();
+      final callsAfterSearch = api.searchCalls;
+
+      c.setSort(TripSort.price);
+      c.setSort(TripSort.departure);
+
+      expect(api.searchCalls, callsAfterSearch);
+    });
+
+    test('a later search keeps the chosen order', () async {
+      seed();
+      final c = make();
+      await c.ensureCorridorsLoaded();
+      c.setSort(TripSort.price);
+
+      await c.search();
+
+      expect(c.results.first.id, 'late_cheap');
+    });
+
+    test('ties break on the other key, so the order is deterministic', () async {
+      api.corridors = const [najafKarbala];
+      api.searchResults = [
+        tripFixture(id: 'same_price_late', hourUtc: 7, price: 6000),
+        tripFixture(id: 'same_price_early', hourUtc: 5, price: 6000),
+      ];
+      final c = make();
+      await c.ensureCorridorsLoaded();
+      c.setSort(TripSort.price);
+      await c.search();
+
+      expect(c.results.map((t) => t.id), ['same_price_early', 'same_price_late']);
+    });
+
+    test('setting the same sort twice notifies once', () async {
+      seed();
+      final c = make();
+      await c.ensureCorridorsLoaded();
+      await c.search();
+
+      var notifications = 0;
+      c.addListener(() => notifications++);
+      c.setSort(TripSort.price);
+      c.setSort(TripSort.price);
+
+      expect(notifications, 1);
+    });
+  });
 }

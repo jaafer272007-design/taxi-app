@@ -25,7 +25,9 @@ export async function logoutAction(): Promise<void> {
 export async function createCorridorAction(input: {
   originCity: string;
   destCity: string;
-  pricePerSeat: number;
+  suggestedPricePerSeat: number;
+  minPricePerSeat: number;
+  maxPricePerSeat: number;
 }): Promise<ActionResult<Corridor>> {
   const token = await requireToken();
   try {
@@ -46,7 +48,9 @@ export async function updateCorridorAction(
   input: Partial<{
     originCity: string;
     destCity: string;
-    pricePerSeat: number;
+    suggestedPricePerSeat: number;
+    minPricePerSeat: number;
+    maxPricePerSeat: number;
     active: boolean;
   }>,
 ): Promise<ActionResult<Corridor>> {

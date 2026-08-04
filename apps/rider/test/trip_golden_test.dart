@@ -154,6 +154,25 @@ void main() {
     });
   });
 
+  // Two trips on ONE route at DIFFERENT prices — only possible now that each
+  // driver sets their own — reordered cheapest-first.
+  group('results_by_price', () {
+    testWidgets('light', (t) async {
+      await _golden(t,
+          name: 'results_by_price_light',
+          brightness: Brightness.light,
+          controller: await _resultsByPriceController(),
+          child: const ResultsScreen());
+    });
+    testWidgets('dark', (t) async {
+      await _golden(t,
+          name: 'results_by_price_dark',
+          brightness: Brightness.dark,
+          controller: await _resultsByPriceController(),
+          child: const ResultsScreen());
+    });
+  });
+
   group('empty', () {
     testWidgets('light', (t) async {
       await _golden(t,
@@ -270,6 +289,12 @@ Future<TripSearchController> _searchController() async {
   final api = FakeTripApi()..corridors = const [najafKarbala, karbalaNajaf];
   final c = TripSearchController(api: api);
   await c.ensureCorridorsLoaded();
+  return c;
+}
+
+Future<TripSearchController> _resultsByPriceController() async {
+  final c = await _resultsController();
+  c.setSort(TripSort.price);
   return c;
 }
 

@@ -47,6 +47,7 @@ void main() {
   _screen('post_trip', _postTrip);
   _screen('post_trip_women', _postTripWomen);
   _screen('post_trip_no_corridor', _postTripNoCorridor);
+  _screen('post_trip_price_error', _postTripPriceError);
   _screen('my_trips', _myTrips);
   _screen('trip_detail', _tripDetailOpen);
   _screen('trip_detail_enroute', _tripDetailEnRoute);
@@ -128,6 +129,24 @@ Future<Widget> _postTripWomen() async {
   await c.loadCorridors();
   c.setSeatCount(2);
   c.setTripType(TripType.womenFamily);
+  return ChangeNotifierProvider<PostTripController>.value(
+    value: c,
+    child: PostTripScreen(onPosted: () {}),
+  );
+}
+
+/// A price outside the corridor's band, after the driver has left the field:
+/// the error names the allowed range, the "if it fills" total is withheld
+/// rather than computed from a price the server will reject, and the one-tap
+/// "use the usual price" shortcut is offered.
+Future<Widget> _postTripPriceError() async {
+  final api = FakeDriverTripApi()..corridors = const [najafKarbala, karbalaNajaf];
+  final c = PostTripController(api: api, maxSeats: 4);
+  await c.loadCorridors();
+  c
+    ..setSeatCount(3)
+    ..setPriceInput('999')
+    ..markPriceTouched();
   return ChangeNotifierProvider<PostTripController>.value(
     value: c,
     child: PostTripScreen(onPosted: () {}),

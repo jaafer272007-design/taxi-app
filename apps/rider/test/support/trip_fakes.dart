@@ -43,10 +43,18 @@ class FakeTripApi implements TripApi {
 
 // ── fixtures ───────────────────────────────────────────────────────────────
 
-const najafKarbala =
-    Corridor(id: 'c1', originCity: 'Najaf', destCity: 'Karbala', pricePerSeat: 6000);
-const karbalaNajaf =
-    Corridor(id: 'c2', originCity: 'Karbala', destCity: 'Najaf', pricePerSeat: 6000);
+// The rider never SHOWS a corridor price — each trip carries the driver's own.
+// The suggestion is here only because the model parses it.
+const najafKarbala = Corridor(
+    id: 'c1',
+    originCity: 'Najaf',
+    destCity: 'Karbala',
+    suggestedPricePerSeat: 6000);
+const karbalaNajaf = Corridor(
+    id: 'c2',
+    originCity: 'Karbala',
+    destCity: 'Najaf',
+    suggestedPricePerSeat: 6000);
 
 /// A trip fixture. [hourUtc]/[minute] are UTC; +3h gives the Baghdad clock the
 /// UI shows (e.g. hourUtc 4 → "07:00"), deterministic across machines.

@@ -24,6 +24,7 @@ class AppTextField extends StatelessWidget {
     this.maxLength,
     this.textInputAction,
     this.autofocus = false,
+    this.focusNode,
   });
 
   final String? label;
@@ -45,6 +46,10 @@ class AppTextField extends StatelessWidget {
   final int? maxLength;
   final TextInputAction? textInputAction;
   final bool autofocus;
+
+  /// Supply one when the caller needs to observe focus — e.g. to validate on
+  /// blur rather than on every keystroke.
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -68,6 +73,7 @@ class AppTextField extends StatelessWidget {
         ],
         TextField(
           controller: controller,
+          focusNode: focusNode,
           keyboardType: keyboardType,
           obscureText: obscureText,
           onChanged: onChanged,

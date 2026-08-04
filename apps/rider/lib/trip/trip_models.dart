@@ -17,24 +17,31 @@ extension TripTypeApi on TripType {
 
 /// A corridor (one direction, e.g. Najaf → Karbala). GET /corridors returns both
 /// directions as separate rows.
+///
+/// The rider app uses a corridor only to resolve a picked city pair into an id
+/// to search with. It deliberately does NOT read a price from here: since each
+/// driver sets their own, the only true fare is the one on the trip
+/// ([TripSummary.pricePerSeat]). [suggestedPricePerSeat] is the admin's
+/// suggestion TO DRIVERS and must never be shown to a rider as "the price".
 class Corridor {
   const Corridor({
     required this.id,
     required this.originCity,
     required this.destCity,
-    required this.pricePerSeat,
+    required this.suggestedPricePerSeat,
   });
 
   final String id;
   final String originCity;
   final String destCity;
-  final int pricePerSeat;
+  final int suggestedPricePerSeat;
 
   factory Corridor.fromJson(Map<String, dynamic> json) => Corridor(
         id: json['id'] as String,
         originCity: json['originCity'] as String,
         destCity: json['destCity'] as String,
-        pricePerSeat: (json['pricePerSeat'] as num).toInt(),
+        suggestedPricePerSeat:
+            (json['suggestedPricePerSeat'] as num).toInt(),
       );
 }
 

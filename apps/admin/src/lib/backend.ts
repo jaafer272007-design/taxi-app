@@ -85,7 +85,13 @@ export function listCorridors(token: string): Promise<Corridor[]> {
 
 export function createCorridor(
   token: string,
-  input: { originCity: string; destCity: string; pricePerSeat: number },
+  input: {
+    originCity: string;
+    destCity: string;
+    suggestedPricePerSeat: number;
+    minPricePerSeat: number;
+    maxPricePerSeat: number;
+  },
 ): Promise<Corridor> {
   return request<Corridor>("/corridors", {
     method: "POST",
@@ -100,7 +106,9 @@ export function updateCorridor(
   input: Partial<{
     originCity: string;
     destCity: string;
-    pricePerSeat: number;
+    suggestedPricePerSeat: number;
+    minPricePerSeat: number;
+    maxPricePerSeat: number;
     active: boolean;
   }>,
 ): Promise<Corridor> {

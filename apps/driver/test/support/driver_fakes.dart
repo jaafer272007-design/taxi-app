@@ -106,6 +106,7 @@ class FakeDriverTripApi implements DriverTripApi {
   int postCalls = 0;
   String? lastCorridorId;
   int? lastSeatsTotal;
+  int? lastPricePerSeat;
   bool? lastDepartNow;
   DateTime? lastDepartureTime;
   TripType? lastTripType;
@@ -152,6 +153,7 @@ class FakeDriverTripApi implements DriverTripApi {
   Future<DriverTrip> postTrip({
     required String corridorId,
     required int seatsTotal,
+    required int pricePerSeat,
     bool departNow = false,
     DateTime? departureTime,
     TripType tripType = TripType.general,
@@ -159,6 +161,7 @@ class FakeDriverTripApi implements DriverTripApi {
     postCalls++;
     lastCorridorId = corridorId;
     lastSeatsTotal = seatsTotal;
+    lastPricePerSeat = pricePerSeat;
     lastDepartNow = departNow;
     lastDepartureTime = departureTime;
     lastTripType = tripType;
@@ -167,6 +170,7 @@ class FakeDriverTripApi implements DriverTripApi {
         tripFixture(
           corridorId: corridorId,
           seatsTotal: seatsTotal,
+          price: pricePerSeat,
           tripType: tripType,
         );
   }
@@ -291,14 +295,29 @@ const najafKarbala = Corridor(
   originCity: 'Najaf',
   destCity: 'Karbala',
   active: true,
-  pricePerSeat: 6000,
+  suggestedPricePerSeat: 6000,
+  minPricePerSeat: 3000,
+  maxPricePerSeat: 12000,
 );
 const karbalaNajaf = Corridor(
   id: 'c2',
   originCity: 'Karbala',
   destCity: 'Najaf',
   active: true,
-  pricePerSeat: 6000,
+  suggestedPricePerSeat: 6000,
+  minPricePerSeat: 3000,
+  maxPricePerSeat: 12000,
+);
+
+/// A corridor the admin pinned to ONE price (min == max), for the "ثابت" path.
+const fixedPriceCorridor = Corridor(
+  id: 'c3',
+  originCity: 'Najaf',
+  destCity: 'Baghdad',
+  active: true,
+  suggestedPricePerSeat: 8000,
+  minPricePerSeat: 8000,
+  maxPricePerSeat: 8000,
 );
 
 Vehicle vehicleFixture({int seats = 4}) => Vehicle(

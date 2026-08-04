@@ -46,8 +46,13 @@ ApiException mapDioError(DioException e) {
     );
   }
   final status = e.response!.statusCode;
-  return ApiException(_serverMessage(e.response!.data, status),
-      statusCode: status);
+  final data = e.response!.data;
+  return ApiException(
+    _serverMessage(data, status),
+    statusCode: status,
+    code: data is Map && data['code'] is String ? data['code'] as String : null,
+    details: data is Map ? Map<String, dynamic>.from(data) : const {},
+  );
 }
 
 /// Prefer the backend's Arabic message; fall back by status code.
