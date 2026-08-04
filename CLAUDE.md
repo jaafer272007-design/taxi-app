@@ -160,6 +160,12 @@ without being asked:
   يشتغل على كل pull request وعلى push إلى `main`.
 - يشغّل لـ `services/api`: `npm ci` → `prisma generate` → `prisma migrate deploy`
   → `npm run build` → `npm test` مقابل Postgres (postgis) + Redis كـ service containers.
+- يشغّل لـ `apps/admin`: `lint` → `build` → **Playwright E2E** مقابل ستاك حقيقي
+  (Postgres + Redis + الـ API + بناء إنتاجي للوحة). قاعدة بيانات منفصلة
+  (`taxi_e2e`) لأن زرع الـ E2E **يمسح صفوفه ويعيد بناءها**. أي فشل يُسقط الـ PR،
+  وتُرفع الـ traces/screenshots كـ artifact باسم `admin-e2e-failures`.
+  الاختبارات: `apps/admin/e2e/`، والزرع: `services/api/prisma/seed-e2e.ts`.
+  التشغيل محلياً: `docs/RUN_LOCAL.md`.
 - متغيّرات WhatsApp/FCM غائبة عمداً بالـ CI حتى يُختبر مسار dev-fallback.
 - **حماية الفرع (يُفعّلها الأدمن مرة واحدة):** Settings → Branches → Add rule على
   `main` → فعّل "Require status checks to pass" واختَر فحص

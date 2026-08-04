@@ -120,6 +120,39 @@ curl -X POST http://localhost:3000/auth/verify-otp \
   (e.g. `psql "postgresql://taxi:taxi@localhost:5433/taxi_db"`)
 - **Redis:** `redis-cli -p 6380 ping` → `PONG`
 
+## Running the admin panel's E2E suite
+
+The Playwright suite in `apps/admin/e2e` drives the panel against a **real** API,
+Postgres and Redis. It is destructive over the rows it owns, so point it at a
+**throwaway database** — never `taxi_db`.
+
+```bash
+# 1. A database for the suite alone.
+psql "postgresql://taxi:taxi@localhost:5433/postgres" -c "CREATE DATABASE taxi_e2e;"
+
+# 2. Migrate + seed it. Prisma reads services/api/.env, and that file WINS over
+#    an exported DATABASE_URL — so override it there (or use a separate env
+#    file) rather than exporting the variable and assuming it took effect.
+cd services/api
+DATABASE_URL="postgresql://taxi:taxi@localhost:5433/taxi_e2e?schema=public" \
+SUPER_ADMIN_USERNAME=e2e-superadmin SUPER_ADMIN_PASSWORD=e2e-password-1234 \
+  npx prisma migrate deploy
+# …then the E2E fixtures (super admin, a normal admin, drivers, corridors):
+npx ts-node prisma/seed-e2e.ts
+
+# 3. Build both apps, then run. Playwright starts the API and the panel itself.
+npm run build
+cd ../../apps/admin && npm run build && npm run e2e
+```
+
+Re-run the seed between runs: the suite approves drivers, edits prices and
+creates a corridor, and the seed is what puts those back. It also clears the
+admin-login throttle counters in Redis, which otherwise outlive the run by 15
+minutes and make the rate-limit test fail on a second run.
+
+`npm run e2e:report` opens the HTML report; a failing CI run uploads the same
+traces as the `admin-e2e-failures` artifact.
+
 ## Stop / reset
 
 ```bash

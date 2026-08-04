@@ -80,18 +80,52 @@ jobs:
         run: npm test
 
   admin:
-    name: apps/admin (lint, build)
+    name: apps/admin (lint, build, e2e)
     runs-on: ubuntu-latest
 
     defaults:
       run:
         working-directory: apps/admin
 
-    # The admin panel talks to the API only at RUNTIME (server-side fetch), so
-    # the build needs no live backend — just a syntactically valid base URL for
-    # the module that reads it.
+    # Lint and build need no live backend — the panel talks to the API only at
+    # RUNTIME (server-side fetch) — but the Playwright suite does, so this job
+    # stands up the same Postgres + Redis the API job uses. Its own database, so
+    # the destructive E2E seed can never reach the API job's.
     env:
-      API_BASE_URL: http://localhost:3000
+      API_BASE_URL: http://127.0.0.1:3000
+      DATABASE_URL: postgresql://taxi:taxi@localhost:5432/taxi_e2e?schema=public
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-dummy-jwt-secret-not-for-production-0123456789
+      TZ: Asia/Baghdad
+      # Test-only credentials for a throwaway database that exists for the
+      # length of one CI job. The E2E suite reads the same values.
+      SUPER_ADMIN_USERNAME: e2e-superadmin
+      SUPER_ADMIN_PASSWORD: e2e-password-1234
+      ADMIN_PHONE: "+9647700000000"
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: taxi
+          POSTGRES_PASSWORD: taxi
+          POSTGRES_DB: taxi_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U taxi -d taxi_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
 
     steps:
       - name: Checkout
@@ -102,7 +136,9 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: apps/admin/package-lock.json
+          cache-dependency-path: |
+            apps/admin/package-lock.json
+            services/api/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -112,6 +148,46 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      # ── E2E: the panel is driven against a real API, not a mock ───────────
+      - name: Install API dependencies
+        working-directory: services/api
+        run: npm ci
+
+      - name: Build the API
+        working-directory: services/api
+        run: |
+          npx prisma generate
+          npx prisma migrate deploy
+          npm run build
+
+      - name: Seed deterministic E2E state
+        working-directory: services/api
+        run: npx ts-node prisma/seed-e2e.ts
+
+      # Only Chromium: this suite tests application behaviour, not cross-browser
+      # rendering, and three engines would triple the job for no extra signal.
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      # Playwright starts both servers itself (see playwright.config.ts), so
+      # this runs the same way locally and here.
+      - name: Run Playwright E2E suite
+        run: npm run e2e
+
+      # Uploaded only on failure, and only because a failure is what needs
+      # diagnosing: the trace replays the run step by step, so a red CI run can
+      # be understood without reproducing it locally.
+      - name: Upload Playwright traces + screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-e2e-failures
+          path: |
+            apps/admin/playwright-report/**
+            apps/admin/test-results/**
+          if-no-files-found: warn
+          retention-days: 7
 
   # One Flutter job: analyze the rider app, run all Flutter tests, and
   # generate/compare the UI golden screenshots for BOTH packages/shared and
