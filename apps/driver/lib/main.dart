@@ -101,6 +101,10 @@ class _DriverRouter extends StatelessWidget {
       // session exists, and the endpoint would 401.
       AuthStatus.authenticated => PollingScope(
           interval: kNotificationsPollInterval,
+          // App-wide: keeps running behind a pushed route and on every tab.
+          // A new booking should reach the driver while they are posting the
+          // next trip, not only from the one screen that happens to poll.
+          pauseWhenObscured: false,
           onPoll: context.read<NotificationsController>().refreshSilently,
           child: const NotificationAnnouncer(child: DriverGate()),
         ),

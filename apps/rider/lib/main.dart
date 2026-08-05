@@ -105,6 +105,10 @@ class _RiderRouter extends StatelessWidget {
       // an endpoint that would 401 is just noise.
       AuthStatus.authenticated => PollingScope(
           interval: kNotificationsPollInterval,
+          // App-wide, so it keeps running behind a pushed route and on every
+          // tab: the whole point is that a rider hears about a cancellation
+          // whatever screen they happen to be on.
+          pauseWhenObscured: false,
           onPoll: context.read<NotificationsController>().refreshSilently,
           child: const NotificationAnnouncer(child: HomeShell()),
         ),

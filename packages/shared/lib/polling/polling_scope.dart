@@ -27,6 +27,9 @@ final RouteObserver<ModalRoute<void>> appRouteObserver =
 ///     polls while they are posting a trip. The shells wrap each tab in
 ///     `TickerMode(enabled: isSelected)` to make this true.
 ///
+/// Conditions 2 and 3 are for a *screen*. An app-wide poll — the notification
+/// badge — passes `pauseWhenObscured: false` and keeps only condition 1.
+///
 /// Failures are swallowed by [Poller] — a failed poll leaves the last good
 /// data on screen and says nothing.
 class PollingScope extends StatefulWidget {
@@ -36,6 +39,7 @@ class PollingScope extends StatefulWidget {
     required this.onPoll,
     required this.child,
     this.enabled = true,
+    this.pauseWhenObscured = true,
   });
 
   final Duration interval;
@@ -45,6 +49,16 @@ class PollingScope extends StatefulWidget {
   /// Turn polling off entirely for this mount — used for screens that are only
   /// live in some states (a settled trip has nothing left to poll for).
   final bool enabled;
+
+  /// Stop when another route covers this one, or when this tab is not the
+  /// selected one. True for a screen; **false for an app-wide poll.**
+  ///
+  /// The notification poll is mounted once above the whole app, and the entire
+  /// point of it is that a rider learns their trip was cancelled *whatever they
+  /// are looking at*. With this left on, opening a trip's details or the
+  /// booking form would silence it — which is exactly the screen someone is on
+  /// while the driver cancels underneath them.
+  final bool pauseWhenObscured;
 
   @override
   State<PollingScope> createState() => _PollingScopeState();
@@ -94,6 +108,9 @@ class _PollingScopeState extends State<PollingScope>
     super.didUpdateWidget(old);
     if (widget.enabled != old.enabled) {
       widget.enabled ? _poller.start() : _poller.stop();
+    }
+    if (widget.enabled != old.enabled ||
+        widget.pauseWhenObscured != old.pauseWhenObscured) {
       _applyGate();
     }
   }
@@ -131,7 +148,9 @@ class _PollingScopeState extends State<PollingScope>
   }
 
   void _applyGate() {
-    _poller.setActive(_foreground && _routeOnTop && _tabVisible);
+    final onScreen =
+        widget.pauseWhenObscured ? (_routeOnTop && _tabVisible) : true;
+    _poller.setActive(_foreground && onScreen);
   }
 
   @override

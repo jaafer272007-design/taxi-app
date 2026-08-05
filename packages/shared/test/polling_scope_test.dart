@@ -16,6 +16,7 @@ void main() {
     required Future<void> Function() onPoll,
     bool enabled = true,
     bool tabVisible = true,
+    bool pauseWhenObscured = true,
     Duration interval = const Duration(seconds: 10),
   }) =>
       MaterialApp(
@@ -26,6 +27,7 @@ void main() {
             interval: interval,
             onPoll: onPoll,
             enabled: enabled,
+            pauseWhenObscured: pauseWhenObscured,
             child: const Scaffold(body: Center(child: Text('الرحلات'))),
           ),
         ),
@@ -172,5 +174,69 @@ void main() {
         reason: 'back on top: refresh before the user reads a stale list');
 
     await unmount(t);
+  });
+
+  group('pauseWhenObscured: false — the app-wide notification poll', () {
+    // Mounted once above the whole app. A rider learns their trip was
+    // cancelled WHATEVER they are looking at, so neither a pushed route nor an
+    // unselected tab may silence it — those are precisely the screens somebody
+    // is on while the driver cancels underneath them.
+
+    testWidgets('keeps polling behind a pushed route', (t) async {
+      var calls = 0;
+      await t.pumpWidget(
+        host(onPoll: () async => calls++, pauseWhenObscured: false),
+      );
+      await t.pump();
+      expect(calls, 1);
+
+      final navigator = t.state<NavigatorState>(find.byType(Navigator));
+      unawaited(navigator.push(MaterialPageRoute<void>(
+        builder: (_) => const Scaffold(body: Center(child: Text('الحجز'))),
+      )));
+      await t.pumpAndSettle();
+      expect(find.text('الحجز'), findsOneWidget);
+
+      final atPush = calls;
+      await t.pump(const Duration(seconds: 10));
+      expect(calls, atPush + 1,
+          reason: 'the booking form is exactly where a cancellation lands');
+
+      navigator.pop();
+      await t.pumpAndSettle();
+      await unmount(t);
+    });
+
+    testWidgets('keeps polling on an unselected tab', (t) async {
+      var calls = 0;
+      Future<void> poll() async => calls++;
+
+      await t.pumpWidget(host(onPoll: poll, pauseWhenObscured: false));
+      await t.pump();
+      expect(calls, 1);
+
+      await t.pumpWidget(
+        host(onPoll: poll, pauseWhenObscured: false, tabVisible: false),
+      );
+      await t.pump(const Duration(seconds: 10));
+      expect(calls, 2);
+
+      await unmount(t);
+    });
+
+    testWidgets('still stops when the app is backgrounded', (t) async {
+      var calls = 0;
+      await t.pumpWidget(
+        host(onPoll: () async => calls++, pauseWhenObscured: false),
+      );
+      await t.pump();
+      expect(calls, 1);
+
+      lifecycle(t, AppLifecycleState.paused);
+      await t.pump(const Duration(minutes: 10));
+      expect(calls, 1, reason: 'a pocket is a pocket, app-wide or not');
+
+      await unmount(t);
+    });
   });
 }
