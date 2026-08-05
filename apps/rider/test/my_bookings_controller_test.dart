@@ -45,7 +45,12 @@ void main() {
 
       expect(err, isNull);
       expect(api.cancelCalls, 1);
-      expect(c.upcoming.single.status, BookingStatus.cancelled);
+      // «سابقة», not «قادمة»: the bucket is a status question now, and CANCELLED
+      // is terminal. This used to assert `c.upcoming.single`, which left the
+      // rider watching a seat they had just given up sit under «قادمة» until
+      // the next load — the small version of BUG 1.
+      expect(c.past.single.status, BookingStatus.cancelled);
+      expect(c.upcoming, isEmpty);
     });
 
     test('cancel past the cutoff returns the Arabic error, status unchanged',
