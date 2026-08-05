@@ -156,14 +156,22 @@ BookingStatus bookingStatusFrom(String? raw) => switch (raw) {
 
 /// One booking on the driver's own trip (GET /trips/:id/bookings). The rider's
 /// [riderName] is resolved server-side; [riderId] is the target for rating.
+///
+/// Carries the pickup/dropoff as [LocationPoint]s, coordinates included: a
+/// neighbourhood name tells the driver roughly where to head, but only a point
+/// can be shown on a map or handed to a navigation app — and completing a
+/// door-to-door pickup needs the latter.
+///
+/// Deliberately NO phone number. The rider's comes from
+/// `GET /trips/:id/contacts` alone, which is the only endpoint that returns one.
 class TripBooking {
   const TripBooking({
     required this.id,
     required this.riderId,
     required this.riderName,
     required this.seatCount,
-    required this.pickupLabel,
-    required this.dropoffLabel,
+    required this.pickup,
+    required this.dropoff,
     required this.fare,
     required this.status,
   });
@@ -172,18 +180,21 @@ class TripBooking {
   final String riderId;
   final String? riderName;
   final int seatCount;
-  final String pickupLabel;
-  final String dropoffLabel;
+  final LocationPoint pickup;
+  final LocationPoint dropoff;
   final int fare;
   final BookingStatus status;
+
+  String get pickupLabel => pickup.label;
+  String get dropoffLabel => dropoff.label;
 
   TripBooking copyWith({BookingStatus? status}) => TripBooking(
         id: id,
         riderId: riderId,
         riderName: riderName,
         seatCount: seatCount,
-        pickupLabel: pickupLabel,
-        dropoffLabel: dropoffLabel,
+        pickup: pickup,
+        dropoff: dropoff,
         fare: fare,
         status: status ?? this.status,
       );
@@ -193,10 +204,53 @@ class TripBooking {
         riderId: json['riderId'] as String,
         riderName: json['riderName'] as String?,
         seatCount: (json['seatCount'] as num?)?.toInt() ?? 1,
-        pickupLabel: json['pickupLabel'] as String? ?? '',
-        dropoffLabel: json['dropoffLabel'] as String? ?? '',
+        pickup: _pointFrom(json, 'pickup'),
+        dropoff: _pointFrom(json, 'dropoff'),
         fare: (json['fare'] as num?)?.toInt() ?? 0,
         status: bookingStatusFrom(json['status'] as String?),
+      );
+}
+
+/// Read `<prefix>Lat` / `<prefix>Lng` / `<prefix>Label` into a [LocationPoint].
+///
+/// Coordinates default to 0,0 only if an older API omits them entirely; callers
+/// check [LocationPoint.hasCoordinates] rather than opening a map on Null
+/// Island.
+LocationPoint _pointFrom(Map<String, dynamic> json, String prefix) =>
+    LocationPoint(
+      lat: (json['${prefix}Lat'] as num?)?.toDouble() ?? 0,
+      lng: (json['${prefix}Lng'] as num?)?.toDouble() ?? 0,
+      label: json['${prefix}Label'] as String? ?? '',
+    );
+
+/// One reachable person on a trip (GET /trips/:id/contacts).
+///
+/// The server returns these ONLY to the trip's driver and to riders holding a
+/// live booking on it; everyone else gets 403. The app never decides who may
+/// see a number — it asks, and renders what comes back.
+class TripContact {
+  const TripContact({
+    required this.userId,
+    required this.name,
+    required this.phone,
+    required this.bookingId,
+  });
+
+  final String userId;
+  final String? name;
+
+  /// E.164, e.g. `+9647701234567`.
+  final String phone;
+
+  /// The booking connecting the caller to this contact — for a driver, which of
+  /// their bookings this rider holds.
+  final String bookingId;
+
+  factory TripContact.fromJson(Map<String, dynamic> json) => TripContact(
+        userId: json['userId'] as String,
+        name: json['name'] as String?,
+        phone: json['phone'] as String? ?? '',
+        bookingId: json['bookingId'] as String? ?? '',
       );
 }
 

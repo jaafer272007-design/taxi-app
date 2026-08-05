@@ -117,6 +117,13 @@ class FakeDriverTripApi implements DriverTripApi {
   // Trip detail / lifecycle scripting.
   List<TripBooking> tripBookingsResult = const [];
 
+  /// Rider phone numbers, as GET /trips/:id/contacts returns them. Empty by
+  /// default so a test has to opt IN to numbers being present — the same
+  /// default the server enforces.
+  List<TripContact> tripContactsResult = const [];
+  Object? tripContactsError;
+  int tripContactsCalls = 0;
+
   /// When set, [completeTrip] swaps [tripBookingsResult] to this — models the
   /// backend settling ONBOARD/CONFIRMED bookings to COMPLETED on completion.
   List<TripBooking>? settledBookingsResult;
@@ -185,6 +192,13 @@ class FakeDriverTripApi implements DriverTripApi {
   Future<List<TripBooking>> tripBookings(String tripId) async {
     if (tripBookingsError != null) throw tripBookingsError!;
     return tripBookingsResult;
+  }
+
+  @override
+  Future<List<TripContact>> tripContacts(String tripId) async {
+    tripContactsCalls++;
+    if (tripContactsError != null) throw tripContactsError!;
+    return tripContactsResult;
   }
 
   @override
@@ -397,16 +411,38 @@ TripBooking bookingFixture({
   String dropoffLabel = 'باب القبلة',
   int fare = 6000,
   BookingStatus status = BookingStatus.confirmed,
+  /// Real Najaf / Karbala coordinates by default, so a fixture that opens the
+  /// map lands somewhere plausible. Pass 0 for the "API sent no coordinates"
+  /// case, which the screen must render as plain text.
+  double pickupLat = 31.9990,
+  double pickupLng = 44.3148,
+  double dropoffLat = 32.6160,
+  double dropoffLng = 44.0242,
 }) =>
     TripBooking(
       id: id,
       riderId: riderId,
       riderName: riderName,
       seatCount: seatCount,
-      pickupLabel: pickupLabel,
-      dropoffLabel: dropoffLabel,
+      pickup: LocationPoint(
+          lat: pickupLat, lng: pickupLng, label: pickupLabel),
+      dropoff: LocationPoint(
+          lat: dropoffLat, lng: dropoffLng, label: dropoffLabel),
       fare: fare,
       status: status,
+    );
+
+TripContact contactFixture({
+  String userId = 'r1',
+  String? name = 'علي حسن',
+  String phone = '+9647701234567',
+  String bookingId = 'b1',
+}) =>
+    TripContact(
+      userId: userId,
+      name: name,
+      phone: phone,
+      bookingId: bookingId,
     );
 
 EarningsRecord earningsRecordFixture({

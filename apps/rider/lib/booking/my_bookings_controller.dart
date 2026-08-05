@@ -15,6 +15,10 @@ class MyBookingsController extends ChangeNotifier {
 
   MyBookingsStatus _status = MyBookingsStatus.loading;
   List<Booking> _bookings = const [];
+
+  /// Driver numbers, keyed by bookingId. Only ever populated for bookings the
+  /// server was willing to answer for — see [_loadContacts].
+  Map<String, TripContact> _contactsByBooking = const {};
   String? _error;
   bool _hasLoaded = false;
   final Set<String> _cancelling = {};
@@ -38,6 +42,11 @@ class MyBookingsController extends ChangeNotifier {
 
   bool isCancelling(String id) => _cancelling.contains(id);
 
+  /// The driver's contact for a booking, or null when the rider is not entitled
+  /// to it (cancelled booking) or the lookup did not resolve. Null means "draw
+  /// no contact row" — never "draw an empty one".
+  TripContact? contactFor(String bookingId) => _contactsByBooking[bookingId];
+
   /// A booking can be cancelled by the rider only while upcoming and CONFIRMED
   /// (the backend still enforces the 15-min cutoff).
   bool canCancel(Booking b) =>
@@ -50,6 +59,7 @@ class MyBookingsController extends ChangeNotifier {
     try {
       _bookings = await _api.listMine();
       _status = MyBookingsStatus.loaded;
+      await _loadContacts();
     } on ApiException catch (e) {
       _error = e.message;
       _status = MyBookingsStatus.error;
@@ -61,6 +71,49 @@ class MyBookingsController extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  /// Resolve the driver's number for the bookings that could use one.
+  ///
+  /// Only [canContact] bookings are asked about: a past or cancelled booking
+  /// would get a 403, and firing requests we expect to be refused would turn a
+  /// long history into a burst of failures on every load.
+  ///
+  /// One request per trip is the cost of keeping the entitlement rule in a
+  /// single server-side place instead of copying it into `/bookings/mine`. A
+  /// rider has a handful of upcoming trips, and they run concurrently.
+  /// Individual failures are swallowed: no number is a missing convenience,
+  /// not a broken screen.
+  Future<void> _loadContacts() async {
+    final wanted = _bookings.where(canContact).toList();
+    if (wanted.isEmpty) {
+      _contactsByBooking = const {};
+      return;
+    }
+
+    final resolved = <String, TripContact>{};
+    await Future.wait(wanted.map((b) async {
+      final tripId = b.trip?.id;
+      if (tripId == null) return;
+      try {
+        final contact = await _api.driverContact(tripId);
+        if (contact != null) resolved[b.id] = contact;
+      } catch (_) {
+        // 403 (not entitled), offline, anything: no row for this booking.
+      }
+    }));
+    _contactsByBooking = resolved;
+  }
+
+  /// Whether it is worth asking the server for this booking's driver number.
+  ///
+  /// A mirror of the server's rule, not a second enforcement of it: the server
+  /// is still the only thing that decides, and it refuses anything this misses.
+  /// This exists purely so a rider with twenty cancelled bookings does not fire
+  /// twenty requests destined for 403.
+  static bool canContact(Booking b) =>
+      b.trip != null &&
+      (b.upcoming ?? false) &&
+      b.status != BookingStatus.cancelled;
 
   /// Cancel a booking. Returns null on success, else an Arabic message (e.g.
   /// past the cutoff) for the caller to surface. Guards double-cancel.
@@ -74,6 +127,10 @@ class MyBookingsController extends ChangeNotifier {
         for (final b in _bookings)
           if (b.id == bookingId) _withStatus(b, updated.status) else b,
       ];
+      // The number goes with the booking. The server would refuse it on the
+      // next load anyway; dropping it now means the rider never sees a stale
+      // "call your driver" on a seat they just gave up.
+      _contactsByBooking = {..._contactsByBooking}..remove(bookingId);
       return null;
     } on ApiException catch (e) {
       return e.message;
@@ -90,8 +147,8 @@ class MyBookingsController extends ChangeNotifier {
         seatCount: b.seatCount,
         fare: b.fare,
         status: status,
-        pickupLabel: b.pickupLabel,
-        dropoffLabel: b.dropoffLabel,
+        pickup: b.pickup,
+        dropoff: b.dropoff,
         trip: b.trip,
         upcoming: b.upcoming,
       );

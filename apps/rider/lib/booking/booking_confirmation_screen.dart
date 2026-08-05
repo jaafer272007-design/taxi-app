@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:shared/shared.dart';
 
 import 'booking_api.dart';
+import 'booking_models.dart';
 import 'my_bookings_controller.dart';
 import 'my_bookings_screen.dart';
 
@@ -35,6 +36,9 @@ class BookingConfirmationScreen extends StatelessWidget {
     required this.departureTime,
     this.originCity,
     this.destCity,
+    this.pickup,
+    this.dropoff,
+    this.driverContact,
   });
 
   final int seatCount;
@@ -42,6 +46,18 @@ class BookingConfirmationScreen extends StatelessWidget {
   final DateTime departureTime;
   final String? originCity;
   final String? destCity;
+
+  /// The two points the rider just chose. Shown back to them so the seat they
+  /// booked is visibly the journey they meant — and tappable, because a
+  /// reverse-geocoded street name is easy to misread and a map is not.
+  final LocationPoint? pickup;
+  final LocationPoint? dropoff;
+
+  /// The driver's number, resolved after the booking existed. Null while it is
+  /// still loading, or if the lookup failed — in which case حجوزاتي will show
+  /// it. The screen never blocks on it: the confirmation is the booking, not
+  /// the phone call.
+  final TripContact? driverContact;
 
   /// Hand-off badge diameter.
   static const double _badge = 88;
@@ -60,6 +76,24 @@ class BookingConfirmationScreen extends StatelessWidget {
           child: const MyBookingsScreen(),
         ),
       ),
+    );
+  }
+
+  void _snack(BuildContext context, String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _showPoint(
+      BuildContext context, LocationPoint point, String title) {
+    return showMapView(
+      context,
+      point: point,
+      launcher: context.read<LinkLauncher>(),
+      title: title,
+      onNavigationUnavailable: () =>
+          _snack(context, 'لا يوجد تطبيق خرائط على هذا الجهاز.'),
     );
   }
 
@@ -122,6 +156,16 @@ class BookingConfirmationScreen extends StatelessWidget {
             departureTime: departureTime,
             originCity: originCity,
             destCity: destCity,
+            pickup: pickup,
+            dropoff: dropoff,
+            driverContact: driverContact,
+            onShowPickup: pickup == null
+                ? null
+                : () => _showPoint(context, pickup!, 'نقطة الانطلاق'),
+            onShowDropoff: dropoff == null
+                ? null
+                : () => _showPoint(context, dropoff!, 'نقطة النزول'),
+            onContactUnavailable: (m) => _snack(context, m),
             onOpenBookings: () => _openMyBookings(context),
             onHome: () =>
                 Navigator.of(context).popUntil((route) => route.isFirst),
@@ -139,6 +183,12 @@ class _RecapSheet extends StatelessWidget {
     required this.departureTime,
     required this.originCity,
     required this.destCity,
+    required this.pickup,
+    required this.dropoff,
+    required this.driverContact,
+    required this.onShowPickup,
+    required this.onShowDropoff,
+    required this.onContactUnavailable,
     required this.onOpenBookings,
     required this.onHome,
   });
@@ -148,6 +198,12 @@ class _RecapSheet extends StatelessWidget {
   final DateTime departureTime;
   final String? originCity;
   final String? destCity;
+  final LocationPoint? pickup;
+  final LocationPoint? dropoff;
+  final TripContact? driverContact;
+  final VoidCallback? onShowPickup;
+  final VoidCallback? onShowDropoff;
+  final ValueChanged<String> onContactUnavailable;
   final VoidCallback onOpenBookings;
   final VoidCallback onHome;
 
@@ -196,6 +252,23 @@ class _RecapSheet extends StatelessWidget {
               ),
               SizedBox(height: space.lg),
               Divider(height: 1, color: colors.border),
+              SizedBox(height: space.sm),
+              if (pickup != null)
+                MapPointRow(
+                  title: 'نقطة الانطلاق',
+                  point: pickup!,
+                  icon: AppIcons.mapPin,
+                  onTap: onShowPickup,
+                ),
+              if (dropoff != null)
+                MapPointRow(
+                  title: 'نقطة النزول',
+                  point: dropoff!,
+                  icon: AppIcons.route,
+                  onTap: onShowDropoff,
+                ),
+              SizedBox(height: space.sm),
+              Divider(height: 1, color: colors.border),
               SizedBox(height: space.lg),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -210,6 +283,22 @@ class _RecapSheet extends StatelessWidget {
                           .copyWith(color: colors.primary)),
                 ],
               ),
+              // The driver's number, the moment the booking makes the rider
+              // entitled to it. This is the screen where they most want it:
+              // the seat is theirs and the next thing that happens is a call
+              // about where exactly to wait.
+              if (driverContact != null) ...[
+                SizedBox(height: space.lg),
+                Divider(height: 1, color: colors.border),
+                SizedBox(height: space.lg),
+                ContactRow(
+                  phone: driverContact!.phone,
+                  name: driverContact!.name,
+                  roleLabel: 'السائق',
+                  launcher: context.read<LinkLauncher>(),
+                  onUnavailable: onContactUnavailable,
+                ),
+              ],
               SizedBox(height: space.xl),
               AppButton(
                 label: 'عرض حجوزاتي',

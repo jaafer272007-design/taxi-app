@@ -127,12 +127,28 @@ Future<Widget> _bookingErrorForm() async {
   );
 }
 
+/// A [LinkLauncher] that goes nowhere — the goldens render the buttons, they
+/// never press them.
+class _InertLauncher implements LinkLauncher {
+  const _InertLauncher();
+
+  @override
+  Future<bool> open(Uri uri) async => true;
+}
+
+/// The confirmation as it looks in practice: the rider's own two points, and
+/// the driver's number, which the booking has just entitled them to.
 Widget _confirmation() => BookingConfirmationScreen(
       seatCount: 2,
       fare: 12000,
       departureTime: DateTime.utc(2026, 7, 20, 4, 30),
       originCity: 'Najaf',
       destCity: 'Karbala',
+      pickup: const LocationPoint(
+          lat: 31.999, lng: 44.3148, label: 'قرية الغدير السكنية'),
+      dropoff: const LocationPoint(
+          lat: 32.616, lng: 44.0242, label: 'طريق الحر، حي الزيتون'),
+      driverContact: contactFixture(name: 'أبو علي', phone: '+9647701234567'),
     );
 
 Future<Widget> _myBookings() async {
@@ -156,7 +172,12 @@ Future<Widget> _myBookings() async {
         hourUtc: 6,
         minute: 0,
       ),
-    ];
+    ]
+    // The fake returns this for any trip, but only the UPCOMING booking is ever
+    // asked about — so the past card below has no contact row, which is the
+    // rule made visible.
+    ..driverContactResult =
+        contactFixture(name: 'أبو علي', phone: '+9647701234567');
   final c = MyBookingsController(api: api);
   await c.load(); // hasLoaded → the screen won't re-fetch
   return ChangeNotifierProvider<MyBookingsController>.value(
@@ -185,10 +206,15 @@ Future<void> _golden(
       brightness == Brightness.light ? AppTheme.light() : AppTheme.dark();
 
   await tester.pumpWidget(
-    MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: theme,
-      home: Directionality(textDirection: TextDirection.rtl, child: child),
+    Provider<LinkLauncher>.value(
+      // Contact rows read the launcher from the tree at build time; the goldens
+      // render the buttons without ever pressing them.
+      value: const _InertLauncher(),
+      child: MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: theme,
+        home: Directionality(textDirection: TextDirection.rtl, child: child),
+      ),
     ),
   );
 

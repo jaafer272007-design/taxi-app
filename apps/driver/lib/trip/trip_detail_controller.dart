@@ -39,6 +39,10 @@ class TripDetailController extends ChangeNotifier {
 
   DriverTrip _trip;
   List<TripBooking> _bookings = const [];
+
+  /// Rider phone numbers, keyed by bookingId. Empty until [load] resolves them
+  /// — and it stays empty if the server refuses, which is a legitimate answer.
+  Map<String, TripContact> _contactsByBooking = const {};
   TripDetailStatus _loadStatus = TripDetailStatus.loading;
   String? _error;
   bool _hasLoaded = false;
@@ -64,6 +68,11 @@ class TripDetailController extends ChangeNotifier {
   bool bookingActionInFlight(String bookingId) =>
       _bookingActionInFlight.contains(bookingId);
   bool isRated(String riderId) => _ratedRiderIds.contains(riderId);
+
+  /// The rider's contact for a booking, or null when the server did not return
+  /// one (a cancelled booking, or an older API). Null means "draw no contact
+  /// row" — never "draw an empty one".
+  TripContact? contactFor(String bookingId) => _contactsByBooking[bookingId];
 
   // ── UI gates (mirror the backend state machine) ───────────────────────────
   bool get canStart =>
@@ -129,8 +138,22 @@ class TripDetailController extends ChangeNotifier {
       _error = 'تعذّر تحميل الحجوزات. حاول مرة أخرى.';
       _loadStatus = TripDetailStatus.error;
     }
+    if (_loadStatus == TripDetailStatus.loaded) await _loadContacts();
     _hasLoaded = true;
     notifyListeners();
+  }
+
+  /// Fetch the riders' numbers. Failure is SWALLOWED on purpose: the screen's
+  /// job is the trip and its bookings, and losing the phone column is a missing
+  /// convenience, not a broken screen. Turning a contacts 403 into a full-page
+  /// error would hide the bookings the driver actually came here for.
+  Future<void> _loadContacts() async {
+    try {
+      final contacts = await _api.tripContacts(_trip.id);
+      _contactsByBooking = {for (final c in contacts) c.bookingId: c};
+    } catch (_) {
+      _contactsByBooking = const {};
+    }
   }
 
   Future<String?> start() =>

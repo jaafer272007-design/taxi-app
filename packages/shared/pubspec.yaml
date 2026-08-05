@@ -37,6 +37,11 @@ dependencies:
   # Device location for "use my location". Imported ONLY in
   # lib/map/geolocator_location_service.dart, behind the LocationService interface.
   geolocator: ^14.0.0
+  # Hands tel: / wa.me / geo: links to the device's dialer, WhatsApp and maps
+  # app. Imported ONLY in lib/contact/url_link_launcher.dart, behind the
+  # LinkLauncher interface — so tests assert the URL a tap produced instead of
+  # mocking a platform channel.
+  url_launcher: ^6.3.0
 
 dev_dependencies:
   flutter_test:

@@ -68,6 +68,9 @@ class RiderApp extends StatelessWidget {
           create: (_) => const GeolocatorLocationService(),
         ),
         Provider<ReverseGeocoder>(create: (_) => NominatimReverseGeocoder()),
+        // Opens tel: / wa.me / geo: links — same containment as above: screens
+        // depend on the LinkLauncher interface, not on url_launcher.
+        Provider<LinkLauncher>(create: (_) => const UrlLinkLauncher()),
       ],
       child: TaxiApp(
         title: 'تكسي مشترك — الراكب',
