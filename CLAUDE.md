@@ -146,6 +146,17 @@ without being asked:
   local run**.
 - The CI **`ui-goldens`** job must **upload these images as an artifact on every
   run** (even on success). Keep that behavior in `.github/workflows/ci.yml`.
+- **A golden that interacts must pump past the animation.** `AppCard` and
+  `AppButton` cross-fade over **120ms**, and Flutter reuses the widget at a list
+  position across a rebuild — so a golden taken after a tap can catch a colour
+  mid-`lerp`. The «سابقة» screenshot shipped with the rate button still wearing
+  the *cancel* button's danger tint (measured fill `#F9EDEC` = `lerp(dangerTonal,
+  surface, 0.27)` — 64ms in) and looked like a design bug that did not exist.
+  Pump **≥ 2 frames of 300ms** after any tap, and read the PNG before believing
+  it. A screenshot of a frame nobody ever sees is worse than no screenshot.
+- **Look at the images, don't just let CI regenerate them.** Every visual bug
+  found here so far — the tofu arrow, the fused `٠` dot, this one — was found by
+  opening the PNG. The test passing means the PNG matches itself.
 - In the PR description, **state what is verified vs. not**: which behaviors are
   covered by golden / widget / unit tests, and which still need a **live device
   run** (e.g. real API round-trips, secure storage, push) — so we always know
