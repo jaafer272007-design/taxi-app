@@ -1,3 +1,5 @@
+import 'package:shared/shared.dart';
+
 /// A door-to-door point the rider marks (a label + coordinates), as it goes
 /// over the wire to POST /bookings.
 class GeoPoint {

@@ -1,3 +1,5 @@
+import 'package:shared/shared.dart';
+
 /// A corridor (one direction, e.g. Najaf → Karbala). GET /corridors returns both
 /// directions; `active: false` corridors can't be posted on.
 ///
