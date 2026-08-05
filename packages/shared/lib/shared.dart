@@ -37,6 +37,7 @@ export 'widgets/seat_glyphs.dart';
 export 'widgets/floating_pill_nav.dart';
 export 'widgets/on_primary_chip.dart';
 export 'widgets/seat_count_picker.dart';
+export 'widgets/map_point_row.dart';
 
 // Shared domain constants (canonical Iraqi cities, kept in sync with the API).
 export 'constants/iraqi_cities.dart';
@@ -57,6 +58,15 @@ export 'map/location_service.dart';
 export 'map/geolocator_location_service.dart';
 export 'map/reverse_geocoder.dart';
 export 'map/app_map_picker.dart';
+
+// Contact between a driver and their riders: the tel:/wa.me/geo: URIs, the
+// launcher behind which `url_launcher` is contained, and the shared row that
+// renders a number with its two actions. Numbers themselves come only from
+// GET /trips/:id/contacts — nothing here decides who may see one.
+export 'contact/contact_link.dart';
+export 'contact/link_launcher.dart';
+export 'contact/url_link_launcher.dart';
+export 'contact/contact_row.dart';
 
 // Networking layer (base URL + JWT interceptor + Arabic error mapping) and the
 // Iraqi-phone helper — shared by the rider & driver apps.

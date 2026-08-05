@@ -64,6 +64,10 @@ class DriverApp extends StatelessWidget {
         ChangeNotifierProvider<AuthController>.value(value: authController),
         ChangeNotifierProvider<DriverController>.value(value: driverController),
         Provider<DriverTripApi>.value(value: driverTripApi),
+        // Opens tel: / wa.me / geo: links. The concrete impl lives here; every
+        // screen depends only on the LinkLauncher interface, so widget tests
+        // inject a fake and assert the URL a tap produced.
+        Provider<LinkLauncher>(create: (_) => const UrlLinkLauncher()),
       ],
       child: TaxiApp(
         title: 'تكسي مشترك — السائق',

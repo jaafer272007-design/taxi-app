@@ -12,13 +12,17 @@ import {
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { TripService } from './trip.service';
+import { TripContactService } from './trip-contact.service';
 import { CreateTripDto } from './dto/create-trip.dto';
 import { UpdateTripDto } from './dto/update-trip.dto';
 
 @Controller('trips')
 @UseGuards(JwtAuthGuard)
 export class TripController {
-  constructor(private readonly trips: TripService) {}
+  constructor(
+    private readonly trips: TripService,
+    private readonly contacts: TripContactService,
+  ) {}
 
   @Post()
   createTrip(@CurrentUser('id') userId: string, @Body() dto: CreateTripDto) {
@@ -33,6 +37,16 @@ export class TripController {
   @Get(':id/bookings')
   listBookings(@CurrentUser('id') userId: string, @Param('id') id: string) {
     return this.trips.listBookings(userId, id);
+  }
+
+  /**
+   * Phone numbers for the other side of this trip — the driver's riders, or a
+   * rider's driver. 403 for anyone without a live booking between them; see
+   * TripContactService, which is the only place a phone leaves the server.
+   */
+  @Get(':id/contacts')
+  listContacts(@CurrentUser('id') userId: string, @Param('id') id: string) {
+    return this.contacts.listContacts(userId, id);
   }
 
   @Patch(':id')

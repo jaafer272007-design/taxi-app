@@ -29,6 +29,14 @@ abstract interface class DriverTripApi {
   /// the rider's resolved name, seats, pickup/dropoff and status.
   Future<List<TripBooking>> tripBookings(String tripId);
 
+  /// GET /trips/:id/contacts — each booked rider's phone number.
+  ///
+  /// Separate from [tripBookings] on purpose: this is the ONE endpoint that
+  /// returns a phone number, so the server's "only after a booking exists" rule
+  /// has exactly one place to be enforced and audited. A 403 here is a normal
+  /// answer (the trip is not yours), not an error to surface.
+  Future<List<TripContact>> tripContacts(String tripId);
+
   /// POST /trips/:id/start — OPEN|LOCKED → EN_ROUTE.
   Future<void> startTrip(String tripId);
 
@@ -121,6 +129,20 @@ class DioDriverTripApi implements DriverTripApi {
       final res = await _dio.get<List<dynamic>>('/trips/$tripId/bookings');
       return (res.data ?? const [])
           .map((e) => TripBooking.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } on DioException catch (e) {
+      throw mapDioError(e);
+    }
+  }
+
+  @override
+  Future<List<TripContact>> tripContacts(String tripId) async {
+    try {
+      final res =
+          await _dio.get<Map<String, dynamic>>('/trips/$tripId/contacts');
+      final list = (res.data?['contacts'] as List<dynamic>?) ?? const [];
+      return list
+          .map((e) => TripContact.fromJson(e as Map<String, dynamic>))
           .toList();
     } on DioException catch (e) {
       throw mapDioError(e);

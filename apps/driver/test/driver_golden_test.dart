@@ -51,6 +51,9 @@ void main() {
   _screen('post_trip_price_error', _postTripPriceError, scrollBy: 320);
   _screen('my_trips', _myTrips);
   _screen('trip_detail', _tripDetailOpen);
+  // Scrolled onto the booking cards: the points and the phone row live below
+  // the hero, and that is the part of this change worth looking at.
+  _screen('trip_detail_contact', _tripDetailOpen, scrollBy: 300);
   _screen('trip_detail_enroute', _tripDetailEnRoute);
   _screen('trip_completed', _tripCompleted);
   _screen('earnings', _earnings);
@@ -220,20 +223,40 @@ Future<TripDetailController> _detail({
   required DriverTrip trip,
   required List<TripBooking> bookings,
   List<TripBooking>? settled,
+  List<TripContact> contacts = const [],
 }) async {
   final api = FakeDriverTripApi()
     ..tripBookingsResult = bookings
-    ..settledBookingsResult = settled;
+    ..settledBookingsResult = settled
+    ..tripContactsResult = contacts;
   final c = TripDetailController(api: api, trip: trip, corridor: najafKarbala);
   await c.load();
   return c;
 }
 
-Widget _hostDetail(TripDetailController c) =>
-    ChangeNotifierProvider<TripDetailController>.value(
-        value: c, child: const TripDetailScreen());
+/// A [LinkLauncher] that goes nowhere — the goldens render the buttons, they
+/// never press them.
+class _InertLauncher implements LinkLauncher {
+  const _InertLauncher();
+
+  @override
+  Future<bool> open(Uri uri) async => true;
+}
+
+Widget _hostDetail(TripDetailController c) => MultiProvider(
+      providers: [
+        ChangeNotifierProvider<TripDetailController>.value(value: c),
+        Provider<LinkLauncher>.value(value: const _InertLauncher()),
+      ],
+      child: const TripDetailScreen(),
+    );
 
 /// OPEN trip with two confirmed bookings → start + (soft) cancel actions.
+///
+/// Both riders carry a phone number, because after a booking exists that is
+/// what the driver actually sees — a screenshot without them would be of a
+/// screen that no longer ships. The second rider's pickup label is blank, so
+/// the coordinate fallback is visible here too.
 Future<Widget> _tripDetailOpen() async {
   final c = await _detail(
     trip: tripFixture(
@@ -243,13 +266,25 @@ Future<Widget> _tripDetailOpen() async {
         tripType: TripType.womenFamily),
     bookings: [
       bookingFixture(
-          id: 'b1', riderId: 'r1', riderName: 'علي حسن', seatCount: 2, fare: 12000),
+          id: 'b1',
+          riderId: 'r1',
+          riderName: 'علي حسن',
+          seatCount: 2,
+          fare: 12000,
+          pickupLabel: 'قرية الغدير السكنية',
+          dropoffLabel: 'طريق الحر، حي الزيتون'),
       bookingFixture(
           id: 'b2',
           riderId: 'r2',
           riderName: 'حسن كريم',
-          pickupLabel: 'دوار الثورة',
+          pickupLabel: '', // reverse geocoding found no name for this one
           dropoffLabel: 'الحرم'),
+    ],
+    contacts: [
+      contactFixture(
+          bookingId: 'b1', userId: 'r1', name: 'علي حسن', phone: '+9647701234567'),
+      contactFixture(
+          bookingId: 'b2', userId: 'r2', name: 'حسن كريم', phone: '+9647809876543'),
     ],
   );
   return _hostDetail(c);
@@ -403,9 +438,12 @@ Future<void> _golden(
   // Some screens are taller than the 844pt frame. Scrolling to the section
   // under review is the only way the screenshot can actually show it — a
   // golden that stops at the fold reviews nothing.
+  //
+  // Targets `Scrollable` rather than `SingleChildScrollView`: the trip detail
+  // is a ListView, and a finder that only matches one of the two would silently
+  // skip the scroll and produce an above-the-fold screenshot that looks fine.
   if (scrollBy != 0) {
-    await tester.drag(
-        find.byType(SingleChildScrollView).first, Offset(0, -scrollBy));
+    await tester.drag(find.byType(Scrollable).first, Offset(0, -scrollBy));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 32));
   }

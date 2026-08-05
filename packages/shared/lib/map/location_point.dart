@@ -14,6 +14,15 @@ class LocationPoint {
   final double lng;
   final String label;
 
+  /// False for the 0,0 placeholder an API response without coordinates
+  /// produces.
+  ///
+  /// Worth a named getter rather than an inline `lat != 0` at each call site:
+  /// 0,0 is Null Island in the Gulf of Guinea, and a map opened there is a
+  /// worse answer than no map — so every caller that can open a map has to ask
+  /// this first, and the question should read the same everywhere.
+  bool get hasCoordinates => lat != 0 || lng != 0;
+
   LocationPoint copyWith({double? lat, double? lng, String? label}) =>
       LocationPoint(
         lat: lat ?? this.lat,

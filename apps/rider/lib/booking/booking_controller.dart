@@ -39,6 +39,7 @@ class BookingController extends ChangeNotifier {
   bool _submitting = false;
   BookingError? _error;
   Booking? _result;
+  TripContact? _driverContact;
 
   int get seatCount => _seatCount;
   GeoPoint get pickup => _pickup;
@@ -51,6 +52,11 @@ class BookingController extends ChangeNotifier {
   bool get submitting => _submitting;
   BookingError? get error => _error;
   Booking? get result => _result;
+
+  /// The driver's number, resolved only AFTER the booking succeeded — the
+  /// booking is what entitles the rider to it. Null before that, and null if
+  /// the lookup failed (حجوزاتي will show it on the next load).
+  TripContact? get driverContact => _driverContact;
 
   /// Cap seats at 4 per booking and never above what's available.
   int get maxSeats => math.min(4, trip.seatsAvailable);
@@ -110,6 +116,10 @@ class BookingController extends ChangeNotifier {
         dropoff: _dropoff,
         seatCount: _seatCount,
       );
+      // AFTER the booking, never before: the booking is the entitlement. The
+      // server would refuse this call a moment earlier, and there is no screen
+      // before this point that has a number to show.
+      await _resolveDriverContact();
       return true;
     } on ApiException catch (e) {
       _error = classifyBookingError(e);
@@ -123,6 +133,19 @@ class BookingController extends ChangeNotifier {
     } finally {
       _submitting = false;
       notifyListeners();
+    }
+  }
+
+  /// Look up the driver's number for the trip just booked.
+  ///
+  /// Failure is swallowed: the seat IS booked, and a confirmation screen that
+  /// reported an error because a phone lookup timed out would tell the rider
+  /// their booking failed when it did not. حجوزاتي retries on its next load.
+  Future<void> _resolveDriverContact() async {
+    try {
+      _driverContact = await _api.driverContact(trip.id);
+    } catch (_) {
+      _driverContact = null;
     }
   }
 

@@ -14,6 +14,12 @@ import 'my_bookings_controller.dart';
 ///
 /// Upcoming CONFIRMED bookings can be cancelled (with a confirm dialog; the
 /// backend enforces the free-cancel cutoff and its error is surfaced).
+///
+/// Each card also shows the two points the rider chose — tappable, so they can
+/// check on a map that the pickup really is their gate and not the next street
+/// — and, once the trip is theirs, the driver's number with call and WhatsApp.
+/// The number comes from the server (`GET /trips/:id/contacts`), which answers
+/// only for a live booking; a cancelled one loses it.
 class MyBookingsScreen extends StatefulWidget {
   const MyBookingsScreen({super.key});
 
@@ -41,9 +47,24 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     final err = await c.cancel(booking.id);
     if (err == null) return;
     if (!mounted) return;
+    _snack(err);
+  }
+
+  void _snack(String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(err)));
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _onShowPoint(LocationPoint point, String title) async {
+    await showMapView(
+      context,
+      point: point,
+      launcher: context.read<LinkLauncher>(),
+      title: title,
+      onNavigationUnavailable: () =>
+          _snack('لا يوجد تطبيق خرائط على هذا الجهاز.'),
+    );
   }
 
   @override
@@ -68,6 +89,8 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                 showPast: _showPast,
                 onSelectPast: (v) => setState(() => _showPast = v),
                 onCancel: _onCancel,
+                onShowPoint: _onShowPoint,
+                onContactUnavailable: _snack,
               ),
       },
     );
@@ -80,12 +103,16 @@ class _BookingsList extends StatelessWidget {
     required this.showPast,
     required this.onSelectPast,
     required this.onCancel,
+    required this.onShowPoint,
+    required this.onContactUnavailable,
   });
 
   final MyBookingsController controller;
   final bool showPast;
   final ValueChanged<bool> onSelectPast;
   final Future<void> Function(MyBookingsController, Booking) onCancel;
+  final Future<void> Function(LocationPoint, String) onShowPoint;
+  final ValueChanged<String> onContactUnavailable;
 
   @override
   Widget build(BuildContext context) {
@@ -126,9 +153,12 @@ class _BookingsList extends StatelessWidget {
                 booking: b,
                 past: showPast,
                 cancelling: controller.isCancelling(b.id),
+                contact: controller.contactFor(b.id),
                 onCancel: controller.canCancel(b)
                     ? () => onCancel(controller, b)
                     : null,
+                onShowPoint: onShowPoint,
+                onContactUnavailable: onContactUnavailable,
               ),
               SizedBox(height: space.md),
             ],
@@ -218,12 +248,21 @@ class _BookingCard extends StatelessWidget {
     required this.booking,
     required this.past,
     required this.cancelling,
+    required this.onShowPoint,
+    required this.onContactUnavailable,
+    this.contact,
     this.onCancel,
   });
 
   final Booking booking;
   final bool past;
   final bool cancelling;
+
+  /// The driver's number, or null when the server did not give one (a past or
+  /// cancelled booking). Null draws no contact section at all.
+  final TripContact? contact;
+  final Future<void> Function(LocationPoint, String) onShowPoint;
+  final ValueChanged<String> onContactUnavailable;
   final VoidCallback? onCancel;
 
   /// Hand-off stripe thickness.
@@ -274,6 +313,26 @@ class _BookingCard extends StatelessWidget {
                   ),
                   SizedBox(height: space.md),
                   Divider(height: 1, color: colors.border),
+                  SizedBox(height: space.sm),
+                  // The rider's own two points, tappable. They picked these on
+                  // a map; being able to look again is how they check the
+                  // pickup is their gate and not the next street over.
+                  MapPointRow(
+                    title: 'نقطة الانطلاق',
+                    point: booking.pickup,
+                    icon: AppIcons.mapPin,
+                    onTap: () =>
+                        onShowPoint(booking.pickup, 'نقطة الانطلاق'),
+                  ),
+                  MapPointRow(
+                    title: 'نقطة النزول',
+                    point: booking.dropoff,
+                    icon: AppIcons.route,
+                    onTap: () =>
+                        onShowPoint(booking.dropoff, 'نقطة النزول'),
+                  ),
+                  SizedBox(height: space.sm),
+                  Divider(height: 1, color: colors.border),
                   SizedBox(height: space.md),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -290,6 +349,20 @@ class _BookingCard extends StatelessWidget {
                       ),
                     ],
                   ),
+                  // Present only because the server answered — a rider with no
+                  // live booking on this trip gets a 403 and no row.
+                  if (contact != null) ...[
+                    SizedBox(height: space.md),
+                    Divider(height: 1, color: colors.border),
+                    SizedBox(height: space.md),
+                    ContactRow(
+                      phone: contact!.phone,
+                      name: contact!.name,
+                      roleLabel: 'السائق',
+                      launcher: context.read<LinkLauncher>(),
+                      onUnavailable: onContactUnavailable,
+                    ),
+                  ],
                   if (onCancel != null) ...[
                     SizedBox(height: space.md),
                     AppButton(

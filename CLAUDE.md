@@ -70,6 +70,13 @@ Pine + saffron on warm paper. Light `primary #0E5C4A` / `bg #F4F1EA`; dark
 - `toWesternDigits` is the inbound direction: normalise anything pasted
   (Arabic-Indic or Persian digits) before parsing or sending to the API — the
   wire format is always Western.
+- **Phone numbers and coordinates stay Western, forced LTR** — a documented
+  exception, not an oversight. A phone number is an **identifier** to be dialled
+  and matched against the device's contact list, not a quantity to be read; and
+  `+٩٦٤ ٧٧١…` in an RTL line adds a `+` sign to the bidi hazard below. Format
+  via `ContactLink.display` (`+964 771 234 5678`), render inside
+  `Directionality(TextDirection.ltr)`. Same for lat/lng: a machine format for
+  another app to parse. Rationale in `docs/PHASE1_BUILD_BRIEF.md` → `trip-contacts`.
 - **Never put a dot-like separator next to an Arabic-Indic numeral.** `٠` IS a
   dot, so `'... · ${formatSeats(3)}'` renders as «٣٠ مقاعد» — thirty — and
   `'${formatSeats(n)} · ${formatPrice(fare)}'` fused the dot onto the fare so
@@ -156,13 +163,24 @@ without being asked:
   map library is **isolated behind one widget** so the provider can be swapped
   later (e.g. to Google) with a contained change.
 - **Single source of truth:** the app depends only on `LocationPoint`
-  ({lat,lng,label}) + `AppMapPicker` (interface: `initialCenter`,
-  `onPointSelected(LocationPoint)`), both in `/packages/shared/lib/map`.
+  ({lat,lng,label}) + `AppMapPicker` (choose a point) / `AppMapView` (read-only,
+  with a hand-off to the device's navigation app), all in
+  `/packages/shared/lib/map`.
 - **Containment rule:** `flutter_map` + `latlong2` are imported **only** in
-  `map/app_map_picker.dart`; `geolocator` **only** in
+  `map/app_map_picker.dart` — which is why `AppMapView` lives in that same file
+  rather than one of its own; `geolocator` **only** in
   `map/geolocator_location_service.dart` (behind the `LocationService`
-  interface). Reverse geocoding is behind `ReverseGeocoder` (Nominatim impl).
-  **Nothing else in the codebase imports a map/GPS package.**
+  interface); `url_launcher` **only** in `contact/url_link_launcher.dart`
+  (behind `LinkLauncher`). Reverse geocoding is behind `ReverseGeocoder`
+  (Nominatim impl). **Nothing else in the codebase imports a map/GPS/launcher
+  package.**
+- A `LinkLauncher` behind an interface is what lets a widget test assert **which
+  URL a tap produced** (`tel:+964…`, `https://wa.me/964…` with no `+`) instead
+  of mocking a platform channel. Those URLs fail silently on a real phone and
+  nowhere else, so they are pinned by tests.
+- Reverse geocoding fails often (offline, rate-limited, unnamed road). A missing
+  label is a **normal state**: `AppMapView.displayLabel` falls back to
+  coordinates, never to a blank line.
 - To change map provider: rewrite the internals of `app_map_picker.dart` only —
   the booking flow and all callers stay unchanged.
 - Tests/goldens pass `usePlaceholderTiles: true` (no network tiles) and inject

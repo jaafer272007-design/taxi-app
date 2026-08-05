@@ -24,11 +24,24 @@ abstract final class AppIcons {
   static const IconData car = LucideIcons.car;
   static const IconData seat = LucideIcons.armchair;
   static const IconData mapPin = LucideIcons.mapPin;
+  static const IconData map = LucideIcons.map;
+
+  /// Hand-off to a maps app for turn-by-turn — the arrow, not the pin: this is
+  /// "take me there", while [mapPin] is "it is here".
+  static const IconData navigation = LucideIcons.navigation;
   static const IconData route = LucideIcons.route;
   static const IconData swap = LucideIcons.arrowRightLeft;
   static const IconData clock = LucideIcons.clock;
   static const IconData calendar = LucideIcons.calendar;
   static const IconData phone = LucideIcons.phone;
+
+  /// WhatsApp, drawn as a generic chat bubble ON PURPOSE.
+  ///
+  /// We do not ship WhatsApp's brand mark: reproducing a logo we have no
+  /// licensed asset for — or worse, re-drawing an approximation — breaks the
+  /// brand's usage guidelines and looks counterfeit. The action always carries
+  /// the word «واتساب» beside this icon, which is what actually identifies it.
+  static const IconData chat = LucideIcons.messageCircle;
   static const IconData user = LucideIcons.user;
   static const IconData users = LucideIcons.users;
   static const IconData wallet = LucideIcons.wallet;
