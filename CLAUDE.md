@@ -299,6 +299,34 @@ sends an event any other way. Details and the per-side event matrix are in
   `main` → فعّل "Require status checks to pass" واختَر فحص
   `services/api (build, migrate, test)` — بعدها ما ينــدمج أي PR إلا والـ CI أخضر.
 
+## Splitting work into several PRs (locked rule)
+
+**Every PR targets `main` directly, and they are merged in order. Never stack a
+PR on another PR's branch.**
+
+A stacked PR does *not* get retargeted to `main` when its parent merges — GitHub
+only does that when the base branch is **deleted** on merge. Leave the branches
+in place and each PR merges into its stack parent instead, exactly as
+configured and silently: every PR goes green, every PR reports "Merged", and
+`main` receives only the bottom one. It cost a full recovery cycle here — three
+changes sat merged-but-unshipped in a side branch while everything looked done.
+
+- Target `main` from the start. Until its predecessor lands, a PR's diff shows
+  the predecessor's commits too; that resolves as each one merges, and is a far
+  smaller cost than the failure above.
+- **Verify against `main`, never against PR state.** "Merged" answers a question
+  about the PR, not about `main`:
+  ```sh
+  git fetch origin main
+  git merge-base --is-ancestor <commit> origin/main && echo ON MAIN || echo MISSING
+  ```
+- Split along real dependencies. If the later work textually modifies files the
+  earlier work created, that ordering is in the code — merging out of order is
+  not an option the split can grant. Check with
+  `git diff --name-only A^ B` per group and intersect.
+- The payoff is revertability: one merge commit per change on `main`, so
+  `git revert -m 1 <merge>` drops exactly one of them.
+
 ## ترتيب البناء (اختبر بعد كل خطوة)
 1. Scaffold + DB + `auth` → دخول OTP يشتغل.
 2. `driver` + اعتماد أدمن → سائق يُعتمد.
