@@ -23,14 +23,10 @@ import { NotificationService, NotificationPayload } from '../notification/notifi
 import { CreateTripDto } from './dto/create-trip.dto';
 import { UpdateTripDto } from './dto/update-trip.dto';
 import { TRIP_PRICE_OUT_OF_RANGE } from './trip-errors';
+import { catchableUntil, departNowWindowEndsAt } from './trip-window';
 
-/**
- * A departNow trip departs immediately and is meant to stay valid for this
- * window. It is derived from departureTime (= now) — no separate column.
- * TODO(Step 4/5): a background job should LOCK/expire departNow trips once the
- * window passes; that only matters once bookings exist.
- */
-const DEPART_NOW_WINDOW_MINUTES = 30;
+/** A trip plus the instant riders stop being able to catch it. */
+export type TripWithWindow = Trip & { catchableUntil: Date };
 
 /** A trip's booking as seen by the OWNING driver (rider name resolved). */
 export interface TripBookingView {
@@ -92,10 +88,11 @@ export class TripService {
     const departureTime = departNow ? new Date() : this.parseFutureDate(dto.departureTime);
 
     if (departNow) {
-      // Derived validity window (not persisted). The expiry job in Step 4/5 will
-      // enforce it once bookings exist.
-      const windowEndsAt = new Date(departureTime.getTime() + DEPART_NOW_WINDOW_MINUTES * 60_000);
-      this.logger.debug(`departNow trip window ends ~${windowEndsAt.toISOString()}`);
+      // The window is DERIVED from departNow + departureTime, never stored — see
+      // trip-window.ts, which is also what search and the booking guard use.
+      this.logger.debug(
+        `departNow trip catchable until ~${departNowWindowEndsAt(departureTime).toISOString()}`,
+      );
     }
 
     return this.prisma.trip.create({
@@ -115,16 +112,26 @@ export class TripService {
     });
   }
 
-  /** The current driver's trips. Empty list if the user is not a driver. */
-  async listMine(userId: string): Promise<Trip[]> {
+  /**
+   * The current driver's trips. Empty list if the user is not a driver.
+   *
+   * Each row carries `catchableUntil`: the instant riders stop being able to
+   * find and book it. For a departNow trip that is departure + the validity
+   * window, which is the only way the driver can tell how much longer their
+   * «الآن» trip is actually live — the app cannot derive it without
+   * duplicating the window length, and a duplicated rule is what caused the
+   * search bug in the first place.
+   */
+  async listMine(userId: string): Promise<TripWithWindow[]> {
     const profile = await this.drivers.findProfileByUserId(userId);
     if (!profile) {
       return [];
     }
-    return this.prisma.trip.findMany({
+    const trips = await this.prisma.trip.findMany({
       where: { driverId: profile.id },
       orderBy: { departureTime: 'desc' },
     });
+    return trips.map((t) => ({ ...t, catchableUntil: catchableUntil(t) }));
   }
 
   /**

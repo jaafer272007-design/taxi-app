@@ -369,6 +369,10 @@ DriverTrip tripFixture({
   TripStatus status = TripStatus.open,
   bool departNow = false,
   TripType tripType = TripType.general,
+  /// Minutes of validity window left on a departNow trip. Mirrors what the
+  /// server sends as `catchableUntil`; ignored for a scheduled trip, whose
+  /// window ends at its departure.
+  int windowMinutes = 30,
 }) =>
     DriverTrip(
       id: id,
@@ -379,6 +383,8 @@ DriverTrip tripFixture({
       seatsAvailable: seatsAvailable,
       pricePerSeat: price,
       status: status,
+      catchableUntil: DateTime.utc(2026, 7, 20, hourUtc, minute)
+          .add(Duration(minutes: departNow ? windowMinutes : 0)),
       tripType: tripType,
     );
 

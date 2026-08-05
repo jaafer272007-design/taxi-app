@@ -84,6 +84,7 @@ class DriverTrip {
     required this.seatsAvailable,
     required this.pricePerSeat,
     required this.status,
+    required this.catchableUntil,
     this.tripType = TripType.general,
   });
 
@@ -91,6 +92,15 @@ class DriverTrip {
   final String corridorId;
   final DateTime departureTime;
   final bool departNow;
+
+  /// When riders stop being able to find and book this trip.
+  ///
+  /// Server-computed (GET /trips/mine). For a scheduled trip it equals
+  /// [departureTime]; for a «الآن» trip it is departure plus the validity
+  /// window. Deliberately NOT derived here — the window length is a server
+  /// rule, and a second copy of it in the app is exactly how the two sides
+  /// drifted apart and made departNow trips invisible to riders.
+  final DateTime catchableUntil;
   final int seatsTotal;
   final int seatsAvailable;
   final int pricePerSeat;
@@ -108,6 +118,7 @@ class DriverTrip {
         seatsAvailable: seatsAvailable,
         pricePerSeat: pricePerSeat,
         status: status ?? this.status,
+        catchableUntil: catchableUntil,
         tripType: tripType,
       );
 
@@ -120,6 +131,13 @@ class DriverTrip {
         seatsAvailable: (json['seatsAvailable'] as num).toInt(),
         pricePerSeat: (json['pricePerSeat'] as num).toInt(),
         status: tripStatusFrom(json['status'] as String?),
+        // Falling back to departureTime is the conservative reading: it is
+        // exactly right for a scheduled trip, and merely understates the window
+        // for a departNow one, so an older API can never make the app claim a
+        // trip is live for longer than it is.
+        catchableUntil: DateTime.parse(
+          (json['catchableUntil'] ?? json['departureTime']) as String,
+        ),
         tripType: tripTypeFrom(json['tripType'] as String?),
       );
 }

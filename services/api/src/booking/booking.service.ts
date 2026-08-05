@@ -20,6 +20,7 @@ import { DriverService } from '../driver/driver.service';
 import { NotificationService, NotificationPayload } from '../notification/notification.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { SearchTripsDto } from './dto/search-trips.dto';
+import { catchableTripFilter, isCatchable } from '../trip/trip-window';
 
 const CANCEL_CUTOFF_MINUTES = 15;
 
@@ -31,24 +32,38 @@ export class BookingService {
     private readonly notifications: NotificationService,
   ) {}
 
-  /** Rider-facing search: only OPEN, future, seats-available trips. */
+  /** Rider-facing search: only OPEN, still-catchable, seats-available trips. */
   async search(dto: SearchTripsDto) {
     const now = new Date();
-    const departureTime: Prisma.DateTimeFilter[] = [{ gt: now }];
+
+    // Deliberately a pure read: an expired trip is invisible because of
+    // `catchableTripFilter`, not because something swept it first. Retiring the
+    // row is housekeeping and belongs on the scheduler (TripExpiryJob), not on
+    // the rider's hottest path.
+    //
+    // Bounds the RIDER asked for (a day, a from/to time). Separate from the
+    // catchability rule below, which is ours and not negotiable.
+    const requestedBounds: Prisma.DateTimeFilter[] = [];
 
     if (dto.date) {
       const day = dto.date.slice(0, 10); // YYYY-MM-DD
       const dayStart = new Date(`${day}T00:00:00`); // process TZ = Asia/Baghdad
       const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
-      departureTime.push({ gte: dayStart, lt: dayEnd });
+      requestedBounds.push({ gte: dayStart, lt: dayEnd });
     }
-    if (dto.fromTime) departureTime.push({ gte: new Date(dto.fromTime) });
-    if (dto.toTime) departureTime.push({ lte: new Date(dto.toTime) });
+    if (dto.fromTime) requestedBounds.push({ gte: new Date(dto.fromTime) });
+    if (dto.toTime) requestedBounds.push({ lte: new Date(dto.toTime) });
 
     const where: Prisma.TripWhereInput = {
       status: TripStatus.OPEN,
       seatsAvailable: { gt: 0 },
-      AND: departureTime.map((filter) => ({ departureTime: filter })),
+      AND: [
+        // NOT a plain `departureTime > now`: that is exactly the filter that
+        // made every departNow trip invisible the moment it was posted, since
+        // departNow sets departureTime to now. See trip-window.ts.
+        catchableTripFilter(now),
+        ...requestedBounds.map((filter) => ({ departureTime: filter })),
+      ],
     };
     if (dto.corridorId) where.corridorId = dto.corridorId;
     if (dto.tripType) where.tripType = dto.tripType;
@@ -114,7 +129,10 @@ export class BookingService {
     if (trip.status !== TripStatus.OPEN) {
       throw new ConflictException('الرحلة غير متاحة للحجز.');
     }
-    if (trip.departureTime.getTime() <= Date.now()) {
+    // The SAME rule search uses. If these two ever diverge again the rider gets
+    // the worst possible version of the bug: the trip is listed, and tapping
+    // «احجز مقعد» answers «انتهى وقت هذه الرحلة».
+    if (!isCatchable(trip)) {
       throw new ConflictException('انتهى وقت هذه الرحلة.');
     }
     const myProfile = await this.drivers.findProfileByUserId(userId);

@@ -190,8 +190,19 @@ Future<Widget> _myTrips() async {
         status: TripStatus.open,
         tripType: TripType.womenFamily,
       ),
+      // A live «الآن» trip: the only card that carries a validity window, so
+      // the badge is covered visually in both themes.
       tripFixture(
         id: 't2',
+        corridorId: 'c2',
+        hourUtc: 5,
+        minute: 15,
+        seatsAvailable: 3,
+        status: TripStatus.open,
+        departNow: true,
+      ),
+      tripFixture(
+        id: 't3',
         corridorId: 'c2',
         hourUtc: 6,
         minute: 0,
