@@ -61,6 +61,33 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
+  /// Open the rate sheet for a completed ride.
+  ///
+  /// The sheet is the shared [RateSheet] — the same one the driver uses to rate
+  /// riders, only the words differ.
+  Future<void> _onRate(MyBookingsController c, Booking booking) async {
+    await showRateSheet(
+      context,
+      title: 'قيّم السائق',
+      name: booking.driverName ?? 'السائق',
+      commentHint: 'كيف كانت الرحلة مع هذا السائق؟',
+      onSubmit: (score, comment) =>
+          c.rateDriver(bookingId: booking.id, score: score, comment: comment),
+    );
+  }
+
+  /// Jump to «سابقة» and rate the oldest ride still waiting on one.
+  Future<void> _onRatePrompt(MyBookingsController c) async {
+    final pending = c.awaitingRating;
+    if (pending.isEmpty) return;
+    final booking = pending.first;
+    // The card lives under «سابقة»; land the rider there so closing the sheet
+    // leaves them looking at the thing they just rated, not at an unrelated
+    // list of upcoming trips.
+    setState(() => _showPast = true);
+    await _onRate(c, booking);
+  }
+
   Future<void> _onShowPoint(LocationPoint point, String title) async {
     await showMapView(
       context,
@@ -107,6 +134,8 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                 onCancel: _onCancel,
                 onShowPoint: _onShowPoint,
                 onContactUnavailable: _snack,
+                onRate: _onRate,
+                onRatePrompt: _onRatePrompt,
               ),
       },
     );
@@ -130,6 +159,8 @@ class _BookingsList extends StatelessWidget {
     required this.onCancel,
     required this.onShowPoint,
     required this.onContactUnavailable,
+    required this.onRate,
+    required this.onRatePrompt,
   });
 
   final MyBookingsController controller;
@@ -138,6 +169,8 @@ class _BookingsList extends StatelessWidget {
   final Future<void> Function(MyBookingsController, Booking) onCancel;
   final Future<void> Function(LocationPoint, String) onShowPoint;
   final ValueChanged<String> onContactUnavailable;
+  final Future<void> Function(MyBookingsController, Booking) onRate;
+  final Future<void> Function(MyBookingsController) onRatePrompt;
 
   @override
   Widget build(BuildContext context) {
@@ -152,6 +185,17 @@ class _BookingsList extends StatelessWidget {
       child: ListView(
         padding: EdgeInsets.all(space.lg),
         children: [
+          // The prompt the rider meets on their next visit after a trip ends.
+          // Above the filter because it is the one thing on this screen that is
+          // asking them for something — and because the card it leads to lives
+          // under «سابقة», which is not the tab they open on.
+          if (controller.awaitingRating.isNotEmpty) ...[
+            _RatePrompt(
+              count: controller.awaitingRating.length,
+              onTap: () => onRatePrompt(controller),
+            ),
+            SizedBox(height: space.md),
+          ],
           Row(
             children: [
               _FilterPill(
@@ -184,6 +228,7 @@ class _BookingsList extends StatelessWidget {
                     : null,
                 onShowPoint: onShowPoint,
                 onContactUnavailable: onContactUnavailable,
+                onRate: b.canRate ? () => onRate(controller, b) : null,
               ),
               SizedBox(height: space.md),
             ],
@@ -192,6 +237,79 @@ class _BookingsList extends StatelessWidget {
     );
   }
 }
+
+/// «قيّم رحلتك الأخيرة» — the prompt a rider meets after a trip completes.
+///
+/// The driver's `ratingAvg` is exactly what riders use to choose a trip, and
+/// before this existed it could never be populated: the driver could rate the
+/// rider, and the rider had nowhere to rate back. A dead trust signal is worse
+/// than a missing one, because the empty stars look like a judgement.
+///
+/// A tonal card rather than a toast: it must survive being ignored once.
+class _RatePrompt extends StatelessWidget {
+  const _RatePrompt({required this.count, required this.onTap});
+
+  /// How many completed rides are still unrated.
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final space = context.space;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: context.radii.cardAll,
+        child: Ink(
+          decoration: BoxDecoration(
+            // Opaque tonal, never an alpha tint — this sits on the page
+            // background and its contrast must not depend on what is behind it.
+            color: colors.primaryTonal,
+            borderRadius: context.radii.cardAll,
+          ),
+          padding: EdgeInsets.all(space.lg),
+          child: Row(
+            children: [
+              Icon(AppIcons.star, color: colors.primary, size: space.xl),
+              SizedBox(width: space.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _promptTitle(count),
+                      style: context.text.bodyStrong
+                          .copyWith(color: colors.textPrimary),
+                    ),
+                    SizedBox(height: space.xs),
+                    Text(
+                      'تقييمك يساعد بقية الركّاب على اختيار سائق.',
+                      style: context.text.caption
+                          .copyWith(color: colors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(width: space.sm),
+              Icon(AppIcons.chevronLeft, color: colors.primary, size: space.lg),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Arabic plural agreement, and no separator anywhere near the numeral: at 3+
+/// the digit leads the phrase, and «رحلة» / «رحلتان» carry no digit at all.
+String _promptTitle(int count) => switch (count) {
+      1 => 'قيّم رحلتك الأخيرة',
+      2 => 'قيّم رحلتيك الأخيرتين',
+      _ => 'لديك ${formatCount(count)} رحلات بانتظار تقييمك',
+    };
 
 /// Upcoming / past selector. The count rides inside the pill so the rider can
 /// see there *is* history without switching to it.
@@ -277,6 +395,7 @@ class _BookingCard extends StatelessWidget {
     required this.onContactUnavailable,
     this.contact,
     this.onCancel,
+    this.onRate,
   });
 
   final Booking booking;
@@ -289,6 +408,11 @@ class _BookingCard extends StatelessWidget {
   final Future<void> Function(LocationPoint, String) onShowPoint;
   final ValueChanged<String> onContactUnavailable;
   final VoidCallback? onCancel;
+
+  /// Rate the driver of this completed ride. Null once rated, or when the ride
+  /// never happened — the server would refuse either, and an action that
+  /// answers with an error is worse than no action.
+  final VoidCallback? onRate;
 
   /// Hand-off stripe thickness.
   static const double _stripe = 4;
@@ -398,6 +522,18 @@ class _BookingCard extends StatelessWidget {
                       icon: AppIcons.close,
                       loading: cancelling,
                       onPressed: onCancel,
+                    ),
+                  ],
+                  if (onRate != null) ...[
+                    SizedBox(height: space.md),
+                    AppButton(
+                      label: 'قيّم السائق',
+                      // Secondary, not primary: a finished ride is not asking
+                      // for anything, and the card is history the rider is
+                      // reading rather than a task waiting on them.
+                      variant: AppButtonVariant.secondary,
+                      icon: AppIcons.star,
+                      onPressed: onRate,
                     ),
                   ],
                 ],

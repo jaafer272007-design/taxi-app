@@ -146,6 +146,17 @@ without being asked:
   local run**.
 - The CI **`ui-goldens`** job must **upload these images as an artifact on every
   run** (even on success). Keep that behavior in `.github/workflows/ci.yml`.
+- **A golden that interacts must pump past the animation.** `AppCard` and
+  `AppButton` cross-fade over **120ms**, and Flutter reuses the widget at a list
+  position across a rebuild — so a golden taken after a tap can catch a colour
+  mid-`lerp`. The «سابقة» screenshot shipped with the rate button still wearing
+  the *cancel* button's danger tint (measured fill `#F9EDEC` = `lerp(dangerTonal,
+  surface, 0.27)` — 64ms in) and looked like a design bug that did not exist.
+  Pump **≥ 2 frames of 300ms** after any tap, and read the PNG before believing
+  it. A screenshot of a frame nobody ever sees is worse than no screenshot.
+- **Look at the images, don't just let CI regenerate them.** Every visual bug
+  found here so far — the tofu arrow, the fused `٠` dot, this one — was found by
+  opening the PNG. The test passing means the PNG matches itself.
 - In the PR description, **state what is verified vs. not**: which behaviors are
   covered by golden / widget / unit tests, and which still need a **live device
   run** (e.g. real API round-trips, secure storage, push) — so we always know
@@ -298,6 +309,63 @@ sends an event any other way. Details and the per-side event matrix are in
 - **حماية الفرع (يُفعّلها الأدمن مرة واحدة):** Settings → Branches → Add rule على
   `main` → فعّل "Require status checks to pass" واختَر فحص
   `services/api (build, migrate, test)` — بعدها ما ينــدمج أي PR إلا والـ CI أخضر.
+
+## «قادمة» / «سابقة», and rating (locked rule)
+
+**A booking's bucket is a STATUS question, not a clock question.** It used to be
+`departureTime > now`, and a driver completing a trip early left the rider's
+finished booking — badge reading «مكتملة» — filed under «قادمة». That is the
+same confusion that made departNow trips invisible: *when it was scheduled* vs
+*what state it is in*.
+
+- The rule lives in **one place**, `services/api/src/booking/booking-lifecycle.ts`,
+  and the apps never re-derive it. `/bookings/mine` sends `upcoming`; the client
+  files the card where it is told. Two copies is how it comes back.
+- «قادمة» holds only what is still actionable. A terminal booking
+  (`COMPLETED`/`CANCELLED`/`NO_SHOW`) or a terminal trip
+  (`COMPLETED`/`SETTLED`/`CANCELLED`) is past whatever the clock says; an
+  `EN_ROUTE` trip is upcoming even though its departure has passed by
+  definition.
+- **Both directions of rating must exist.** A driver's `ratingAvg` is exactly
+  what riders choose a trip on, so a one-way rating path leaves the trust
+  signal dead — and empty stars read as a judgement rather than as missing
+  data. `/bookings/mine` carries `driverUserId`, `ratable` and `ratedDriver`
+  so the app can offer the action, address it, and stop offering it.
+- `ratable` is computed server-side to stay in step with what `POST /ratings`
+  will accept. **An action the UI offers and the server refuses is worse than
+  no action**, so the two are derived from the same statuses.
+- A 409 from `POST /ratings` is **idempotent success** on both sides: the
+  rating already exists, which is the state the caller wanted.
+- One rate sheet for both directions — `packages/shared/lib/rating/rate_sheet.dart`.
+  Only the words differ, so only the words are parameters.
+
+## Splitting work into several PRs (locked rule)
+
+**Every PR targets `main` directly, and they are merged in order. Never stack a
+PR on another PR's branch.**
+
+A stacked PR does *not* get retargeted to `main` when its parent merges — GitHub
+only does that when the base branch is **deleted** on merge. Leave the branches
+in place and each PR merges into its stack parent instead, exactly as
+configured and silently: every PR goes green, every PR reports "Merged", and
+`main` receives only the bottom one. It cost a full recovery cycle here — three
+changes sat merged-but-unshipped in a side branch while everything looked done.
+
+- Target `main` from the start. Until its predecessor lands, a PR's diff shows
+  the predecessor's commits too; that resolves as each one merges, and is a far
+  smaller cost than the failure above.
+- **Verify against `main`, never against PR state.** "Merged" answers a question
+  about the PR, not about `main`:
+  ```sh
+  git fetch origin main
+  git merge-base --is-ancestor <commit> origin/main && echo ON MAIN || echo MISSING
+  ```
+- Split along real dependencies. If the later work textually modifies files the
+  earlier work created, that ordering is in the code — merging out of order is
+  not an option the split can grant. Check with
+  `git diff --name-only A^ B` per group and intersect.
+- The payoff is revertability: one merge commit per change on `main`, so
+  `git revert -m 1 <merge>` drops exactly one of them.
 
 ## ترتيب البناء (اختبر بعد كل خطوة)
 1. Scaffold + DB + `auth` → دخول OTP يشتغل.

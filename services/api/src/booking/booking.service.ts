@@ -22,6 +22,7 @@ import { NotificationService, NotificationPayload } from '../notification/notifi
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { SearchTripsDto } from './dto/search-trips.dto';
 import { catchableTripFilter, isCatchable } from '../trip/trip-window';
+import { isBookingUpcoming, isRatableByRider } from './booking-lifecycle';
 
 const CANCEL_CUTOFF_MINUTES = 15;
 
@@ -220,15 +221,66 @@ export class BookingService {
     return booking;
   }
 
-  /** Rider's bookings with trip info; each flagged upcoming vs past. */
+  /**
+   * Rider's bookings with trip info, each flagged upcoming vs past and carrying
+   * what the rider needs to rate their driver.
+   *
+   * The bucket comes from `isBookingUpcoming` — a STATUS question, not a clock
+   * one; see `booking-lifecycle.ts` for why that distinction has now cost us
+   * two bugs.
+   *
+   * Three queries regardless of how many bookings come back: the bookings, the
+   * driver profiles behind them, and this rider's ratings for those trips.
+   * `Trip.driverId` is a plain FK with no Prisma relation, so the driver's USER
+   * id — the thing a rating is addressed to — has to be resolved separately.
+   */
   async listMine(userId: string) {
     const bookings = await this.prisma.seatBooking.findMany({
       where: { riderId: userId },
       include: { trip: { include: { corridor: true } } },
       orderBy: { createdAt: 'desc' },
     });
-    const now = Date.now();
-    return bookings.map((b) => ({ ...b, upcoming: b.trip.departureTime.getTime() > now }));
+    if (bookings.length === 0) return [];
+
+    const profiles = await this.prisma.driverProfile.findMany({
+      where: { id: { in: [...new Set(bookings.map((b) => b.trip.driverId))] } },
+      select: { id: true, userId: true, user: { select: { name: true } } },
+    });
+    const driverByProfileId = new Map(profiles.map((p) => [p.id, p]));
+
+    // Ratings this rider has already written for these trips. Only their own —
+    // whether the DRIVER rated THEM is none of the rider's business here.
+    const ratings = await this.prisma.rating.findMany({
+      where: {
+        fromUserId: userId,
+        tripId: { in: [...new Set(bookings.map((b) => b.tripId))] },
+      },
+      select: { tripId: true, toUserId: true },
+    });
+    const ratedPairs = new Set(ratings.map((r) => `${r.tripId}:${r.toUserId}`));
+
+    const now = new Date();
+    return bookings.map((b) => {
+      const driver = driverByProfileId.get(b.trip.driverId);
+      return {
+        ...b,
+        upcoming: isBookingUpcoming(
+          {
+            bookingStatus: b.status,
+            tripStatus: b.trip.status,
+            departureTime: b.trip.departureTime,
+          },
+          now,
+        ),
+        // The driver's USER id, which is who a rating is addressed to. No phone
+        // number here — that stays behind GET /trips/:id/contacts, the one
+        // place in the server a number ever leaves.
+        driverUserId: driver?.userId ?? null,
+        driverName: driver?.user?.name ?? null,
+        ratable: isRatableByRider(b.status, b.trip.status),
+        ratedDriver: driver ? ratedPairs.has(`${b.tripId}:${driver.userId}`) : false,
+      };
+    });
   }
 
   /** Cancel a booking (owning rider), returning the seat atomically. */

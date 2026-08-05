@@ -12,7 +12,6 @@ import 'package:driver/trip/my_trips_controller.dart';
 import 'package:driver/trip/my_trips_screen.dart';
 import 'package:driver/trip/post_trip_controller.dart';
 import 'package:driver/trip/post_trip_screen.dart';
-import 'package:driver/trip/rate_rider_sheet.dart';
 import 'package:driver/trip/trip_detail_controller.dart';
 import 'package:driver/trip/trip_detail_screen.dart';
 import 'package:flutter/material.dart';
@@ -395,8 +394,10 @@ Future<Widget> _rateRider() async {
             color: context.colors.surface,
             borderRadius: context.radii.sheetTop,
             clipBehavior: Clip.antiAlias,
-            child: RateRiderSheet(
-              riderName: 'علي حسن',
+            child: RateSheet(
+              title: 'قيّم الراكب',
+              name: 'علي حسن',
+              commentHint: 'كيف كانت الرحلة مع هذا الراكب؟',
               onSubmit: (_, __) async => null,
             ),
           ),

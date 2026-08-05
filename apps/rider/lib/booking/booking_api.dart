@@ -31,6 +31,15 @@ abstract interface class BookingApi {
   /// is a normal answer (no live booking on that trip) and the caller renders
   /// no contact row — it is not an error to show the rider.
   Future<TripContact?> driverContact(String tripId);
+
+  /// POST /ratings → rate the driver of a completed trip. One per
+  /// (trip, from, to); the server answers 409 on a repeat.
+  Future<void> rateDriver({
+    required String tripId,
+    required String toUserId,
+    required int score,
+    String? comment,
+  });
 }
 
 class DioBookingApi implements BookingApi {
@@ -79,6 +88,30 @@ class DioBookingApi implements BookingApi {
       final res =
           await _dio.post<Map<String, dynamic>>('/bookings/$bookingId/cancel');
       return Booking.fromJson(res.data!);
+    } on DioException catch (e) {
+      throw mapDioError(e);
+    }
+  }
+
+  @override
+  Future<void> rateDriver({
+    required String tripId,
+    required String toUserId,
+    required int score,
+    String? comment,
+  }) async {
+    try {
+      // Send only whitelisted fields; omit an empty comment entirely rather
+      // than posting "" — the same shape the driver app sends.
+      final data = <String, dynamic>{
+        'tripId': tripId,
+        'toUserId': toUserId,
+        'score': score,
+      };
+      if (comment != null && comment.trim().isNotEmpty) {
+        data['comment'] = comment.trim();
+      }
+      await _dio.post<dynamic>('/ratings', data: data);
     } on DioException catch (e) {
       throw mapDioError(e);
     }

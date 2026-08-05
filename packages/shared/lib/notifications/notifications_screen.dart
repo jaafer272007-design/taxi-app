@@ -16,7 +16,16 @@ import 'notifications_controller.dart';
 /// in it is decided server-side by who the event was for. Unread rows carry a
 /// pine dot and a tonal fill so the eye finds them before it reads anything.
 class NotificationsScreen extends StatefulWidget {
-  const NotificationsScreen({super.key});
+  const NotificationsScreen({super.key, this.onOpen});
+
+  /// Where an event leads, when it leads anywhere.
+  ///
+  /// The centre itself owns no navigation — it does not know what tabs exist,
+  /// and a shared screen that reached into one app's shell would stop being
+  /// shared. The host passes this in; today the rider's shell uses it to send
+  /// a completed-trip notification to حجوزاتي, where the rate action lives.
+  /// Null means the row still marks itself read and goes no further.
+  final void Function(AppNotification)? onOpen;
 
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
@@ -37,6 +46,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Widget build(BuildContext context) {
     final c = context.watch<NotificationsController>();
 
+    final onOpen = widget.onOpen;
     return AppScaffold(
       title: 'الإشعارات',
       padded: false,
@@ -48,16 +58,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             onRetry: c.load,
           ),
         NotificationsStatus.loaded =>
-          c.isEmpty ? const _EmptyView() : _NotificationsList(controller: c),
+          c.isEmpty
+              ? const _EmptyView()
+              : _NotificationsList(controller: c, onOpen: onOpen),
       },
     );
   }
 }
 
 class _NotificationsList extends StatelessWidget {
-  const _NotificationsList({required this.controller});
+  const _NotificationsList({required this.controller, this.onOpen});
 
   final NotificationsController controller;
+  final void Function(AppNotification)? onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -79,9 +92,18 @@ class _NotificationsList extends StatelessWidget {
             return _MarkAllRow(controller: controller);
           }
           final n = items[controller.unreadCount > 0 ? i - 1 : i];
+          // A read row stays tappable when it leads somewhere: «انتهت رحلتك»
+          // is how the rider reaches the rate action, and it would be a poor
+          // trade to lose that the moment the row has been glanced at once.
+          final leadsSomewhere = onOpen != null;
           return _NotificationCard(
             notification: n,
-            onTap: () => controller.markRead(n.id),
+            onTap: (n.isUnread || leadsSomewhere)
+                ? () {
+                    controller.markRead(n.id); // idempotent when already read
+                    onOpen?.call(n);
+                  }
+                : null,
           );
         },
       ),
@@ -134,10 +156,10 @@ String _unreadPhrase(int count) => switch (count) {
 
 /// One event. Unread rows are tonal with a leading dot; read rows recede.
 class _NotificationCard extends StatelessWidget {
-  const _NotificationCard({required this.notification, required this.onTap});
+  const _NotificationCard({required this.notification, this.onTap});
 
   final AppNotification notification;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -147,7 +169,7 @@ class _NotificationCard extends StatelessWidget {
     final tone = _toneFor(notification.type, colors);
 
     return AppCard(
-      onTap: unread ? onTap : null,
+      onTap: onTap,
       muted: !unread,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

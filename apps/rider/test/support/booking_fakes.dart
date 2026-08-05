@@ -35,6 +35,11 @@ class FakeBookingApi implements BookingApi {
   Object? driverContactError;
   final List<String> driverContactCalls = [];
 
+  // rateDriver
+  final List<({String tripId, String toUserId, int score, String? comment})>
+      rateCalls = [];
+  Object? rateError;
+
   @override
   Future<Booking> create({
     required String tripId,
@@ -68,6 +73,22 @@ class FakeBookingApi implements BookingApi {
   }
 
   @override
+  Future<void> rateDriver({
+    required String tripId,
+    required String toUserId,
+    required int score,
+    String? comment,
+  }) async {
+    rateCalls.add((
+      tripId: tripId,
+      toUserId: toUserId,
+      score: score,
+      comment: comment,
+    ));
+    if (rateError != null) throw rateError!;
+  }
+
+  @override
   Future<TripContact?> driverContact(String tripId) async {
     driverContactCalls.add(tripId);
     if (driverContactError != null) throw driverContactError!;
@@ -86,6 +107,10 @@ Booking bookingFixture({
   String dropoffLabel = 'قرب المستشفى',
   BookingTrip? trip,
   bool? upcoming,
+  String? driverUserId,
+  String? driverName,
+  bool ratable = false,
+  bool ratedDriver = false,
   /// Real Najaf / Karbala coordinates by default. Pass 0 for the "API sent no
   /// coordinates" case, which must render as plain text with no map tap.
   double pickupLat = 31.9990,
@@ -104,6 +129,10 @@ Booking bookingFixture({
         lat: dropoffLat, lng: dropoffLng, label: dropoffLabel),
     trip: trip,
     upcoming: upcoming,
+    driverUserId: driverUserId,
+    driverName: driverName,
+    ratable: ratable,
+    ratedDriver: ratedDriver,
   );
 }
 
@@ -131,6 +160,14 @@ Booking mineFixture({
   int minute = 30,
   String originCity = 'Najaf',
   String destCity = 'Karbala',
+  String? driverUserId = 'du1',
+  String? driverName = 'علي حسن',
+  bool ratable = false,
+  bool ratedDriver = false,
+  /// Defaults to a trip of this booking's own. Pass it explicitly to put two
+  /// bookings on the SAME trip — which is what a rider booking two seats in
+  /// separate transactions looks like.
+  String? tripId,
 }) {
   return bookingFixture(
     id: id,
@@ -138,8 +175,12 @@ Booking mineFixture({
     fare: fare,
     status: status,
     upcoming: upcoming,
+    driverUserId: driverUserId,
+    driverName: driverName,
+    ratable: ratable,
+    ratedDriver: ratedDriver,
     trip: BookingTrip(
-      id: 't-$id',
+      id: tripId ?? 't-$id',
       departureTime: DateTime.utc(2026, 7, 20, hourUtc, minute),
       corridor: BookingCorridor(originCity: originCity, destCity: destCity),
     ),

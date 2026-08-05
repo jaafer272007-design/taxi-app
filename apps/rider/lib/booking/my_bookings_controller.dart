@@ -30,13 +30,26 @@ class MyBookingsController extends ChangeNotifier {
   /// controller that was pre-populated, e.g. in tests).
   bool get hasLoaded => _hasLoaded;
 
-  /// Future-departure bookings (server-flagged), newest first.
+  /// Still-actionable bookings (server-flagged), newest first.
+  ///
+  /// The flag is a STATUS question answered server-side — see
+  /// `booking-lifecycle.ts`. Deliberately not re-derived here from
+  /// `departureTime`: that is precisely the bug that filed a completed booking
+  /// under «قادمة», and two copies of the rule would let it come back.
   List<Booking> get upcoming =>
       _bookings.where((b) => b.upcoming ?? false).toList();
 
   /// Past bookings, newest first.
   List<Booking> get past =>
       _bookings.where((b) => !(b.upcoming ?? false)).toList();
+
+  /// Completed rides this rider has not rated yet.
+  ///
+  /// Drives the prompt at the top of حجوزاتي: a driver's ratingAvg is what
+  /// riders pick a trip on, and until this existed it could never be
+  /// populated at all.
+  List<Booking> get awaitingRating =>
+      _bookings.where((b) => b.canRate).toList();
 
   bool get isEmpty => _bookings.isEmpty;
 
@@ -174,6 +187,78 @@ class MyBookingsController extends ChangeNotifier {
         pickup: b.pickup,
         dropoff: b.dropoff,
         trip: b.trip,
-        upcoming: b.upcoming,
+        // A cancelled booking is no longer upcoming, and the server says so on
+        // the next load; say it here too so the card moves to «سابقة» at once
+        // instead of after a refresh.
+        upcoming: false,
+        driverUserId: b.driverUserId,
+        driverName: b.driverName,
+        // Cancelling is not riding: the rating action must not appear.
+        ratable: false,
+        ratedDriver: b.ratedDriver,
       );
+
+  /// Rate the driver of a completed trip.
+  ///
+  /// Returns null on success or a ready-to-show Arabic message. A **409 is
+  /// treated as success**: it means the rating already exists, which is exactly
+  /// the state the caller was trying to reach — the same idempotent handling
+  /// the driver side uses, so a double-tap or a retry after a dropped response
+  /// closes the sheet instead of flashing an error for work already done.
+  Future<String?> rateDriver({
+    required String bookingId,
+    required int score,
+    String? comment,
+  }) async {
+    final booking = _bookings.firstWhereOrNull((b) => b.id == bookingId);
+    final tripId = booking?.trip?.id;
+    final toUserId = booking?.driverUserId;
+    if (booking == null || tripId == null || toUserId == null) {
+      return 'تعذّر إرسال التقييم. حاول مرة أخرى.';
+    }
+
+    try {
+      await _api.rateDriver(
+        tripId: tripId,
+        toUserId: toUserId,
+        score: score,
+        comment: comment,
+      );
+      _markRated(bookingId);
+      return null;
+    } on ApiException catch (e) {
+      if (e.statusCode == 409) {
+        _markRated(bookingId);
+        return null;
+      }
+      return e.message;
+    } catch (_) {
+      return 'تعذّر إرسال التقييم. حاول مرة أخرى.';
+    }
+  }
+
+  /// Hide the rate action for this booking. Every booking on the SAME trip is
+  /// marked, because a rating is per (trip, driver) — a rider who booked twice
+  /// on one trip rates its driver once.
+  void _markRated(String bookingId) {
+    final tripId =
+        _bookings.firstWhereOrNull((b) => b.id == bookingId)?.trip?.id;
+    _bookings = [
+      for (final b in _bookings)
+        if (b.id == bookingId || (tripId != null && b.trip?.id == tripId))
+          b.copyWith(ratedDriver: true)
+        else
+          b,
+    ];
+    notifyListeners();
+  }
+}
+
+extension _FirstWhereOrNull<T> on List<T> {
+  T? firstWhereOrNull(bool Function(T) test) {
+    for (final e in this) {
+      if (test(e)) return e;
+    }
+    return null;
+  }
 }

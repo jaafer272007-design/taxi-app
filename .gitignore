@@ -12,6 +12,9 @@ build/
 .env.local
 .env.*.local
 **/.env
+# a hand-made backup of a .env is still a .env
+.env.bak*
+**/.env.bak*
 
 # logs
 *.log

@@ -126,6 +126,10 @@ class Booking {
     required this.dropoff,
     this.trip,
     this.upcoming,
+    this.driverUserId,
+    this.driverName,
+    this.ratable = false,
+    this.ratedDriver = false,
   });
 
   final String id;
@@ -136,9 +140,32 @@ class Booking {
   final LocationPoint dropoff;
   final BookingTrip? trip;
 
-  /// Server-computed: is the trip's departure still in the future? Null when the
-  /// response omits the trip (POST /bookings, cancel).
+  /// Server-computed: does this booking still belong under «قادمة»? Null when
+  /// the response omits the trip (POST /bookings, cancel).
+  ///
+  /// A STATUS question, not a clock one — a completed booking is past even if
+  /// its trip had been scheduled for tonight. The rule lives server-side in
+  /// `booking-lifecycle.ts`; the app must not re-derive it, or the two drift
+  /// and the drift is invisible until someone completes a trip early.
   final bool? upcoming;
+
+  /// The driver's USER id — who a rating is addressed to. Null on responses
+  /// that carry no trip.
+  final String? driverUserId;
+
+  /// The driver's display name, for the rate sheet.
+  final String? driverName;
+
+  /// The ride actually happened, so a rating is allowed. Server-computed to
+  /// stay in step with what `POST /ratings` will accept: an action the UI
+  /// offers and the server refuses is worse than no action.
+  final bool ratable;
+
+  /// This rider has already rated this driver for this trip.
+  final bool ratedDriver;
+
+  /// Show a rate action for this booking.
+  bool get canRate => ratable && !ratedDriver && driverUserId != null;
 
   String get pickupLabel => pickup.label;
   String get dropoffLabel => dropoff.label;
@@ -154,6 +181,25 @@ class Booking {
             ? null
             : BookingTrip.fromJson(json['trip'] as Map<String, dynamic>),
         upcoming: json['upcoming'] as bool?,
+        driverUserId: json['driverUserId'] as String?,
+        driverName: json['driverName'] as String?,
+        ratable: json['ratable'] as bool? ?? false,
+        ratedDriver: json['ratedDriver'] as bool? ?? false,
+      );
+
+  Booking copyWith({bool? ratedDriver}) => Booking(
+        id: id,
+        seatCount: seatCount,
+        fare: fare,
+        status: status,
+        pickup: pickup,
+        dropoff: dropoff,
+        trip: trip,
+        upcoming: upcoming,
+        driverUserId: driverUserId,
+        driverName: driverName,
+        ratable: ratable,
+        ratedDriver: ratedDriver ?? this.ratedDriver,
       );
 }
 
