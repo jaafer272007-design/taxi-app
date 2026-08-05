@@ -83,7 +83,18 @@ test("nothing refreshes while the tab is hidden; returning catches up", async ({
   await expect.poll(() => lastRefreshedAt(page), { timeout: 10_000 }).not.toBe(start);
 
   await setVisibility(page, "hidden");
+
+  // Let whatever was already on the wire land before taking the baseline.
+  // Stopping the beat does not cancel a request that has already been sent —
+  // you cannot un-send one — so the timestamp can legitimately advance ONCE
+  // after the tab is hidden. Reading the baseline immediately made this test
+  // fail in CI by exactly one interval, twice, which looks identical to a
+  // leaking timer; on a localhost round trip it never showed.
+  await page.waitForTimeout(FAST * 2);
   const whenHidden = await lastRefreshedAt(page);
+
+  // Now the real assertion: four intervals, zero refreshes. A broken gate
+  // would land about four here, so this still fails loudly.
   await page.waitForTimeout(FAST * 4);
   expect(
     await lastRefreshedAt(page),
