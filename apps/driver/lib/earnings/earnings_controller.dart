@@ -45,10 +45,18 @@ class EarningsController extends ChangeNotifier {
   /// How many trips produced [allTimeTotal].
   int get tripCount => records.length;
 
-  Future<void> load() async {
-    _status = EarningsStatus.loading;
-    _error = null;
-    notifyListeners();
+  /// A BACKGROUND refresh: no skeleton, and no error page on failure.
+  ///
+  /// What pull-to-refresh calls. Cash figures are the last thing that should
+  /// vanish and be replaced by "حدث خطأ" because one request dropped.
+  Future<void> refreshSilently() => load(silent: true);
+
+  Future<void> load({bool silent = false}) async {
+    if (!silent) {
+      _status = EarningsStatus.loading;
+      _error = null;
+      notifyListeners();
+    }
     try {
       final results = await Future.wait([
         _api.earnings(range: 'today'),
@@ -58,12 +66,17 @@ class EarningsController extends ChangeNotifier {
       _all = results[1];
       _days = _groupByDay(_all!.records);
       _status = EarningsStatus.loaded;
+      _error = null;
     } on ApiException catch (e) {
-      _error = e.message;
-      _status = EarningsStatus.error;
+      if (!silent) {
+        _error = e.message;
+        _status = EarningsStatus.error;
+      }
     } catch (_) {
-      _error = 'تعذّر تحميل أرباحك. حاول مرة أخرى.';
-      _status = EarningsStatus.error;
+      if (!silent) {
+        _error = 'تعذّر تحميل أرباحك. حاول مرة أخرى.';
+        _status = EarningsStatus.error;
+      }
     } finally {
       _hasLoaded = true;
       notifyListeners();

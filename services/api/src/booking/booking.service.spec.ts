@@ -4,7 +4,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { BookingStatus, Gender, TripStatus, TripType } from '@prisma/client';
+import { BookingStatus, Gender, NotificationType, TripStatus, TripType } from '@prisma/client';
 import { BookingService } from './booking.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DriverService } from '../driver/driver.service';
@@ -110,7 +110,7 @@ describe('BookingService.book', () => {
     // booking.created → the driver is notified after commit
     expect(notifications.send).toHaveBeenCalledWith(
       'driverU',
-      expect.objectContaining({ data: expect.objectContaining({ type: 'booking.created' }) }),
+      expect.objectContaining({ type: NotificationType.BOOKING_CREATED }),
     );
     expect(tx.trip.update).not.toHaveBeenCalled(); // still seats left → not locked
   });
@@ -231,7 +231,7 @@ describe('BookingService.cancel', () => {
     // booking.cancelled → the driver is notified after commit
     expect(notifications.send).toHaveBeenCalledWith(
       'driverU',
-      expect.objectContaining({ data: expect.objectContaining({ type: 'booking.cancelled' }) }),
+      expect.objectContaining({ type: NotificationType.BOOKING_CANCELLED_BY_RIDER }),
     );
   });
 

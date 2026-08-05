@@ -72,7 +72,7 @@ class _Loaded extends StatelessWidget {
 
     return RefreshIndicator(
       color: context.colors.primary,
-      onRefresh: controller.load,
+      onRefresh: controller.refreshSilently,
       child: ListView(
         padding: EdgeInsets.all(space.lg),
         children: [

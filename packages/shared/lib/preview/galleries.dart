@@ -408,6 +408,7 @@ class MasarComponentsGallery extends StatelessWidget {
           title: 'شريط التنقّل العائم · Floating pill nav',
           child: Column(
             children: [
+              // Three tabs: the roomy inset.
               FloatingPillNav(
                 currentIndex: 0,
                 onSelect: (_) {},
@@ -417,13 +418,31 @@ class MasarComponentsGallery extends StatelessWidget {
                   FloatingPillNavItem(icon: AppIcons.user, label: 'حسابي'),
                 ],
               ),
+              // The rider's four, with an unread badge on an UNSELECTED tab —
+              // the state that has to catch the eye from across the screen.
               FloatingPillNav(
-                currentIndex: 2,
+                currentIndex: 0,
+                onSelect: (_) {},
+                items: const [
+                  FloatingPillNavItem(icon: AppIcons.search, label: 'ابحث'),
+                  FloatingPillNavItem(icon: AppIcons.seat, label: 'حجوزاتي'),
+                  FloatingPillNavItem(
+                      icon: AppIcons.bell, label: 'إشعارات', badgeCount: 3),
+                  FloatingPillNavItem(icon: AppIcons.user, label: 'حسابي'),
+                ],
+              ),
+              // The driver's five — the pill's documented maximum, at the
+              // tightest inset, with the badge on the SELECTED tab (danger on
+              // primaryTonal) and its two-glyph «+٩» overflow form.
+              FloatingPillNav(
+                currentIndex: 3,
                 onSelect: (_) {},
                 items: const [
                   FloatingPillNavItem(icon: AppIcons.plusCircle, label: 'انشر'),
                   FloatingPillNavItem(icon: AppIcons.route, label: 'رحلاتي'),
                   FloatingPillNavItem(icon: AppIcons.wallet, label: 'أرباحي'),
+                  FloatingPillNavItem(
+                      icon: AppIcons.bell, label: 'إشعارات', badgeCount: 12),
                   FloatingPillNavItem(icon: AppIcons.user, label: 'حسابي'),
                 ],
               ),

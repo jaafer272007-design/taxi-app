@@ -46,10 +46,12 @@ interface Painted {
   top: number;
 }
 
-/** Every character in the page's main content, with the rect it was painted into. */
+/** Every character the page painted, with the rect it was painted into. */
 async function paintedChars(page: Page): Promise<Painted[]> {
   return page.evaluate(() => {
-    const root = document.querySelector("main") ?? document.body;
+    // The whole page, not just <main>: the sidebar carries the pending-drivers
+    // badge, which is a bare Arabic-Indic numeral sitting next to a label.
+    const root = document.body;
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     const out: Painted[] = [];
     let node: Node | null;

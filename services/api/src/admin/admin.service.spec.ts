@@ -1,5 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
-import { DriverStatus } from '@prisma/client';
+import { DriverStatus, NotificationType } from '@prisma/client';
 import { AdminService } from './admin.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationService } from '../notification/notification.service';
@@ -44,7 +44,7 @@ describe('AdminService (approval + notifications)', () => {
     );
     expect(notifications.send).toHaveBeenCalledWith(
       'driverU',
-      expect.objectContaining({ data: expect.objectContaining({ type: 'driver.approved' }) }),
+      expect.objectContaining({ type: NotificationType.DRIVER_APPROVED }),
     );
   });
 
@@ -73,7 +73,7 @@ describe('AdminService (approval + notifications)', () => {
     );
     expect(notifications.send).toHaveBeenCalledWith(
       'driverU',
-      expect.objectContaining({ data: expect.objectContaining({ type: 'driver.rejected' }) }),
+      expect.objectContaining({ type: NotificationType.DRIVER_REJECTED }),
     );
   });
 

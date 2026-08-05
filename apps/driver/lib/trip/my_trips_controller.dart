@@ -27,22 +27,36 @@ class MyTripsController extends ChangeNotifier {
 
   Corridor? corridorFor(String corridorId) => _corridors[corridorId];
 
-  Future<void> load() async {
-    _status = MyTripsStatus.loading;
-    _error = null;
-    notifyListeners();
+  /// A BACKGROUND refresh: no skeleton, and no error page on failure.
+  ///
+  /// What pull-to-refresh calls — the [RefreshIndicator] is already the
+  /// spinner, so swapping the list for the loading skeleton under the driver's
+  /// finger just makes their own trips disappear for a moment.
+  Future<void> refreshSilently() => load(silent: true);
+
+  Future<void> load({bool silent = false}) async {
+    if (!silent) {
+      _status = MyTripsStatus.loading;
+      _error = null;
+      notifyListeners();
+    }
     try {
       final trips = await _api.myTrips();
       final corridors = await _api.getCorridors();
       _trips = trips;
       _corridors = {for (final c in corridors) c.id: c};
       _status = MyTripsStatus.loaded;
+      _error = null;
     } on ApiException catch (e) {
-      _error = e.message;
-      _status = MyTripsStatus.error;
+      if (!silent) {
+        _error = e.message;
+        _status = MyTripsStatus.error;
+      }
     } catch (_) {
-      _error = 'تعذّر تحميل رحلاتك. حاول مرة أخرى.';
-      _status = MyTripsStatus.error;
+      if (!silent) {
+        _error = 'تعذّر تحميل رحلاتك. حاول مرة أخرى.';
+        _status = MyTripsStatus.error;
+      }
     } finally {
       _hasLoaded = true;
       notifyListeners();

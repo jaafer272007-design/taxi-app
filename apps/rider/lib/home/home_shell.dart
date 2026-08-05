@@ -8,9 +8,18 @@ import '../booking/my_bookings_screen.dart';
 import '../config/app_config.dart';
 import '../trip/search_screen.dart';
 
-/// The authenticated home: a three-tab shell (ابحث · حجوزاتي · حسابي). Each tab
-/// keeps its own state across switches (an [IndexedStack]); the bookings tab
-/// owns its [MyBookingsController]; the account tab is the shared Settings.
+/// The authenticated home: a four-tab shell (ابحث · حجوزاتي · الإشعارات ·
+/// حسابي). Each tab keeps its own state across switches (an [IndexedStack]);
+/// the bookings tab owns its [MyBookingsController]; the account tab is the
+/// shared Settings.
+///
+/// ## Why each tab is wrapped in a TickerMode
+///
+/// An [IndexedStack] keeps every tab mounted and building, so a polling screen
+/// on an unselected tab would keep polling forever. `TickerMode` is Flutter's
+/// existing answer to "should time-based work run in this subtree", and
+/// [PollingScope] reads it — so flipping it here is what actually stops the
+/// حجوزاتي poll while the rider is on the search tab.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -38,15 +47,22 @@ class _HomeShellState extends State<HomeShell> {
             child: IndexedStack(
               index: _index,
               children: [
-                const SearchScreen(),
-                ChangeNotifierProvider<MyBookingsController>(
-                  create: (ctx) =>
-                      MyBookingsController(api: ctx.read<BookingApi>()),
-                  child: const MyBookingsScreen(),
+                _Tab(selected: _index == 0, child: const SearchScreen()),
+                _Tab(
+                  selected: _index == 1,
+                  child: ChangeNotifierProvider<MyBookingsController>(
+                    create: (ctx) =>
+                        MyBookingsController(api: ctx.read<BookingApi>()),
+                    child: const MyBookingsScreen(),
+                  ),
                 ),
-                SettingsScreen(
-                  appVersion: AppConfig.appVersion,
-                  onLogout: () => context.read<AuthController>().logout(),
+                _Tab(selected: _index == 2, child: const NotificationsScreen()),
+                _Tab(
+                  selected: _index == 3,
+                  child: SettingsScreen(
+                    appVersion: AppConfig.appVersion,
+                    onLogout: () => context.read<AuthController>().logout(),
+                  ),
                 ),
               ],
             ),
@@ -58,10 +74,17 @@ class _HomeShellState extends State<HomeShell> {
             child: FloatingPillNav(
               currentIndex: _index,
               onSelect: (i) => setState(() => _index = i),
-              items: const [
-                FloatingPillNavItem(icon: AppIcons.search, label: 'ابحث'),
-                FloatingPillNavItem(icon: AppIcons.seat, label: 'حجوزاتي'),
-                FloatingPillNavItem(icon: AppIcons.user, label: 'حسابي'),
+              items: [
+                const FloatingPillNavItem(
+                    icon: AppIcons.search, label: 'ابحث'),
+                const FloatingPillNavItem(
+                    icon: AppIcons.seat, label: 'حجوزاتي'),
+                FloatingPillNavItem(
+                  icon: AppIcons.bell,
+                  label: 'إشعارات',
+                  badgeCount: context.watch<NotificationsController>().unreadCount,
+                ),
+                const FloatingPillNavItem(icon: AppIcons.user, label: 'حسابي'),
               ],
             ),
           ),
@@ -69,4 +92,17 @@ class _HomeShellState extends State<HomeShell> {
       ),
     );
   }
+}
+
+/// One tab of the [IndexedStack], with its time-based work gated on being the
+/// selected one. See the class doc above.
+class _Tab extends StatelessWidget {
+  const _Tab({required this.selected, required this.child});
+
+  final bool selected;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) =>
+      TickerMode(enabled: selected, child: child);
 }

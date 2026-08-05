@@ -65,3 +65,52 @@ AuthUser fakeUser({String? name, Gender? gender}) => AuthUser(
       profileComplete:
           (name?.trim().isNotEmpty ?? false) && gender != null,
     );
+
+/// A scriptable [NotificationApi] — no network, empty inbox by default.
+class FakeNotificationApi implements NotificationApi {
+  NotificationFeed feed = NotificationFeed.empty;
+  Object? listError;
+  int listCalls = 0;
+  final List<String> readCalls = [];
+  int readAllCalls = 0;
+  Object? markError;
+
+  @override
+  Future<NotificationFeed> list() async {
+    listCalls++;
+    if (listError != null) throw listError!;
+    return feed;
+  }
+
+  @override
+  Future<void> markRead(String id) async {
+    readCalls.add(id);
+    if (markError != null) throw markError!;
+  }
+
+  @override
+  Future<void> markAllRead() async {
+    readAllCalls++;
+    if (markError != null) throw markError!;
+  }
+}
+
+/// A notification fixture. [minutesAgo] keeps ordering deterministic.
+AppNotification notificationFixture({
+  String id = 'n1',
+  AppNotificationType type = AppNotificationType.bookingConfirmed,
+  String title = 'تم تأكيد حجزك',
+  String body = 'حجزك مؤكد.',
+  bool read = false,
+  int minutesAgo = 0,
+  String? tripId,
+}) =>
+    AppNotification(
+      id: id,
+      type: type,
+      title: title,
+      body: body,
+      createdAt: DateTime.utc(2026, 7, 20, 5).subtract(Duration(minutes: minutesAgo)),
+      tripId: tripId,
+      readAt: read ? DateTime.utc(2026, 7, 20, 6) : null,
+    );

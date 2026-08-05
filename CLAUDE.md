@@ -57,6 +57,12 @@ Pine + saffron on warm paper. Light `primary #0E5C4A` / `bg #F4F1EA`; dark
 - The measured ratio table and every deviation from the raw design hand-off (with
   its reason) live in the doc comment at the top of `theme/colors.dart`.
 
+### Glyph coverage
+The bundled Cairo has **no arrow glyphs** — `←` / `→` render as a tofu box (seen
+in a golden). Join cities with a word (`النجف إلى كربلاء`) or draw the direction
+with `RouteRail`, never with an arrow character. Same caution for any symbol not
+already in use: check it in a golden before it ships.
+
 ### Numerals (locked decision)
 - **Display values render in Arabic-Indic numerals** (`٠١٢٣`) with the Arabic
   thousands separator `٬` (U+066C) and decimal separator `٫` (U+066B) — prices,
@@ -157,6 +163,91 @@ without being asked:
 - **No riverpod / bloc / getx** unless we explicitly revisit this decision.
 - Reference: `ThemeController` is provided at the app shell by `TaxiApp` and
   drives `MaterialApp.themeMode`.
+
+## Refresh & polling (locked decision)
+
+The app used to fetch once on open and never learn that anything changed: a
+rider could not see a trip posted a minute ago, and a driver could cancel a
+trip with booked seats and the riders found out by arriving at the pickup point.
+
+- **Polling, not WebSocket.** Users are on unreliable Iraqi mobile networks. A
+  poll recovers from a dropped connection by simply succeeding next time; a
+  socket has to notice it died, back off, reconnect and re-sync — and a socket
+  that *thinks* it is connected is worse than none, because the screen looks
+  live while it is frozen. Revisit for Phase 2 live matching.
+- **One implementation:** `Poller` (pure Dart, no Flutter — which is what makes
+  start/pause/resume unit-testable) + `PollingScope` (the widget that decides
+  when it may run). No screen writes its own `Timer`.
+- **Never poll a screen nobody is looking at.** `PollingScope` gates on the
+  conjunction of three things, and each one alone leaves a real hole:
+  foreground (`WidgetsBindingObserver`), this route is on top
+  (`appRouteObserver`, registered by `TaxiApp`), and this tab is selected
+  (`TickerMode` — an `IndexedStack` keeps every tab mounted and building, so the
+  shells wrap each tab in `TickerMode(enabled: isSelected)`).
+- **Never poll a terminal screen.** `enabled:` is false when there is nothing
+  left to learn — a settled trip, a history of finished bookings.
+- **A background refresh is silent, always.** Controllers take `load({silent})`
+  and expose `refreshSilently()`: no spinner, and **on failure the last good
+  data stays on screen and nothing is reported**. The user did not ask for the
+  refresh and must not be told it failed. Only an explicit, visible load
+  (first open, retry button) may show an error page.
+- **Pull-to-refresh calls the silent path too** — the `RefreshIndicator` is
+  already the spinner, and a non-silent call takes the list away under the
+  user's finger and can replace it with a full-page error.
+- Polls never stack: a tick while a request is in flight is skipped, not queued.
+
+| Screen | Interval | Live while |
+|---|---|---|
+| rider — نتائج البحث | **15s** | always on screen (an «الآن» trip appears *and expires* inside 30 min) |
+| rider — حجوزاتي | **30s** | any upcoming, non-cancelled, non-completed booking |
+| driver — تفاصيل الرحلة | **20s** | `OPEN` / `LOCKED` / `EN_ROUTE` |
+| both — notification badge | **30s** | authenticated (app-shell wide, so a cancellation reaches the user on *any* screen) |
+
+Every list screen (both apps) has pull-to-refresh regardless of whether it polls.
+
+### The admin panel (`/apps/admin`)
+
+Same rule, different mechanism: the panel is React Server Components, so a
+"refresh" is `router.refresh()` — the RSC payload is re-fetched and re-rendered
+with scroll position, open dialogs and client state intact. There is no client
+data layer to keep in sync.
+
+- One component, `RefreshBar`, does the polling **and** renders the manual
+  control («تحديث» + «آخر تحديث الساعة …»). Every polled view gets it; nothing
+  else sets a timer.
+- **السائقون — 20s.** The one that matters: a driver stuck at «بانتظار
+  المراجعة» cannot post a trip until an admin sees them.
+  **لوحة المعلومات — 60s.** Figures watched over a shift.
+  **الممرات — NOT polled**, deliberately: 306 rows that only change when an
+  admin changes them.
+- Pauses on `document.visibilityState === "hidden"`, resumes on
+  `visibilitychange`/`focus` with one immediate catch-up refresh. A failed
+  refresh leaves the rendered tree and says nothing.
+- The **pending-drivers badge** on the Drivers nav item comes from the layout's
+  dashboard aggregate, so it is as fresh as whatever view is open — on
+  /drivers and /dashboard it follows their beat; on /corridors it is as of page
+  load. Zero draws nothing.
+- `?refreshMs=` (floored at 1s) overrides the beat for one tab. It exists so
+  `e2e/refresh.spec.ts` can prove "it stopped while hidden" in seconds without
+  a build-time flag that would fire `router.refresh()` under every other spec's
+  clicks.
+
+## In-app notifications
+
+Stored notifications are the half of the event system that works today — FCM
+push is written but blocked on Firebase credentials. **One emitter, two sinks:**
+`NotificationService.send()` writes the row *then* attempts the push; nothing
+sends an event any other way. Details and the per-side event matrix are in
+`docs/PHASE1_BUILD_BRIEF.md` → `notification`.
+
+- `NotificationsController` lives at the app shell, not on the screen: the badge
+  must be right on every tab and the announcer must see an event arrive whatever
+  the user is looking at.
+- The **first** feed seeds silently — opening the app must never replay a week
+  of events as a stack of toasts.
+- While the app is open, an arrival is a toast **except** a driver-cancelled
+  trip, which is a blocking dialog (`barrierDismissible: false` + `PopScope`).
+  That exception only stays justifiable while it stays the only one.
 
 ## Map picker (خرائط — swappable provider)
 - The location picker uses **free OpenStreetMap** tiles via `flutter_map`, but the

@@ -68,6 +68,20 @@ export 'contact/link_launcher.dart';
 export 'contact/url_link_launcher.dart';
 export 'contact/contact_row.dart';
 
+// Refresh & polling. A poll recovers from a dropped connection by succeeding
+// next time; a socket has to notice it died and reconnect. Locked decision —
+// see CLAUDE.md → Refresh & polling.
+export 'polling/poller.dart';
+export 'polling/polling_scope.dart';
+
+// In-app notifications: the stored half of the event system, which works today
+// while push is blocked on Firebase credentials.
+export 'notifications/app_notification.dart';
+export 'notifications/notification_api.dart';
+export 'notifications/notifications_controller.dart';
+export 'notifications/notifications_screen.dart';
+export 'notifications/notification_announcer.dart';
+
 // Networking layer (base URL + JWT interceptor + Arabic error mapping) and the
 // Iraqi-phone helper — shared by the rider & driver apps.
 export 'net/api_exception.dart';

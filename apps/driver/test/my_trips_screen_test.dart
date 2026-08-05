@@ -111,4 +111,32 @@ void main() {
     expect(offenders, isEmpty,
         reason: 'a middle dot touches an Arabic-Indic digit in رحلاتي');
   });
+
+  group('MyTripsController background refresh', () {
+    test('a failed pull-to-refresh keeps the trips on screen', () async {
+      final api = FakeDriverTripApi()
+        ..corridors = const [najafKarbala]
+        ..myTripsResult = [tripFixture(id: 't1')];
+      final c = MyTripsController(api: api);
+      await c.load();
+
+      api.myTripsError = const ApiException('لا يوجد اتصال بالإنترنت.');
+      await c.refreshSilently();
+
+      expect(c.status, MyTripsStatus.loaded);
+      expect(c.trips.map((t) => t.id), ['t1']);
+      expect(c.error, isNull);
+    });
+
+    test('a visible load still surfaces its error', () async {
+      final api = FakeDriverTripApi()
+        ..myTripsError = const ApiException('لا يوجد اتصال بالإنترنت.');
+      final c = MyTripsController(api: api);
+
+      await c.load();
+
+      expect(c.status, MyTripsStatus.error);
+      expect(c.error, 'لا يوجد اتصال بالإنترنت.');
+    });
+  });
 }

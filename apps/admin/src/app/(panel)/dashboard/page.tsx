@@ -5,6 +5,8 @@ import { requireAdmin } from "@/lib/admin-session";
 import { ApiError, getDashboard } from "@/lib/backend";
 import { formatCount, formatPrice } from "@/lib/format";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { RefreshBar } from "@/components/refresh-bar";
+import { DASHBOARD_REFRESH_MS } from "@/lib/refresh";
 import type { DashboardCounts } from "@/lib/types";
 
 export const metadata = { title: "لوحة المعلومات — تكسي" };
@@ -56,9 +58,14 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <header>
-        <h1 className="text-2xl font-bold">لوحة المعلومات</h1>
-        <p className="text-sm text-muted-foreground">نظرة سريعة على حالة المنصة.</p>
+      {/* A slower beat than /drivers on purpose: these are figures watched
+          over a shift, not a queue anyone is blocked behind. */}
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">لوحة المعلومات</h1>
+          <p className="text-sm text-muted-foreground">نظرة سريعة على حالة المنصة.</p>
+        </div>
+        <RefreshBar intervalMs={DASHBOARD_REFRESH_MS} />
       </header>
 
       {error && (

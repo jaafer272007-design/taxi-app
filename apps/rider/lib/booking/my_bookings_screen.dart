@@ -20,6 +20,11 @@ import 'my_bookings_controller.dart';
 /// — and, once the trip is theirs, the driver's number with call and WhatsApp.
 /// The number comes from the server (`GET /trips/:id/contacts`), which answers
 /// only for a live booking; a cancelled one loses it.
+///
+/// Refreshes on pull, and polls every [kBookingsPollInterval] while there is
+/// anything live to learn about — a driver can start, complete or cancel the
+/// trip from their side, and the rider should not have to leave the screen and
+/// come back to find out.
 class MyBookingsScreen extends StatefulWidget {
   const MyBookingsScreen({super.key});
 
@@ -71,6 +76,17 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   Widget build(BuildContext context) {
     final c = context.watch<MyBookingsController>();
 
+    return PollingScope(
+      interval: kBookingsPollInterval,
+      // A finished history cannot change on its own; asking about it forever
+      // is the definition of polling a screen with nothing to learn.
+      enabled: c.hasLiveBookings,
+      onPoll: c.refreshSilently,
+      child: _body(c),
+    );
+  }
+
+  Widget _body(MyBookingsController c) {
     return AppScaffold(
       title: 'حجوزاتي',
       padded: false,
@@ -96,6 +112,15 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     );
   }
 }
+
+/// How often حجوزاتي re-asks while a booking is still live.
+///
+/// 30 seconds, twice the results interval: what changes here is driver-driven
+/// and rarely urgent to the second — the rider is waiting for a start or a
+/// cancellation, not for a listing to appear before someone else takes it.
+/// The cancellation that IS urgent arrives through the notification poll,
+/// which is separate and does not depend on this screen being open.
+const Duration kBookingsPollInterval = Duration(seconds: 30);
 
 class _BookingsList extends StatelessWidget {
   const _BookingsList({
@@ -123,7 +148,7 @@ class _BookingsList extends StatelessWidget {
 
     return RefreshIndicator(
       color: context.colors.primary,
-      onRefresh: controller.load,
+      onRefresh: controller.refreshSilently,
       child: ListView(
         padding: EdgeInsets.all(space.lg),
         children: [

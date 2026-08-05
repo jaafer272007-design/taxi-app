@@ -1,14 +1,29 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { NotificationType } from '@prisma/client';
 import * as admin from 'firebase-admin';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDeviceDto } from './dto/register-device.dto';
 
+/**
+ * One event, described once.
+ *
+ * [type] is the typed enum rather than a `data: { type: 'booking.created' }`
+ * string, because that string used to be the ONLY record of what an event was
+ * — and it was written by hand at every call site with nothing checking it.
+ * Now the same value is the stored row's column, the FCM data key, and the
+ * thing the apps switch on.
+ */
 export interface NotificationPayload {
+  type: NotificationType;
   title: string;
   body: string;
-  data?: Record<string, string | number | null | undefined>;
+  tripId?: string;
+  bookingId?: string;
 }
+
+/** How many notifications the centre asks for. */
+const LIST_LIMIT = 50;
 
 @Injectable()
 export class NotificationService {
@@ -52,12 +67,53 @@ export class NotificationService {
   }
 
   /**
-   * Push a notification to all of a user's devices. NEVER throws — these fire
-   * AFTER the DB transaction commits, so a delivery failure must not affect the
-   * caller. Invalid/expired tokens are pruned. If FCM isn't configured, logs a
-   * DEV-ONLY line instead (not a release blocker).
+   * Emit one event to one user: **store it, then try to push it.**
+   *
+   * ─── ONE EMITTER, TWO SINKS ───────────────────────────────────────────────
+   * Every caller in the codebase calls exactly this. The stored row and the
+   * push are not two features to keep in step — they are two sinks on one
+   * emission, so an event cannot reach one and miss the other, and adding an
+   * event later cannot forget half of it.
+   * ──────────────────────────────────────────────────────────────────────────
+   *
+   * Order matters. The row is written FIRST and outside the push path, because:
+   *
+   *  - push is blocked on Firebase credentials and currently only logs, so the
+   *    stored row is the only sink that works today;
+   *  - the old code returned early when the user had no registered device. A
+   *    user with no device is the common case right now, and under the naive
+   *    ordering they would have been told nothing at all.
+   *
+   * NEVER throws — these fire AFTER the DB transaction commits, so a delivery
+   * failure must not affect the caller's write.
    */
   async send(userId: string, payload: NotificationPayload): Promise<void> {
+    await this.store(userId, payload);
+    await this.push(userId, payload);
+  }
+
+  /** Sink 1 — the in-app notification centre. */
+  private async store(userId: string, payload: NotificationPayload): Promise<void> {
+    try {
+      await this.prisma.notification.create({
+        data: {
+          userId,
+          type: payload.type,
+          title: payload.title,
+          body: payload.body,
+          tripId: payload.tripId ?? null,
+          bookingId: payload.bookingId ?? null,
+        },
+      });
+    } catch (err) {
+      this.logger.error(
+        `Storing notification failed for ${userId}: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  /** Sink 2 — FCM. Invalid/expired tokens are pruned. */
+  private async push(userId: string, payload: NotificationPayload): Promise<void> {
     try {
       const devices = await this.prisma.deviceToken.findMany({ where: { userId } });
       if (devices.length === 0) return;
@@ -80,12 +136,79 @@ export class NotificationService {
     }
   }
 
+  // ── The notification centre ────────────────────────────────────────────────
+
+  /**
+   * This user's notifications, newest first, with the unread count.
+   *
+   * Both in one response on purpose: the badge and the list are polled
+   * together, and two endpoints would mean two round trips on a mobile network
+   * for one screen — and a window in which the badge disagrees with the list.
+   */
+  async list(userId: string) {
+    const [notifications, unreadCount] = await Promise.all([
+      this.prisma.notification.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: LIST_LIMIT,
+      }),
+      this.prisma.notification.count({ where: { userId, readAt: null } }),
+    ]);
+    return { unreadCount, notifications };
+  }
+
+  /** Just the unread count — for a cheap badge poll. */
+  async unreadCount(userId: string): Promise<{ unreadCount: number }> {
+    const unreadCount = await this.prisma.notification.count({
+      where: { userId, readAt: null },
+    });
+    return { unreadCount };
+  }
+
+  /** Mark one notification read. 404 if unknown, 403 if it is not yours. */
+  async markRead(userId: string, id: string) {
+    const existing = await this.prisma.notification.findUnique({
+      where: { id },
+      select: { userId: true, readAt: true },
+    });
+    if (!existing) {
+      throw new NotFoundException('الإشعار غير موجود.');
+    }
+    if (existing.userId !== userId) {
+      throw new ForbiddenException('هذا ليس إشعارك.');
+    }
+    // Idempotent: re-reading must not move the timestamp, or "when did I first
+    // see this" stops meaning anything.
+    if (existing.readAt) {
+      return this.prisma.notification.findUniqueOrThrow({ where: { id } });
+    }
+    return this.prisma.notification.update({
+      where: { id },
+      data: { readAt: new Date() },
+    });
+  }
+
+  /** Mark every unread notification read. Returns how many changed. */
+  async markAllRead(userId: string): Promise<{ updated: number }> {
+    const res = await this.prisma.notification.updateMany({
+      where: { userId, readAt: null },
+      data: { readAt: new Date() },
+    });
+    return { updated: res.count };
+  }
+
   /** Deliver via FCM; returns invalid/expired tokens that should be pruned. */
   protected async deliverToTokens(tokens: string[], payload: NotificationPayload): Promise<string[]> {
     const res = await admin.messaging().sendEachForMulticast({
       tokens,
       notification: { title: payload.title, body: payload.body },
-      data: this.stringifyData(payload.data),
+      // Built from the payload's own fields, so the push data and the stored
+      // row can never describe the event differently.
+      data: this.stringifyData({
+        type: payload.type,
+        tripId: payload.tripId,
+        bookingId: payload.bookingId,
+      }),
     });
 
     const invalid: string[] = [];
@@ -104,7 +227,9 @@ export class NotificationService {
     return invalid;
   }
 
-  private stringifyData(data?: NotificationPayload['data']): Record<string, string> {
+  private stringifyData(
+    data?: Record<string, string | number | null | undefined>,
+  ): Record<string, string> {
     const out: Record<string, string> = {};
     if (data) {
       for (const [k, v] of Object.entries(data)) {
