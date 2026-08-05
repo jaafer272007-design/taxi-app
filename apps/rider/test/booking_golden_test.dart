@@ -234,29 +234,30 @@ Future<void> _openPastTab(WidgetTester tester) async {
 
 /// The rider's half of the shared [RateSheet] — same body the driver uses to
 /// rate riders, different words.
-Widget _rateDriverSheet() => Directionality(
-      textDirection: TextDirection.rtl,
-      child: Builder(
-        builder: (context) => Column(
+Widget _rateDriverSheet() => Builder(
+      // ColoredBox because the sheet is hosted bare here rather than over a
+      // route: without it the golden would render on transparent black and
+      // stop telling us anything about the light theme.
+      builder: (context) => ColoredBox(
+        color: context.colors.background,
+        child: Column(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
             Material(
               color: context.colors.surface,
               borderRadius: context.radii.sheetTop,
               clipBehavior: Clip.antiAlias,
-              child: const RateSheet(
+              child: RateSheet(
                 title: 'قيّم السائق',
                 name: 'أبو علي',
                 commentHint: 'كيف كانت الرحلة مع هذا السائق؟',
-                onSubmit: _noopSubmit,
+                onSubmit: (_, __) async => null,
               ),
             ),
           ],
         ),
       ),
     );
-
-Future<String?> _noopSubmit(int score, String? comment) async => null;
 
 Future<void> _golden(
   WidgetTester tester, {
