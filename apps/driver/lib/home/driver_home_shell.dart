@@ -11,9 +11,17 @@ import '../trip/my_trips_screen.dart';
 import '../trip/post_trip_controller.dart';
 import '../trip/post_trip_screen.dart';
 
-/// The APPROVED driver's home: a four-tab shell (انشر رحلة · رحلاتي · أرباحي ·
-/// حسابي). Owns the post-trip, my-trips and earnings controllers; the account
-/// tab is the shared Settings. Seat count is capped at [vehicleSeats].
+/// The APPROVED driver's home: a five-tab shell (انشر · رحلاتي · أرباحي ·
+/// إشعارات · حسابي). Owns the post-trip, my-trips and earnings controllers;
+/// the account tab is the shared Settings. Seat count is capped at
+/// [vehicleSeats].
+///
+/// Five tabs is the pill's documented maximum and it needed the tighter inset
+/// to keep every label on one line — see [FloatingPillNav].
+///
+/// Each tab is wrapped in a `TickerMode` so a polling screen on an unselected
+/// tab stops: an [IndexedStack] keeps every child mounted and building, and
+/// [PollingScope] reads `TickerMode` to decide whether anyone is looking.
 class DriverHomeShell extends StatefulWidget {
   const DriverHomeShell({super.key, required this.vehicleSeats});
 
@@ -58,12 +66,22 @@ class _DriverHomeShellState extends State<DriverHomeShell> {
               child: IndexedStack(
                 index: _index,
                 children: [
-                  PostTripScreen(onPosted: () => setState(() => _index = 1)),
-                  const MyTripsScreen(),
-                  const EarningsScreen(),
-                  SettingsScreen(
-                    appVersion: AppConfig.appVersion,
-                    onLogout: () => context.read<AuthController>().logout(),
+                  _Tab(
+                    selected: _index == 0,
+                    child: PostTripScreen(
+                        onPosted: () => setState(() => _index = 1)),
+                  ),
+                  _Tab(selected: _index == 1, child: const MyTripsScreen()),
+                  _Tab(selected: _index == 2, child: const EarningsScreen()),
+                  _Tab(
+                      selected: _index == 3,
+                      child: const NotificationsScreen()),
+                  _Tab(
+                    selected: _index == 4,
+                    child: SettingsScreen(
+                      appVersion: AppConfig.appVersion,
+                      onLogout: () => context.read<AuthController>().logout(),
+                    ),
                   ),
                 ],
               ),
@@ -75,12 +93,21 @@ class _DriverHomeShellState extends State<DriverHomeShell> {
               child: FloatingPillNav(
                 currentIndex: _index,
                 onSelect: (i) => setState(() => _index = i),
-                items: const [
-                  FloatingPillNavItem(
+                items: [
+                  const FloatingPillNavItem(
                       icon: AppIcons.plusCircle, label: 'انشر'),
-                  FloatingPillNavItem(icon: AppIcons.route, label: 'رحلاتي'),
-                  FloatingPillNavItem(icon: AppIcons.wallet, label: 'أرباحي'),
-                  FloatingPillNavItem(icon: AppIcons.user, label: 'حسابي'),
+                  const FloatingPillNavItem(
+                      icon: AppIcons.route, label: 'رحلاتي'),
+                  const FloatingPillNavItem(
+                      icon: AppIcons.wallet, label: 'أرباحي'),
+                  FloatingPillNavItem(
+                    icon: AppIcons.bell,
+                    label: 'إشعارات',
+                    badgeCount:
+                        context.watch<NotificationsController>().unreadCount,
+                  ),
+                  const FloatingPillNavItem(
+                      icon: AppIcons.user, label: 'حسابي'),
                 ],
               ),
             ),
@@ -89,4 +116,17 @@ class _DriverHomeShellState extends State<DriverHomeShell> {
       ),
     );
   }
+}
+
+/// One tab of the [IndexedStack], with its time-based work gated on being the
+/// selected one. See the class doc above.
+class _Tab extends StatelessWidget {
+  const _Tab({required this.selected, required this.child});
+
+  final bool selected;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) =>
+      TickerMode(enabled: selected, child: child);
 }

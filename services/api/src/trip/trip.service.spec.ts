@@ -7,6 +7,7 @@ import {
 import {
   BookingStatus,
   DriverStatus,
+  NotificationType,
   PaymentStatus,
   TripCreatedBy,
   TripStatus,
@@ -326,7 +327,7 @@ describe('TripService lifecycle (start / complete)', () => {
       );
       expect(notifications.send).toHaveBeenCalledWith(
         'r1',
-        expect.objectContaining({ data: expect.objectContaining({ type: 'trip.started' }) }),
+        expect.objectContaining({ type: NotificationType.TRIP_STARTED }),
       );
     });
 
@@ -397,7 +398,7 @@ describe('TripService lifecycle (start / complete)', () => {
       // trip.completed → riders notified after commit
       expect(notifications.send).toHaveBeenCalledWith(
         expect.anything(),
-        expect.objectContaining({ data: expect.objectContaining({ type: 'trip.completed' }) }),
+        expect.objectContaining({ type: NotificationType.TRIP_COMPLETED }),
       );
     });
 

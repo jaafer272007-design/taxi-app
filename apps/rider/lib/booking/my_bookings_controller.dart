@@ -52,25 +52,49 @@ class MyBookingsController extends ChangeNotifier {
   bool canCancel(Booking b) =>
       (b.upcoming ?? false) && b.status == BookingStatus.confirmed;
 
-  Future<void> load() async {
-    _status = MyBookingsStatus.loading;
-    _error = null;
-    notifyListeners();
+  /// A BACKGROUND refresh: no spinner, and **no clearing on failure**.
+  ///
+  /// This is what the poll and the pull-to-refresh call. A rider watching for
+  /// their driver to start the trip must not have the list replaced by an
+  /// error the moment a request drops on a bad connection.
+  Future<void> refreshSilently() => load(silent: true);
+
+  Future<void> load({bool silent = false}) async {
+    if (!silent) {
+      _status = MyBookingsStatus.loading;
+      _error = null;
+      notifyListeners();
+    }
     try {
       _bookings = await _api.listMine();
       _status = MyBookingsStatus.loaded;
+      _error = null;
       await _loadContacts();
     } on ApiException catch (e) {
-      _error = e.message;
-      _status = MyBookingsStatus.error;
+      if (!silent) {
+        _error = e.message;
+        _status = MyBookingsStatus.error;
+      }
     } catch (_) {
-      _error = 'تعذّر تحميل حجوزاتك. حاول مرة أخرى.';
-      _status = MyBookingsStatus.error;
+      if (!silent) {
+        _error = 'تعذّر تحميل حجوزاتك. حاول مرة أخرى.';
+        _status = MyBookingsStatus.error;
+      }
     } finally {
       _hasLoaded = true;
       notifyListeners();
     }
   }
+
+  /// Whether anything on this screen can still change on its own.
+  ///
+  /// An upcoming booking can be started, completed or cancelled by the driver.
+  /// A history of finished trips cannot change at all, and polling it would be
+  /// asking the server the same question forever.
+  bool get hasLiveBookings => _bookings.any((b) =>
+      (b.upcoming ?? false) &&
+      b.status != BookingStatus.cancelled &&
+      b.status != BookingStatus.completed);
 
   /// Resolve the driver's number for the bookings that could use one.
   ///

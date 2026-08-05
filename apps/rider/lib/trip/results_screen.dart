@@ -8,6 +8,18 @@ import 'widgets/trip_card.dart';
 import 'widgets/trip_state_views.dart';
 
 /// Results of the current search: cards, or loading / empty / error.
+///
+/// ## Live
+///
+/// This is the screen where staleness costs the most, and the reason is
+/// «الآن» trips: a driver posts one and it is bookable for thirty minutes.
+/// A rider staring at a list that was fetched two minutes ago is being shown
+/// an empty road while a car is sitting there.
+///
+/// So it polls every [kResultsPollInterval] — but only while it is genuinely
+/// on screen (see [PollingScope]), and a failed poll leaves the list exactly
+/// as it is. Pull-to-refresh is on the same call for when the rider wants it
+/// now.
 class ResultsScreen extends StatelessWidget {
   const ResultsScreen({super.key});
 
@@ -25,28 +37,79 @@ class ResultsScreen extends StatelessWidget {
     // filters wouldn't change anything).
     final corridorServed = c.matchedCorridor != null;
 
-    return AppScaffold(
-      title: title,
-      padded: false,
-      body: switch (c.status) {
-        TripSearchStatus.loading => const _Padded(child: TripLoadingList()),
-        TripSearchStatus.error => TripErrorView(
-            message: c.error ?? 'حدث خطأ. حاول مرة أخرى.',
-            onRetry: () => c.search(),
+    return PollingScope(
+      interval: kResultsPollInterval,
+      onPoll: c.refreshSilently,
+      child: AppScaffold(
+        title: title,
+        padded: false,
+        body: switch (c.status) {
+          TripSearchStatus.loading => const _Padded(child: TripLoadingList()),
+          TripSearchStatus.error => TripErrorView(
+              message: c.error ?? 'حدث خطأ. حاول مرة أخرى.',
+              onRetry: () => c.search(),
+            ),
+          // Even the empty view is pull-to-refresh-able: "no trips yet" is
+          // exactly the state a rider wants to retry, and it is the state a
+          // newly-posted «الآن» trip arrives into.
+          TripSearchStatus.empty => _Refreshable(
+              controller: c,
+              child: TripEmptyView(
+                tripType: corridorServed ? c.tripType : null,
+                driverGender: corridorServed ? c.driverGender : null,
+                onClearFilters: (corridorServed && c.hasActiveFilters)
+                    ? () {
+                        c.clearFilters();
+                        c.search();
+                      }
+                    : null,
+              ),
+            ),
+          TripSearchStatus.results => _ResultsList(controller: c),
+          TripSearchStatus.initial => const SizedBox.shrink(),
+        },
+      ),
+    );
+  }
+}
+
+/// How often the open results list re-asks the server.
+///
+/// 15 seconds: the shortest interval in the app, because this is the only
+/// screen where the thing being waited for (a driver posting «الآن») can
+/// appear and expire inside half an hour. Longer and the feature stops
+/// feeling live; shorter and it is four requests a minute on a metered
+/// connection for a screen someone may leave open.
+const Duration kResultsPollInterval = Duration(seconds: 15);
+
+/// Wraps a non-scrolling view so it can still be pulled to refresh.
+///
+/// [RefreshIndicator] needs a scrollable; the empty state is a centred column,
+/// so it gets one that always overscrolls.
+class _Refreshable extends StatelessWidget {
+  const _Refreshable({required this.controller, required this.child});
+
+  final TripSearchController controller;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      color: context.colors.primary,
+      // refreshSilently, not search: the RefreshIndicator is already the
+      // spinner, and a non-silent call would swap the view for the loading
+      // skeleton under the rider's finger and could replace it with a
+      // full-page error.
+      onRefresh: controller.refreshSilently,
+      child: LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: child,
           ),
-        TripSearchStatus.empty => TripEmptyView(
-            tripType: corridorServed ? c.tripType : null,
-            driverGender: corridorServed ? c.driverGender : null,
-            onClearFilters: (corridorServed && c.hasActiveFilters)
-                ? () {
-                    c.clearFilters();
-                    c.search();
-                  }
-                : null,
-          ),
-        TripSearchStatus.results => _ResultsList(controller: c),
-        TripSearchStatus.initial => const SizedBox.shrink(),
-      },
+        ),
+      ),
     );
   }
 }
@@ -78,29 +141,33 @@ class _ResultsList extends StatelessWidget {
     final space = context.space;
     final trips = controller.results;
 
-    return ListView.separated(
-      padding: EdgeInsets.all(space.lg),
-      // One extra leading item: the sort bar.
-      itemCount: trips.length + 1,
-      separatorBuilder: (_, __) => SizedBox(height: space.md),
-      itemBuilder: (context, i) {
-        if (i == 0) {
-          return _SortBar(
-            value: controller.sort,
-            onChanged: controller.setSort,
-            count: trips.length,
-          );
-        }
-        final trip = trips[i - 1];
-        return TripCard(
-          trip: trip,
-          onTap: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => TripDetailsScreen(trip: trip),
+    return RefreshIndicator(
+      color: context.colors.primary,
+      onRefresh: controller.refreshSilently,
+      child: ListView.separated(
+        padding: EdgeInsets.all(space.lg),
+        // One extra leading item: the sort bar.
+        itemCount: trips.length + 1,
+        separatorBuilder: (_, __) => SizedBox(height: space.md),
+        itemBuilder: (context, i) {
+          if (i == 0) {
+            return _SortBar(
+              value: controller.sort,
+              onChanged: controller.setSort,
+              count: trips.length,
+            );
+          }
+          final trip = trips[i - 1];
+          return TripCard(
+            trip: trip,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => TripDetailsScreen(trip: trip),
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }

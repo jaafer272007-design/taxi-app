@@ -27,8 +27,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { RefreshBar } from "@/components/refresh-bar";
 import { cn } from "@/lib/utils";
 import { formatRating, formatSeats, formatTrips } from "@/lib/format";
+import { DRIVERS_REFRESH_MS } from "@/lib/refresh";
 import type { DocStatus, DocType, Driver, DriverStatus } from "@/lib/types";
 import { approveDriverAction, rejectDriverAction, suspendDriverAction } from "./actions";
 
@@ -119,11 +121,18 @@ export function DriversClient({
 
   return (
     <div className="grid gap-6">
-      <header>
-        <h1 className="text-2xl font-bold">السائقون</h1>
-        <p className="text-sm text-muted-foreground">
-          راجع المستمسكات واعتمد السائق ليتمكّن من إعلان الرحلات.
-        </p>
+      {/* This list auto-refreshes: a driver stuck at «بانتظار المراجعة»
+          cannot post a single trip until somebody here sees them, and an admin
+          watching a list fetched ten minutes ago has no way to know that
+          somebody is waiting. */}
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">السائقون</h1>
+          <p className="text-sm text-muted-foreground">
+            راجع المستمسكات واعتمد السائق ليتمكّن من إعلان الرحلات.
+          </p>
+        </div>
+        <RefreshBar intervalMs={DRIVERS_REFRESH_MS} />
       </header>
 
       <nav className="flex flex-wrap gap-2">

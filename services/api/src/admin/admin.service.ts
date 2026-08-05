@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { DriverStatus, Prisma, UserRole } from '@prisma/client';
+import { DriverStatus, NotificationType, Prisma, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationService } from '../notification/notification.service';
 import { ListTripsDto } from './dto/list-trips.dto';
@@ -35,7 +35,7 @@ export class AdminService {
     await this.notifications.send(profile.user.id, {
       title: 'تم الاعتماد',
       body: 'تم اعتماد حسابك كسائق. يمكنك الآن إعلان الرحلات.',
-      data: { type: 'driver.approved' },
+      type: NotificationType.DRIVER_APPROVED,
     });
     return profile;
   }
@@ -48,7 +48,7 @@ export class AdminService {
     await this.notifications.send(profile.user.id, {
       title: 'تم رفض الطلب',
       body: reason ? `تم رفض طلبك: ${reason}` : 'تم رفض طلبك.',
-      data: { type: 'driver.rejected' },
+      type: NotificationType.DRIVER_REJECTED,
     });
     return profile;
   }

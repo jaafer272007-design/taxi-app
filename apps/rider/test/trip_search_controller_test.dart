@@ -346,4 +346,72 @@ void main() {
       expect(c.canSearch, isTrue);
     });
   });
+
+  group('background refresh (poll + pull-to-refresh)', () {
+    Future<TripSearchController> loaded() async {
+      api.corridors = const [najafKarbala];
+      api.searchResults = [tripFixture(id: 't1')];
+      final c = make();
+      await c.ensureCorridorsLoaded();
+      await c.search();
+      expect(c.status, TripSearchStatus.results);
+      return c;
+    }
+
+    test('a failed refresh keeps the list and says nothing', () async {
+      final c = await loaded();
+
+      api.searchError = const ApiException('لا يوجد اتصال بالإنترنت.');
+      await c.refreshSilently();
+
+      // The whole contract of a background refresh: the rider did not ask for
+      // it, so it may not take their results away or tell them it failed.
+      expect(c.status, TripSearchStatus.results);
+      expect(c.results.map((t) => t.id), ['t1']);
+      expect(c.error, isNull);
+    });
+
+    test('a refresh never shows the loading skeleton', () async {
+      final c = await loaded();
+      final seen = <TripSearchStatus>[];
+      c.addListener(() => seen.add(c.status));
+
+      await c.refreshSilently();
+
+      expect(seen, isNot(contains(TripSearchStatus.loading)),
+          reason: 'shimmer every 15 seconds would make the screen unusable');
+    });
+
+    test('a refresh picks up a newly posted trip', () async {
+      final c = await loaded();
+
+      api.searchResults = [tripFixture(id: 't1'), tripFixture(id: 't2')];
+      await c.refreshSilently();
+
+      expect(c.results.map((t) => t.id), ['t1', 't2']);
+    });
+
+    test('a visible search still surfaces its error', () async {
+      final c = await loaded();
+
+      api.searchError = const ApiException('لا يوجد اتصال بالإنترنت.');
+      await c.search();
+
+      expect(c.status, TripSearchStatus.error);
+      expect(c.error, 'لا يوجد اتصال بالإنترنت.');
+    });
+
+    test('a recovered refresh clears a stale error', () async {
+      final c = await loaded();
+      api.searchError = const ApiException('لا يوجد اتصال بالإنترنت.');
+      await c.search();
+      expect(c.error, isNotNull);
+
+      api.searchError = null;
+      await c.refreshSilently();
+
+      expect(c.status, TripSearchStatus.results);
+      expect(c.error, isNull);
+    });
+  });
 }

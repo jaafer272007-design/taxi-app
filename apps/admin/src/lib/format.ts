@@ -148,6 +148,22 @@ export function formatDate(value: string | Date): string {
   );
 }
 
+/**
+ * A timestamp as a **Baghdad** wall clock — `٠٨:٤٥`.
+ *
+ * Zero-padded, and the colon is safe next to a numeral: `:` is not one of the
+ * dot-like glyphs `e2e/numerals.spec.ts` sweeps for, and it is part of the
+ * value rather than a separator between two of them. Do not follow this with a
+ * full stop — `.` IS dot-like, and «٠٨:٤٥.» would read as an extra zero.
+ */
+export function formatClock(value: string | Date): string {
+  const dt = typeof value === "string" ? new Date(value) : value;
+  if (Number.isNaN(dt.getTime())) return "—";
+  const baghdad = new Date(dt.getTime() + BAGHDAD_OFFSET_MS);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return toArabicDigits(`${pad(baghdad.getUTCHours())}:${pad(baghdad.getUTCMinutes())}`);
+}
+
 /** A 1–5 rating with one decimal, Arabic-Indic — `4.8` → `٤٫٨`. */
 export function formatRating(value: number): string {
   return toArabicDigits(value.toFixed(1)).replace(".", "٫");

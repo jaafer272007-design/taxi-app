@@ -19,6 +19,8 @@ void main() {
     addTearDown(driver.dispose);
 
     await tester.pumpWidget(DriverApp(
+      notificationsController:
+          NotificationsController(api: FakeNotificationApi()),
       themeController: themeController,
       authController: auth,
       driverController: driver,

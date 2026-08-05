@@ -175,6 +175,43 @@ model AdminUser {
   createdBy    String?                      // AdminUser.id — null للمزروع من البيئة
 }
 
+// Phase 1 amendment: الإشعارات المخزّنة (مركز الإشعارات داخل التطبيق).
+//
+// ليش جدول أصلاً؟ الـ push (FCM) موجود بس معطّل — ينتظر بيانات اعتماد
+// Firebase، فحالياً يسجّل بالـ log وما يوصل. والأهم: الـ push حدث عابر،
+// إذا الجهاز مطفأ أو الرمز منتهي يضيع بلا أثر. الصف المخزّن هو النسخة
+// الدائمة: يُقرأ لاحقاً، ويُعلَّم كمقروء، ويغذّي عدّاد الشارة.
+//
+// **باعث واحد، مصرفان**: كل حدث يمرّ بـ NotificationService.send() التي
+// تكتب الصف **أولاً** ثم تحاول الـ push. الترتيب مقصود — النسخة القديمة
+// كانت ترجع مبكراً إذا ما عند المستخدم جهاز مسجّل، فالمستخدم ما كان
+// يُخبَر بشيء أبداً. ممنوع إضافة مسار ثانٍ يبعث إشعاراً بلا المرور بها.
+enum NotificationType {
+  BOOKING_CREATED              // للسائق: راكب حجز مقعداً
+  BOOKING_CONFIRMED            // للراكب: حجزك مؤكَّد
+  BOOKING_CANCELLED_BY_RIDER   // للسائق: راكب ألغى
+  BOOKING_CANCELLED            // للراكب: حجزك أُلغي
+  TRIP_STARTED
+  TRIP_COMPLETED               // للراكب: + دعوة للتقييم
+  TRIP_CANCELLED               // للراكب: السائق ألغى الرحلة ← الأهم
+  DRIVER_APPROVED
+  DRIVER_REJECTED
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String                            // المستلم
+  type      NotificationType
+  title     String                            // عربي، مُركَّب على الخادم
+  body      String                            // عربي، مُركَّب على الخادم
+  tripId    String?                           // للسياق فقط — بلا relation
+  bookingId String?                           //   حتى يبقى الإشعار مقروءاً
+  readAt    DateTime?                         //   بعد اختفاء صفّه الأصلي
+  createdAt DateTime         @default(now())
+
+  @@index([userId, createdAt])
+}
+
 // SeatRequest = Phase 2 (لا يُبنى الآن)
 ```
 
@@ -353,6 +390,43 @@ model AdminUser {
 ### `notification`
 - `POST /devices` `{ token }` (FCM). أحداث تُطلق إشعار: حجز جديد (للسائق)، تأكيد حجز (للراكب)، تذكير مغادرة، إلغاء رحلة، بدء/إكمال.
 **قبول:** الأحداث الرئيسية تُطلق إشعارات فعلاً.
+
+#### مركز الإشعارات داخل التطبيق — Phase 1 amendment
+
+الـ push موجود لكن **معطّل**: ينتظر بيانات اعتماد Firebase، فحالياً يسجّل بالـ
+log فقط. هذا القسم هو النصف الذي **يشتغل اليوم**، ويكمّل الـ push لاحقاً بدل أن
+يستبدله.
+
+- `GET  /notifications` → `{ unreadCount, notifications[] }` (الأحدث أولاً، بحد
+  أقصى ٥٠ صفاً) — طلب واحد يغذّي القائمة والشارة معاً.
+- `GET  /notifications/unread-count` → `{ unreadCount }`.
+- `POST /notifications/:id/read` — idempotent؛ `404` لصف غير موجود، `403` لصف
+  يخصّ مستخدماً آخر.
+- `POST /notifications/read-all`.
+
+> **ترتيب المسارات:** `read-all` مُعرَّف **قبل** `:id/read` بالـ controller،
+> وإلا التقط `:id` الكلمة `read-all` كمعرّف.
+
+**باعث واحد، مصرفان.** كل حدث يمرّ بـ `NotificationService.send(userId, payload)`
+التي **تخزّن الصف ثم تحاول الـ push**. ممنوع أن يبعث أي module إشعاراً بطريق
+آخر — الـ fan-out (مَن يستلم ماذا) مُثبَّت باختبارات تكامل حقيقية في
+`notification-fanout.int-spec.ts`، لأن `findMany` المُقلَّد لا يطبّق `where`
+أصلاً فلا يثبت شيئاً.
+
+**مَن يستلم ماذا:**
+
+| الحدث | الراكب | السائق |
+|---|---|---|
+| حجز جديد | `BOOKING_CONFIRMED` | `BOOKING_CREATED` |
+| الراكب ألغى حجزه | `BOOKING_CANCELLED` | `BOOKING_CANCELLED_BY_RIDER` |
+| السائق بدأ الرحلة | `TRIP_STARTED` | — |
+| السائق أنهى الرحلة | `TRIP_COMPLETED` (+ دعوة تقييم) | — |
+| **السائق ألغى الرحلة** | `TRIP_CANCELLED` لكل راكب حجزه غير ملغى | — |
+| اعتماد/رفض السائق | — | `DRIVER_APPROVED` / `DRIVER_REJECTED` |
+
+`TRIP_CANCELLED` هو **الحدث الوحيد الحاجب** بالتطبيق: يوقف الواجهة بحوار لا
+يُغلق بالضغط خارجه ولا بزر الرجوع، وله زر إقرار واحد. السبب مباشر — مَن يفوته
+هذا الخبر يذهب ليقف عند نقطة انطلاق لسيارة لن تأتي. كل ما عداه توست عابر.
 
 ### `earnings` (نقدي)
 - `GET /driver/earnings?range=` (يومي/إجمالي). يُسجَّل عند إكمال الرحلة.

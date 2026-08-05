@@ -21,12 +21,24 @@ import 'trip_detail_controller.dart';
 ///
 /// Numbers appear only because the server returned them: `GET
 /// /trips/:id/contacts` answers for the trip's own driver and nobody else.
+///
+/// Refreshes on pull, and polls every [kTripDetailPollInterval] while the trip
+/// is live — a new booking arriving is exactly the thing a driver waiting to
+/// set off needs to see without tapping anything.
 class TripDetailScreen extends StatefulWidget {
   const TripDetailScreen({super.key});
 
   @override
   State<TripDetailScreen> createState() => _TripDetailScreenState();
 }
+
+/// How often a live trip's bookings are re-fetched.
+///
+/// 20 seconds: between the rider's 15s results poll and the 30s bookings poll.
+/// A driver watching seats fill is waiting on other people's taps, so it has
+/// to feel prompt — but this screen is open for long stretches while parked at
+/// the كراج, and every tick is a request on a metered connection.
+const Duration kTripDetailPollInterval = Duration(seconds: 20);
 
 class _TripDetailScreenState extends State<TripDetailScreen> {
   @override
@@ -150,24 +162,35 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     final c = context.watch<TripDetailController>();
     final space = context.space;
 
-    return AppScaffold(
-      title: 'تفاصيل الرحلة',
-      padded: false,
-      bottomBar: _bottomBar(c),
-      body: ListView(
-        padding: EdgeInsets.all(space.lg),
-        children: [
-          _TripHero(controller: c),
-          if (c.summary != null) ...[
-            SizedBox(height: space.md),
-            _SummaryCard(summary: c.summary!),
-          ],
-          SizedBox(height: space.lg),
-          Text('الحجوزات',
-              style: context.text.h2.copyWith(color: context.colors.textPrimary)),
-          SizedBox(height: space.md),
-          _bookingsSection(c),
-        ],
+    return PollingScope(
+      interval: kTripDetailPollInterval,
+      // Nothing left to learn about a finished trip.
+      enabled: c.isLive,
+      onPoll: c.refreshSilently,
+      child: AppScaffold(
+        title: 'تفاصيل الرحلة',
+        padded: false,
+        bottomBar: _bottomBar(c),
+        body: RefreshIndicator(
+          color: context.colors.primary,
+          onRefresh: c.refreshSilently,
+          child: ListView(
+            padding: EdgeInsets.all(space.lg),
+            children: [
+              _TripHero(controller: c),
+              if (c.summary != null) ...[
+                SizedBox(height: space.md),
+                _SummaryCard(summary: c.summary!),
+              ],
+              SizedBox(height: space.lg),
+              Text('الحجوزات',
+                  style: context.text.h2
+                      .copyWith(color: context.colors.textPrimary)),
+              SizedBox(height: space.md),
+              _bookingsSection(c),
+            ],
+          ),
+        ),
       ),
     );
   }

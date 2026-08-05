@@ -123,4 +123,27 @@ void main() {
     expect(c.status, EarningsStatus.error);
     expect(c.error, 'تعذّر الاتصال بالخادم.');
   });
+
+  test('a failed pull-to-refresh keeps the cash figures on screen', () async {
+    final api = FakeDriverTripApi()
+      ..earningsByRange = {
+        'today': const DriverEarnings(total: 18000, records: []),
+        'all': DriverEarnings(total: 96000, records: [
+          earningsRecordFixture(id: 'e1', amount: 12000),
+        ]),
+      };
+    final c = EarningsController(api: api);
+    await c.load();
+
+    api.earningsError =
+        const ApiException('تعذّر الاتصال بالخادم.', isNetwork: true);
+    await c.refreshSilently();
+
+    // Cash is the last thing that should vanish behind "حدث خطأ" because one
+    // request dropped on a bad connection.
+    expect(c.status, EarningsStatus.loaded);
+    expect(c.todayTotal, 18000);
+    expect(c.allTimeTotal, 96000);
+    expect(c.error, isNull);
+  });
 }

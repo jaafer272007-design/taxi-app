@@ -1,8 +1,27 @@
 import { CarTaxiFront } from "lucide-react";
 
 import { requireAdmin } from "@/lib/admin-session";
+import { getDashboard } from "@/lib/backend";
 import { PanelNav } from "./panel-nav";
 import { LogoutButton } from "./logout-button";
+
+/**
+ * How many drivers are waiting to be reviewed, for the sidebar badge.
+ *
+ * Read from the dashboard aggregate rather than by listing PENDING drivers:
+ * the backend already counts them, and a count is the whole answer. Failure is
+ * swallowed — a badge is a hint, and taking the entire panel down because one
+ * summary request timed out would be a spectacularly bad trade.
+ */
+async function pendingDriverCount(token: string): Promise<number> {
+  try {
+    const counts = await getDashboard(token);
+    const pending = counts.drivers?.byStatus?.PENDING;
+    return typeof pending === "number" && Number.isFinite(pending) ? pending : 0;
+  } catch {
+    return 0;
+  }
+}
 
 /**
  * The authenticated shell. Everything under `(panel)` shares it; the route
@@ -15,8 +34,9 @@ import { LogoutButton } from "./logout-button";
  * whose every button would 403.
  */
 export default async function PanelLayout({ children }: { children: React.ReactNode }) {
-  const { me } = await requireAdmin();
+  const { me, token } = await requireAdmin();
   const isSuperAdmin = me.role === "SUPER_ADMIN";
+  const pendingDrivers = await pendingDriverCount(token);
 
   return (
     <div className="flex min-h-dvh">
@@ -34,7 +54,7 @@ export default async function PanelLayout({ children }: { children: React.ReactN
         {/* The nav item for admin management is only rendered for the super
             admin — but /admins re-checks the role server-side, so hiding it is
             tidiness, not protection. */}
-        <PanelNav isSuperAdmin={isSuperAdmin} />
+        <PanelNav isSuperAdmin={isSuperAdmin} pendingDrivers={pendingDrivers} />
 
         <div className="border-t border-sidebar-border p-3">
           <div className="px-3 pb-2">

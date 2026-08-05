@@ -212,9 +212,21 @@ class TripSearchController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Re-run the current search as a BACKGROUND refresh.
+  ///
+  /// This is what the poll and pull-to-refresh call. It differs from [search]
+  /// in exactly two ways, and both matter:
+  ///
+  ///  * it never shows the loading skeleton — the rider is reading the list,
+  ///    and replacing it with shimmer every 15 seconds would be unusable;
+  ///  * **it never clears the results on failure.** A dropped request leaves
+  ///    the last good list exactly where it was and says nothing. The rider
+  ///    did not ask for this refresh and must not be told it failed.
+  Future<void> refreshSilently() => search(silent: true);
+
   /// Run the search for the current form. Results come back in the current
   /// [sort] order.
-  Future<void> search() async {
+  Future<void> search({bool silent = false}) async {
     if (!canSearch) return;
     final corridor = matchedCorridor;
 
@@ -228,9 +240,11 @@ class TripSearchController extends ChangeNotifier {
       return;
     }
 
-    _status = TripSearchStatus.loading;
-    _error = null;
-    notifyListeners();
+    if (!silent) {
+      _status = TripSearchStatus.loading;
+      _error = null;
+      notifyListeners();
+    }
 
     try {
       final day = _date ?? _today();
@@ -257,12 +271,17 @@ class TripSearchController extends ChangeNotifier {
       );
       _status =
           _results.isEmpty ? TripSearchStatus.empty : TripSearchStatus.results;
+      _error = null;
     } on ApiException catch (e) {
-      _error = e.message;
-      _status = TripSearchStatus.error;
+      if (!silent) {
+        _error = e.message;
+        _status = TripSearchStatus.error;
+      }
     } catch (_) {
-      _error = 'حدث خطأ. حاول مرة أخرى.';
-      _status = TripSearchStatus.error;
+      if (!silent) {
+        _error = 'حدث خطأ. حاول مرة أخرى.';
+        _status = TripSearchStatus.error;
+      }
     } finally {
       notifyListeners();
     }
