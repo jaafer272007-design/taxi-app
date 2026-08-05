@@ -90,6 +90,12 @@ class _TripCard extends StatelessWidget {
   /// Hand-off stripe thickness.
   static const double _stripe = 4;
 
+  /// A «الآن» trip that is still OPEN is the only case where the driver needs
+  /// to be told how long riders can still catch it. A scheduled trip already
+  /// shows its departure time, and a trip that is no longer OPEN has stopped
+  /// taking bookings whatever the clock says.
+  bool get _showsWindow => trip.departNow && trip.status == TripStatus.open;
+
   /// Open the trip detail (bookings + lifecycle). Refreshes the list on return
   /// so any status change (started/completed/cancelled) shows immediately.
   Future<void> _open(BuildContext context) async {
@@ -153,6 +159,13 @@ class _TripCard extends StatelessWidget {
                       child: typeBadge,
                     ),
                   ],
+                  if (_showsWindow) ...[
+                    SizedBox(height: space.md),
+                    Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: _DepartNowWindow(until: trip.catchableUntil),
+                    ),
+                  ],
                   SizedBox(height: space.md),
                   Divider(height: 1, color: colors.border),
                   SizedBox(height: space.md),
@@ -180,6 +193,31 @@ class _TripCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// How much longer riders can still catch a «الآن» trip.
+///
+/// Shows the END of the window rather than a live countdown: the card is built
+/// once per load, so a "٢٣ دقيقة متبقية" label would quietly go stale while the
+/// screen sits open, and a stale number about whether your trip is still live
+/// is worse than no number. A clock time stays true however long the driver
+/// looks at it.
+class _DepartNowWindow extends StatelessWidget {
+  const _DepartNowWindow({required this.until});
+
+  final DateTime until;
+
+  @override
+  Widget build(BuildContext context) {
+    // «الساعة» sits between the label and the digits on purpose. A dot-like
+    // separator next to an Arabic-Indic numeral reads as an extra ٠ — see the
+    // Numerals rule in CLAUDE.md.
+    return AppBadge(
+      label: 'متاحة للحجز حتى الساعة ${formatTime(until)}',
+      tone: AppBadgeTone.info,
+      icon: AppIcons.clock,
     );
   }
 }

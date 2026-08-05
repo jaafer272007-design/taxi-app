@@ -3,10 +3,13 @@ import { DriverModule } from '../driver/driver.module';
 import { CorridorModule } from '../corridor/corridor.module';
 import { TripController } from './trip.controller';
 import { TripService } from './trip.service';
+import { TripExpiryJob } from './trip-expiry.job';
 
 @Module({
   imports: [DriverModule, CorridorModule],
   controllers: [TripController],
-  providers: [TripService],
+  // TripExpiryJob has no consumers — it is driven by the scheduler. It is
+  // registered here so it lives next to the rule it enforces.
+  providers: [TripService, TripExpiryJob],
 })
 export class TripModule {}
