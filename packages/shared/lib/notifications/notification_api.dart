@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
-import '../net/api_exception.dart';
+// mapDioError lives beside the client, not beside ApiException.
+import '../net/api_client.dart';
 import 'app_notification.dart';
 
 /// The notification centre's endpoints. Shared: rider and driver read the same
