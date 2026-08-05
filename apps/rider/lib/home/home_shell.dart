@@ -30,6 +30,33 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
 
+  /// Index of the حجوزاتي tab — where every booking- and trip-shaped event is
+  /// actionable, including «انتهت رحلتك» and the rate action it leads to.
+  static const int _bookingsTab = 1;
+
+  /// Where a tapped notification takes the rider.
+  ///
+  /// Everything about a booking or a trip lands on حجوزاتي: the confirmation,
+  /// the start, the cancellation, and — the one that had nowhere to go until
+  /// now — the completion, whose whole point is to reach the rate action.
+  /// A driver-approval event concerns the driver app and stays put.
+  void _openNotification(AppNotification n) {
+    switch (n.type) {
+      case AppNotificationType.bookingConfirmed:
+      case AppNotificationType.bookingCancelled:
+      case AppNotificationType.tripStarted:
+      case AppNotificationType.tripCompleted:
+      case AppNotificationType.tripCancelled:
+        setState(() => _index = _bookingsTab);
+      case AppNotificationType.bookingCreated:
+      case AppNotificationType.bookingCancelledByRider:
+      case AppNotificationType.driverApproved:
+      case AppNotificationType.driverRejected:
+      case AppNotificationType.unknown:
+        break; // not a rider-side destination
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
@@ -56,7 +83,10 @@ class _HomeShellState extends State<HomeShell> {
                     child: const MyBookingsScreen(),
                   ),
                 ),
-                _Tab(selected: _index == 2, child: const NotificationsScreen()),
+                _Tab(
+                  selected: _index == 2,
+                  child: NotificationsScreen(onOpen: _openNotification),
+                ),
                 _Tab(
                   selected: _index == 3,
                   child: SettingsScreen(

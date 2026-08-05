@@ -74,6 +74,38 @@ void main() {
     });
   });
 
+  group('my bookings — سابقة, where the rate action lives', () {
+    testWidgets('light', (t) async {
+      await _golden(t,
+          name: 'my_bookings_past_light',
+          brightness: Brightness.light,
+          child: await _myBookings(),
+          afterPump: _openPastTab);
+    });
+    testWidgets('dark', (t) async {
+      await _golden(t,
+          name: 'my_bookings_past_dark',
+          brightness: Brightness.dark,
+          child: await _myBookings(),
+          afterPump: _openPastTab);
+    });
+  });
+
+  group('rate the driver', () {
+    testWidgets('light', (t) async {
+      await _golden(t,
+          name: 'rate_driver_sheet_light',
+          brightness: Brightness.light,
+          child: _rateDriverSheet());
+    });
+    testWidgets('dark', (t) async {
+      await _golden(t,
+          name: 'rate_driver_sheet_dark',
+          brightness: Brightness.dark,
+          child: _rateDriverSheet());
+    });
+  });
+
   group('my bookings', () {
     testWidgets('light', (t) async {
       await _golden(t,
@@ -171,6 +203,10 @@ Future<Widget> _myBookings() async {
         upcoming: false,
         hourUtc: 6,
         minute: 0,
+        // Completed and unrated → the rate prompt rides at the top of the
+        // screen and the card below carries «قيّم السائق».
+        ratable: true,
+        driverName: 'أبو علي',
       ),
     ]
     // The fake returns this for any trip, but only the UPCOMING booking is ever
@@ -186,11 +222,48 @@ Future<Widget> _myBookings() async {
   );
 }
 
+/// Switch حجوزاتي to «سابقة» before the snapshot — the rate action lives on a
+/// completed ride, and the screen opens on «قادمة».
+Future<void> _openPastTab(WidgetTester tester) async {
+  // The pill carries its count («سابقة ١»), and the empty-state line ends with
+  // the same word — anchor so exactly one thing matches.
+  await tester.tap(find.textContaining(RegExp('^سابقة')));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 32));
+}
+
+/// The rider's half of the shared [RateSheet] — same body the driver uses to
+/// rate riders, different words.
+Widget _rateDriverSheet() => Directionality(
+      textDirection: TextDirection.rtl,
+      child: Builder(
+        builder: (context) => Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            Material(
+              color: context.colors.surface,
+              borderRadius: context.radii.sheetTop,
+              clipBehavior: Clip.antiAlias,
+              child: const RateSheet(
+                title: 'قيّم السائق',
+                name: 'أبو علي',
+                commentHint: 'كيف كانت الرحلة مع هذا السائق؟',
+                onSubmit: _noopSubmit,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+Future<String?> _noopSubmit(int score, String? comment) async => null;
+
 Future<void> _golden(
   WidgetTester tester, {
   required String name,
   required Brightness brightness,
   required Widget child,
+  Future<void> Function(WidgetTester)? afterPump,
 }) async {
   // Render at a real phone size (logical 390×844) so screens render at true
   // proportions with the bottom button pinned at its natural size/position.
@@ -220,6 +293,8 @@ Future<void> _golden(
 
   await tester.pump(const Duration(milliseconds: 32));
   await tester.pump(const Duration(milliseconds: 32));
+
+  if (afterPump != null) await afterPump(tester);
 
   await expectLater(
     find.byType(MaterialApp),

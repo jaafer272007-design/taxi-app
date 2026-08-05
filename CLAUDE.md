@@ -299,6 +299,35 @@ sends an event any other way. Details and the per-side event matrix are in
   `main` → فعّل "Require status checks to pass" واختَر فحص
   `services/api (build, migrate, test)` — بعدها ما ينــدمج أي PR إلا والـ CI أخضر.
 
+## «قادمة» / «سابقة», and rating (locked rule)
+
+**A booking's bucket is a STATUS question, not a clock question.** It used to be
+`departureTime > now`, and a driver completing a trip early left the rider's
+finished booking — badge reading «مكتملة» — filed under «قادمة». That is the
+same confusion that made departNow trips invisible: *when it was scheduled* vs
+*what state it is in*.
+
+- The rule lives in **one place**, `services/api/src/booking/booking-lifecycle.ts`,
+  and the apps never re-derive it. `/bookings/mine` sends `upcoming`; the client
+  files the card where it is told. Two copies is how it comes back.
+- «قادمة» holds only what is still actionable. A terminal booking
+  (`COMPLETED`/`CANCELLED`/`NO_SHOW`) or a terminal trip
+  (`COMPLETED`/`SETTLED`/`CANCELLED`) is past whatever the clock says; an
+  `EN_ROUTE` trip is upcoming even though its departure has passed by
+  definition.
+- **Both directions of rating must exist.** A driver's `ratingAvg` is exactly
+  what riders choose a trip on, so a one-way rating path leaves the trust
+  signal dead — and empty stars read as a judgement rather than as missing
+  data. `/bookings/mine` carries `driverUserId`, `ratable` and `ratedDriver`
+  so the app can offer the action, address it, and stop offering it.
+- `ratable` is computed server-side to stay in step with what `POST /ratings`
+  will accept. **An action the UI offers and the server refuses is worse than
+  no action**, so the two are derived from the same statuses.
+- A 409 from `POST /ratings` is **idempotent success** on both sides: the
+  rating already exists, which is the state the caller wanted.
+- One rate sheet for both directions — `packages/shared/lib/rating/rate_sheet.dart`.
+  Only the words differ, so only the words are parameters.
+
 ## Splitting work into several PRs (locked rule)
 
 **Every PR targets `main` directly, and they are merged in order. Never stack a

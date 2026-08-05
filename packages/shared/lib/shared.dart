@@ -59,6 +59,10 @@ export 'map/geolocator_location_service.dart';
 export 'map/reverse_geocoder.dart';
 export 'map/app_map_picker.dart';
 
+// The rate sheet — ONE implementation for both directions (driver rates rider,
+// rider rates driver). Only the words differ, so only the words are parameters.
+export 'rating/rate_sheet.dart';
+
 // Contact between a driver and their riders: the tel:/wa.me/geo: URIs, the
 // launcher behind which `url_launcher` is contained, and the shared row that
 // renders a number with its two actions. Numbers themselves come only from

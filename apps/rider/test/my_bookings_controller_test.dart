@@ -166,4 +166,207 @@ void main() {
       expect(c.hasLiveBookings, isTrue);
     });
   });
+
+  group('BUG 1 — the bucket follows STATUS, not the clock', () {
+    // The server decides; the controller must not second-guess it. These pin
+    // that the app files a booking exactly where `upcoming` says, so the rule
+    // stays in one place (booking-lifecycle.ts) rather than two.
+
+    test('a COMPLETED booking flagged past lands in سابقة, not قادمة', () async {
+      // The reported bug, from the app's side: departure is still ahead — the
+      // fixture's trip is at a fixed future-ish clock — but the ride is done.
+      final api = FakeBookingApi()
+        ..listMineResult = [
+          mineFixture(
+            id: 'b1',
+            status: BookingStatus.completed,
+            upcoming: false,
+          ),
+        ];
+      final c = MyBookingsController(api: api);
+      await c.load();
+
+      expect(c.past.map((b) => b.id), ['b1']);
+      expect(c.upcoming, isEmpty);
+    });
+
+    test('a live booking still lands in قادمة — the fix is narrow', () async {
+      final api = FakeBookingApi()
+        ..listMineResult = [mineFixture(id: 'b1', upcoming: true)];
+      final c = MyBookingsController(api: api);
+      await c.load();
+
+      expect(c.upcoming.map((b) => b.id), ['b1']);
+      expect(c.past, isEmpty);
+    });
+
+    test('cancelling moves the card out of قادمة straight away', () async {
+      final api = FakeBookingApi()
+        ..listMineResult = [mineFixture(id: 'b1', upcoming: true)]
+        ..cancelResult = bookingFixture(id: 'b1', status: BookingStatus.cancelled);
+      final c = MyBookingsController(api: api);
+      await c.load();
+
+      await c.cancel('b1');
+
+      // Without this the rider watches a cancelled seat sit under «قادمة»
+      // until the next refresh.
+      expect(c.upcoming, isEmpty);
+      expect(c.past.single.status, BookingStatus.cancelled);
+    });
+  });
+
+  group('BUG 2 — the rider rates the driver', () {
+    FakeBookingApi apiWithRatable() => FakeBookingApi()
+      ..listMineResult = [
+        mineFixture(
+          id: 'b1',
+          status: BookingStatus.completed,
+          upcoming: false,
+          ratable: true,
+          driverUserId: 'du1',
+        ),
+      ];
+
+    test('a completed unrated ride is awaiting a rating', () async {
+      final c = MyBookingsController(api: apiWithRatable());
+      await c.load();
+
+      expect(c.awaitingRating.map((b) => b.id), ['b1']);
+      expect(c.past.single.canRate, isTrue);
+    });
+
+    test('rating posts the trip, the driver and the score', () async {
+      final api = apiWithRatable();
+      final c = MyBookingsController(api: api);
+      await c.load();
+
+      final err = await c.rateDriver(bookingId: 'b1', score: 5, comment: 'ممتاز');
+
+      expect(err, isNull);
+      expect(api.rateCalls.single.tripId, 't-b1');
+      expect(api.rateCalls.single.toUserId, 'du1');
+      expect(api.rateCalls.single.score, 5);
+    });
+
+    test('once rated the action disappears', () async {
+      final c = MyBookingsController(api: apiWithRatable());
+      await c.load();
+
+      await c.rateDriver(bookingId: 'b1', score: 4);
+
+      expect(c.awaitingRating, isEmpty);
+      expect(c.past.single.canRate, isFalse);
+      expect(c.past.single.ratedDriver, isTrue);
+    });
+
+    test('a 409 is idempotent success — the rating already exists', () async {
+      // Matches the driver side. A double-tap, or a retry after a dropped
+      // response, has already achieved what the caller wanted; reporting an
+      // error for finished work would leave the sheet open on a lie.
+      final api = apiWithRatable()
+        ..rateError = const ApiException('قيّمت هذا الشخص مسبقاً.', statusCode: 409);
+      final c = MyBookingsController(api: api);
+      await c.load();
+
+      final err = await c.rateDriver(bookingId: 'b1', score: 3);
+
+      expect(err, isNull);
+      expect(c.past.single.ratedDriver, isTrue);
+    });
+
+    test('a real failure surfaces its Arabic message and keeps the action',
+        () async {
+      final api = apiWithRatable()
+        ..rateError = const ApiException('لا يوجد اتصال بالإنترنت.', isNetwork: true);
+      final c = MyBookingsController(api: api);
+      await c.load();
+
+      final err = await c.rateDriver(bookingId: 'b1', score: 3);
+
+      expect(err, 'لا يوجد اتصال بالإنترنت.');
+      expect(c.past.single.canRate, isTrue, reason: 'they can try again');
+    });
+
+    test('two bookings on ONE trip are rated together', () async {
+      // A rating is per (trip, driver). Marking only the tapped booking would
+      // leave a second «قيّم السائق» on the same trip that the server answers
+      // 409 to — an action that exists only to fail.
+      final api = FakeBookingApi()
+        ..listMineResult = [
+          mineFixture(
+              id: 'b1',
+              tripId: 't-shared',
+              status: BookingStatus.completed,
+              upcoming: false,
+              ratable: true),
+          mineFixture(
+              id: 'b2',
+              tripId: 't-shared',
+              status: BookingStatus.completed,
+              upcoming: false,
+              ratable: true),
+        ];
+      final c = MyBookingsController(api: api);
+      await c.load();
+      expect(c.awaitingRating, hasLength(2));
+
+      await c.rateDriver(bookingId: 'b1', score: 5);
+
+      expect(c.awaitingRating, isEmpty);
+      expect(api.rateCalls, hasLength(1), reason: 'one trip, one rating');
+    });
+
+    test('bookings on DIFFERENT trips stay independently ratable', () async {
+      final api = FakeBookingApi()
+        ..listMineResult = [
+          mineFixture(id: 'b1', status: BookingStatus.completed, upcoming: false, ratable: true),
+          mineFixture(id: 'b2', status: BookingStatus.completed, upcoming: false, ratable: true),
+        ];
+      final c = MyBookingsController(api: api);
+      await c.load();
+
+      await c.rateDriver(bookingId: 'b1', score: 5);
+
+      expect(c.awaitingRating.map((b) => b.id), ['b2']);
+    });
+
+    test('a ride that never happened is not ratable', () async {
+      final api = FakeBookingApi()
+        ..listMineResult = [
+          mineFixture(
+            id: 'b1',
+            status: BookingStatus.cancelled,
+            upcoming: false,
+            ratable: false,
+          ),
+        ];
+      final c = MyBookingsController(api: api);
+      await c.load();
+
+      expect(c.awaitingRating, isEmpty);
+      expect(c.past.single.canRate, isFalse);
+    });
+
+    test('a booking with no driver id cannot be rated', () async {
+      // An older API, or a response that omitted the trip. Better to draw no
+      // action than one that cannot address itself to anyone.
+      final api = FakeBookingApi()
+        ..listMineResult = [
+          mineFixture(
+            id: 'b1',
+            status: BookingStatus.completed,
+            upcoming: false,
+            ratable: true,
+            driverUserId: null,
+          ),
+        ];
+      final c = MyBookingsController(api: api);
+      await c.load();
+
+      expect(c.past.single.canRate, isFalse);
+      expect(await c.rateDriver(bookingId: 'b1', score: 5), isNotNull);
+      expect(api.rateCalls, isEmpty);
+    });
+  });
 }
