@@ -91,7 +91,9 @@ Future<Widget> _centre({bool empty = false}) async {
               id: 'n2',
               type: AppNotificationType.bookingConfirmed,
               title: 'تم تأكيد حجزك',
-              body: 'مقعدك محجوز في رحلة النجف ← كربلاء مع علي حسن.',
+              // No arrow glyph: the bundled Cairo has none, so `←` renders as
+              // a tofu box. Arabic copy joins cities with a word.
+              body: 'مقعدك محجوز في رحلة النجف إلى كربلاء مع علي حسن.',
               createdAt: DateTime.utc(2026, 8, 5, 4, 10),
             ),
             notif(

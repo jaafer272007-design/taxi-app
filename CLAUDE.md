@@ -57,6 +57,12 @@ Pine + saffron on warm paper. Light `primary #0E5C4A` / `bg #F4F1EA`; dark
 - The measured ratio table and every deviation from the raw design hand-off (with
   its reason) live in the doc comment at the top of `theme/colors.dart`.
 
+### Glyph coverage
+The bundled Cairo has **no arrow glyphs** — `←` / `→` render as a tofu box (seen
+in a golden). Join cities with a word (`النجف إلى كربلاء`) or draw the direction
+with `RouteRail`, never with an arrow character. Same caution for any symbol not
+already in use: check it in a golden before it ships.
+
 ### Numerals (locked decision)
 - **Display values render in Arabic-Indic numerals** (`٠١٢٣`) with the Arabic
   thousands separator `٬` (U+066C) and decimal separator `٫` (U+066B) — prices,
