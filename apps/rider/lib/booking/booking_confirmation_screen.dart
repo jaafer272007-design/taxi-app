@@ -107,43 +107,60 @@ class BookingConfirmationScreen extends StatelessWidget {
       body: Column(
         children: [
           // ── The moment ────────────────────────────────────────────────
+          //
+          // Centred when there is room, scrollable when there is not. The
+          // recap sheet below is now considerably taller — two door-to-door
+          // points and the driver's number — so on a short phone, or at a
+          // large Dynamic Type setting, the space left for the badge and the
+          // headline can fall below what they need. Before this it overflowed:
+          // the confirmation of a successful booking is the last screen that
+          // should be showing a yellow-and-black overflow stripe.
           Expanded(
             child: SafeArea(
               bottom: false,
-              child: Center(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: space.xl3),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: _badge,
-                        height: _badge,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          // Opaque: pre-blended rather than a live alpha wash,
-                          // so the badge's contrast is fixed and measurable.
-                          color: onPrimaryFill(colors, badgeBlend),
-                          shape: BoxShape.circle,
+              child: LayoutBuilder(
+                builder: (context, constraints) => SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints:
+                        BoxConstraints(minHeight: constraints.maxHeight),
+                    child: Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(horizontal: space.xl3),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: _badge,
+                              height: _badge,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                // Opaque: pre-blended rather than a live alpha
+                                // wash, so the badge's contrast is fixed and
+                                // measurable.
+                                color: onPrimaryFill(colors, badgeBlend),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(AppIcons.check,
+                                  size: space.xl4, color: colors.onPrimary),
+                            ),
+                            SizedBox(height: space.xl),
+                            Text(
+                              'تم تأكيد حجزك',
+                              textAlign: TextAlign.center,
+                              style: context.text.h1
+                                  .copyWith(color: colors.onPrimary),
+                            ),
+                            SizedBox(height: space.md),
+                            Text(
+                              'أبلغنا السائق بحجزك. ستصلك رسالة واتساب قبل الانطلاق.',
+                              textAlign: TextAlign.center,
+                              style: context.text.body
+                                  .copyWith(color: colors.onPrimary),
+                            ),
+                          ],
                         ),
-                        child: Icon(AppIcons.check,
-                            size: space.xl4, color: colors.onPrimary),
                       ),
-                      SizedBox(height: space.xl),
-                      Text(
-                        'تم تأكيد حجزك',
-                        textAlign: TextAlign.center,
-                        style: context.text.h1
-                            .copyWith(color: colors.onPrimary),
-                      ),
-                      SizedBox(height: space.md),
-                      Text(
-                        'أبلغنا السائق بحجزك. ستصلك رسالة واتساب قبل الانطلاق.',
-                        textAlign: TextAlign.center,
-                        style: context.text.body
-                            .copyWith(color: colors.onPrimary),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),

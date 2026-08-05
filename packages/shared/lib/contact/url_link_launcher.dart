@@ -16,6 +16,20 @@ class UrlLinkLauncher implements LinkLauncher {
   @override
   Future<bool> open(Uri uri) async {
     try {
+      // ── Do NOT add a canLaunchUrl() guard here ──────────────────────────
+      // It looks like a safety improvement and is the opposite. `canLaunchUrl`
+      // resolves the intent through the package manager, which on Android 11+
+      // (API 30) is subject to package-visibility filtering — so it returns
+      // false unless the app's AndroidManifest declares a matching <queries>
+      // entry for every scheme. `launchUrl` does not: it calls startActivity
+      // directly and reports ActivityNotFoundException, which is what the
+      // `false` below means. (Read from url_launcher_android's UrlLauncher.java,
+      // not inferred from the README, which documents the rule for
+      // canLaunchUrl only.)
+      //
+      // This repo has no android/ folder committed, so a canLaunchUrl guard
+      // would make every action fail on a real device with no way to tell why.
+      //
       // externalApplication: a `tel:` or `wa.me` link opened in an in-app
       // webview is a dead end — the whole intent is to leave for the dialer,
       // WhatsApp, or a maps app.
