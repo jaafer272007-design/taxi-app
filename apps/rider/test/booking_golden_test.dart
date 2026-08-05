@@ -229,7 +229,13 @@ Future<void> _openPastTab(WidgetTester tester) async {
   // the same word — anchor so exactly one thing matches.
   await tester.tap(find.textContaining(RegExp('^سابقة')));
   await tester.pump();
-  await tester.pump(const Duration(milliseconds: 32));
+  // Past the 120ms AnimatedContainer in AppCard/AppButton, twice over. Two 32ms
+  // pumps caught it a quarter of the way through and the snapshot showed the
+  // rate button still wearing the cancel button's danger tint — Flutter reuses
+  // the widget at that position across the tab switch, so it lerps rather than
+  // repaints. A golden of a frame nobody ever sees is worse than no golden.
+  await tester.pump(const Duration(milliseconds: 300));
+  await tester.pump(const Duration(milliseconds: 300));
 }
 
 /// The rider's half of the shared [RateSheet] — same body the driver uses to
