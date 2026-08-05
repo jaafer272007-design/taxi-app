@@ -217,6 +217,47 @@ model DeviceToken {
   @@index([userId])
 }
 
+/// Phase 1 amendment: the IN-APP half of notifications.
+///
+/// Every event already fires a push (NotificationService.send). Push is blocked
+/// on Firebase credentials, so today it only logs — which meant a driver could
+/// cancel a trip and the riders found out by arriving at a pickup point for a
+/// trip that no longer existed.
+///
+/// These rows are the second sink for the SAME emitter: one call, one event,
+/// persisted here and attempted over FCM. They are what the notification centre
+/// reads, and unlike push they work now.
+enum NotificationType {
+  BOOKING_CREATED /// to the DRIVER: someone booked a seat on your trip
+  BOOKING_CONFIRMED /// to the RIDER: your seat is reserved
+  BOOKING_CANCELLED_BY_RIDER /// to the DRIVER: a rider pulled out
+  BOOKING_CANCELLED /// to the RIDER: your booking is cancelled
+  TRIP_STARTED
+  TRIP_COMPLETED
+  TRIP_CANCELLED /// to the RIDER: the driver cancelled the trip
+  DRIVER_APPROVED
+  DRIVER_REJECTED
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  /// Arabic, ready to render. Composed at emit time so the centre never has to
+  /// re-derive copy from ids that may since have changed.
+  title     String
+  body      String
+  /// Context for deep-linking; nullable because not every event has both.
+  tripId    String?
+  bookingId String?
+  /// Null until the user opens it. Unread count is a COUNT over this.
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  /// The centre's only query: this user's rows, newest first.
+  @@index([userId, createdAt])
+}
+
 // Phase 1 amendment (Step 7): admin accounts.
 //
 // Admins authenticate with USERNAME + PASSWORD, not phone + WhatsApp OTP, and

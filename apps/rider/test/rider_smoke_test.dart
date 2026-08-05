@@ -19,6 +19,8 @@ void main() {
     final trips = TripSearchController(api: FakeTripApi());
 
     await tester.pumpWidget(RiderApp(
+      notificationsController:
+          NotificationsController(api: FakeNotificationApi()),
       themeController: themeController,
       authController: auth,
       tripSearchController: trips,

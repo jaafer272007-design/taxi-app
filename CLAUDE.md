@@ -158,6 +158,64 @@ without being asked:
 - Reference: `ThemeController` is provided at the app shell by `TaxiApp` and
   drives `MaterialApp.themeMode`.
 
+## Refresh & polling (locked decision)
+
+The app used to fetch once on open and never learn that anything changed: a
+rider could not see a trip posted a minute ago, and a driver could cancel a
+trip with booked seats and the riders found out by arriving at the pickup point.
+
+- **Polling, not WebSocket.** Users are on unreliable Iraqi mobile networks. A
+  poll recovers from a dropped connection by simply succeeding next time; a
+  socket has to notice it died, back off, reconnect and re-sync — and a socket
+  that *thinks* it is connected is worse than none, because the screen looks
+  live while it is frozen. Revisit for Phase 2 live matching.
+- **One implementation:** `Poller` (pure Dart, no Flutter — which is what makes
+  start/pause/resume unit-testable) + `PollingScope` (the widget that decides
+  when it may run). No screen writes its own `Timer`.
+- **Never poll a screen nobody is looking at.** `PollingScope` gates on the
+  conjunction of three things, and each one alone leaves a real hole:
+  foreground (`WidgetsBindingObserver`), this route is on top
+  (`appRouteObserver`, registered by `TaxiApp`), and this tab is selected
+  (`TickerMode` — an `IndexedStack` keeps every tab mounted and building, so the
+  shells wrap each tab in `TickerMode(enabled: isSelected)`).
+- **Never poll a terminal screen.** `enabled:` is false when there is nothing
+  left to learn — a settled trip, a history of finished bookings.
+- **A background refresh is silent, always.** Controllers take `load({silent})`
+  and expose `refreshSilently()`: no spinner, and **on failure the last good
+  data stays on screen and nothing is reported**. The user did not ask for the
+  refresh and must not be told it failed. Only an explicit, visible load
+  (first open, retry button) may show an error page.
+- **Pull-to-refresh calls the silent path too** — the `RefreshIndicator` is
+  already the spinner, and a non-silent call takes the list away under the
+  user's finger and can replace it with a full-page error.
+- Polls never stack: a tick while a request is in flight is skipped, not queued.
+
+| Screen | Interval | Live while |
+|---|---|---|
+| rider — نتائج البحث | **15s** | always on screen (an «الآن» trip appears *and expires* inside 30 min) |
+| rider — حجوزاتي | **30s** | any upcoming, non-cancelled, non-completed booking |
+| driver — تفاصيل الرحلة | **20s** | `OPEN` / `LOCKED` / `EN_ROUTE` |
+| both — notification badge | **30s** | authenticated (app-shell wide, so a cancellation reaches the user on *any* screen) |
+
+Every list screen (both apps) has pull-to-refresh regardless of whether it polls.
+
+## In-app notifications
+
+Stored notifications are the half of the event system that works today — FCM
+push is written but blocked on Firebase credentials. **One emitter, two sinks:**
+`NotificationService.send()` writes the row *then* attempts the push; nothing
+sends an event any other way. Details and the per-side event matrix are in
+`docs/PHASE1_BUILD_BRIEF.md` → `notification`.
+
+- `NotificationsController` lives at the app shell, not on the screen: the badge
+  must be right on every tab and the announcer must see an event arrive whatever
+  the user is looking at.
+- The **first** feed seeds silently — opening the app must never replay a week
+  of events as a stack of toasts.
+- While the app is open, an arrival is a toast **except** a driver-cancelled
+  trip, which is a blocking dialog (`barrierDismissible: false` + `PopScope`).
+  That exception only stays justifiable while it stays the only one.
+
 ## Map picker (خرائط — swappable provider)
 - The location picker uses **free OpenStreetMap** tiles via `flutter_map`, but the
   map library is **isolated behind one widget** so the provider can be swapped

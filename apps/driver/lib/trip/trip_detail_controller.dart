@@ -124,19 +124,43 @@ class TripDetailController extends ChangeNotifier {
     return out;
   }
 
-  Future<void> load() async {
-    _loadStatus = TripDetailStatus.loading;
-    _error = null;
-    notifyListeners();
+  /// Whether this trip can still change on its own.
+  ///
+  /// OPEN and LOCKED gain and lose bookings; EN_ROUTE is a live trip. A
+  /// COMPLETED, SETTLED or CANCELLED trip is finished — polling it would be
+  /// asking a question whose answer can never change again.
+  bool get isLive =>
+      _trip.status == TripStatus.open ||
+      _trip.status == TripStatus.locked ||
+      _trip.status == TripStatus.enRoute;
+
+  /// A BACKGROUND refresh: no spinner, and **no error on failure**.
+  ///
+  /// A driver mid-trip must never have the bookings list replaced by an error
+  /// page because one request dropped — those are the names and pickup points
+  /// they are working from.
+  Future<void> refreshSilently() => load(silent: true);
+
+  Future<void> load({bool silent = false}) async {
+    if (!silent) {
+      _loadStatus = TripDetailStatus.loading;
+      _error = null;
+      notifyListeners();
+    }
     try {
       _bookings = await _api.tripBookings(_trip.id);
       _loadStatus = TripDetailStatus.loaded;
+      _error = null;
     } on ApiException catch (e) {
-      _error = e.message;
-      _loadStatus = TripDetailStatus.error;
+      if (!silent) {
+        _error = e.message;
+        _loadStatus = TripDetailStatus.error;
+      }
     } catch (_) {
-      _error = 'تعذّر تحميل الحجوزات. حاول مرة أخرى.';
-      _loadStatus = TripDetailStatus.error;
+      if (!silent) {
+        _error = 'تعذّر تحميل الحجوزات. حاول مرة أخرى.';
+        _loadStatus = TripDetailStatus.error;
+      }
     }
     if (_loadStatus == TripDetailStatus.loaded) await _loadContacts();
     _hasLoaded = true;

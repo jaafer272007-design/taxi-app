@@ -8,6 +8,7 @@ import {
 import {
   BookingStatus,
   Gender,
+  NotificationType,
   PaymentMethod,
   PaymentStatus,
   Prisma,
@@ -200,9 +201,21 @@ export class BookingService {
 
     // Fire AFTER commit — a notification failure must not roll back the booking.
     await this.notifyDriver(trip.driverId, {
+      type: NotificationType.BOOKING_CREATED,
       title: 'حجز جديد',
       body: 'حجز جديد على رحلتك.',
-      data: { type: 'booking.created', tripId: trip.id, bookingId: booking.id },
+      tripId: trip.id,
+      bookingId: booking.id,
+    });
+    // The rider's own receipt. It was missing: the driver learned a seat had
+    // gone and the rider, who had just committed to a journey, was told
+    // nothing they could go back and look at.
+    await this.notifications.send(userId, {
+      type: NotificationType.BOOKING_CONFIRMED,
+      title: 'تم تأكيد حجزك',
+      body: 'حجزك مؤكد. ستصلك إشعارات عن الرحلة هنا.',
+      tripId: trip.id,
+      bookingId: booking.id,
     });
     return booking;
   }
@@ -267,11 +280,23 @@ export class BookingService {
       return tx.seatBooking.findUniqueOrThrow({ where: { id: bookingId } });
     });
 
-    // AFTER commit: tell the driver a seat opened up.
+    // AFTER commit: tell the driver a seat opened up…
     await this.notifyDriver(trip.driverId, {
+      type: NotificationType.BOOKING_CANCELLED_BY_RIDER,
       title: 'إلغاء حجز',
       body: 'أُلغي حجز على رحلتك.',
-      data: { type: 'booking.cancelled', tripId: trip.id, bookingId },
+      tripId: trip.id,
+      bookingId,
+    });
+    // …and leave the rider a record of their own cancellation. Not redundant
+    // with the tap they just made: this is what they scroll back to when they
+    // are no longer sure whether the seat actually went.
+    await this.notifications.send(userId, {
+      type: NotificationType.BOOKING_CANCELLED,
+      title: 'أُلغي حجزك',
+      body: 'تم إلغاء حجزك ولن تُحاسب عليه.',
+      tripId: trip.id,
+      bookingId,
     });
     return cancelledBooking;
   }

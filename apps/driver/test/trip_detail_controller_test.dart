@@ -233,4 +233,69 @@ void main() {
       expect(c.isRated('r1'), isFalse);
     });
   });
+
+  group('background refresh (poll + pull-to-refresh)', () {
+    test('a failed refresh keeps the bookings and stays loaded', () async {
+      final api = FakeDriverTripApi()
+        ..tripBookingsResult = [bookingFixture(id: 'b1', riderName: 'علي')];
+      final c = _ctrl(api, tripFixture(status: TripStatus.enRoute));
+      await c.load();
+
+      api.tripBookingsError = const ApiException('لا يوجد اتصال بالإنترنت.');
+      await c.refreshSilently();
+
+      // These are the names and pickup points the driver is working from
+      // mid-trip; one dropped request must not replace them with an error.
+      expect(c.loadStatus, TripDetailStatus.loaded);
+      expect(c.bookings.single.riderName, 'علي');
+      expect(c.error, isNull);
+    });
+
+    test('a refresh never shows the loading state', () async {
+      final api = FakeDriverTripApi()
+        ..tripBookingsResult = [bookingFixture(id: 'b1')];
+      final c = _ctrl(api, tripFixture(status: TripStatus.open));
+      await c.load();
+
+      final seen = <TripDetailStatus>[];
+      c.addListener(() => seen.add(c.loadStatus));
+      await c.refreshSilently();
+
+      expect(seen, isNot(contains(TripDetailStatus.loading)));
+    });
+
+    test('a refresh picks up a seat booked while the screen was open',
+        () async {
+      final api = FakeDriverTripApi()
+        ..tripBookingsResult = [bookingFixture(id: 'b1')];
+      final c = _ctrl(api, tripFixture(status: TripStatus.open));
+      await c.load();
+
+      api.tripBookingsResult = [
+        bookingFixture(id: 'b1'),
+        bookingFixture(id: 'b2', riderName: 'حسن'),
+      ];
+      await c.refreshSilently();
+
+      expect(c.bookings.map((b) => b.id), ['b1', 'b2']);
+    });
+  });
+
+  group('isLive (whether this screen polls at all)', () {
+    bool live(TripStatus status) =>
+        _ctrl(FakeDriverTripApi(), tripFixture(status: status)).isLive;
+
+    test('OPEN, LOCKED and EN_ROUTE are live', () {
+      expect(live(TripStatus.open), isTrue);
+      expect(live(TripStatus.locked), isTrue);
+      expect(live(TripStatus.enRoute), isTrue);
+    });
+
+    test('COMPLETED, SETTLED and CANCELLED are not', () {
+      expect(live(TripStatus.completed), isFalse);
+      expect(live(TripStatus.settled), isFalse);
+      expect(live(TripStatus.cancelled), isFalse,
+          reason: 'a finished trip cannot change again');
+    });
+  });
 }

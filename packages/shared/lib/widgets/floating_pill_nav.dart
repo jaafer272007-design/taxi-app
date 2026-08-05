@@ -1,13 +1,22 @@
 import 'package:flutter/material.dart';
 
+import '../format/numerals.dart';
 import '../theme/app_theme.dart';
 
 /// A tab in [FloatingPillNav].
 class FloatingPillNavItem {
-  const FloatingPillNavItem({required this.icon, required this.label});
+  const FloatingPillNavItem({
+    required this.icon,
+    required this.label,
+    this.badgeCount = 0,
+  });
 
   final IconData icon;
   final String label;
+
+  /// Unread count drawn on the icon. Zero draws nothing — a badge showing "٠"
+  /// is a badge saying "look at me, there is nothing here".
+  final int badgeCount;
 }
 
 /// The **floating pill nav** — Masar's bottom navigation.
@@ -58,8 +67,8 @@ class FloatingPillNav extends StatelessWidget {
     required this.items,
     required this.currentIndex,
     required this.onSelect,
-  }) : assert(items.length >= 2 && items.length <= 4,
-            'The pill fits 2–4 tabs; beyond that the labels stop fitting.');
+  }) : assert(items.length >= 2 && items.length <= 5,
+            'The pill fits 2–5 tabs; beyond that the labels stop fitting.');
 
   final List<FloatingPillNavItem> items;
   final int currentIndex;
@@ -85,9 +94,20 @@ class FloatingPillNav extends StatelessWidget {
     final isDark = context.isDark;
 
     // Four tabs need the tighter inset from the hand-off to keep the labels on
-    // one line; three tabs get the roomier one.
-    final sideInset = items.length >= 4 ? space.lg : space.xl;
-    final tabPadding = items.length >= 4 ? space.md : space.lg;
+    // one line; three tabs get the roomier one. Five (the driver, once the
+    // notification centre joined the nav) needs tighter still — at 390dp that
+    // leaves ~70dp per tab, which fits «إشعارات» at the caption size with room
+    // to spare, but not with the four-tab padding.
+    final sideInset = items.length >= 5
+        ? space.md
+        : items.length >= 4
+            ? space.lg
+            : space.xl;
+    final tabPadding = items.length >= 5
+        ? space.sm
+        : items.length >= 4
+            ? space.md
+            : space.lg;
 
     // Lift above the gesture bar. viewPadding (not padding) so it still works
     // when the keyboard has consumed the inset.
@@ -148,7 +168,11 @@ class _Tab extends StatelessWidget {
     return Semantics(
       button: true,
       selected: selected,
-      label: item.label,
+      // The count belongs in the spoken label too, or a screen reader hears
+      // "notifications" and misses the only part that says to go there.
+      label: item.badgeCount > 0
+          ? '${item.label}، ${formatCount(item.badgeCount)} غير مقروء'
+          : item.label,
       excludeSemantics: true,
       child: InkWell(
         onTap: onTap,
@@ -171,7 +195,7 @@ class _Tab extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(item.icon, size: 20, color: fg),
+                _BadgedIcon(icon: item.icon, count: item.badgeCount, color: fg),
                 SizedBox(height: context.space.xs),
                 Text(
                   item.label,
@@ -187,6 +211,70 @@ class _Tab extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// A nav icon with an unread count riding on its corner.
+///
+/// The count is drawn on `danger` rather than `primary`: on the selected tab
+/// the icon is already `primary` on `primaryTonal`, and a primary badge on top
+/// of that reads as part of the selection state instead of as a count. Danger
+/// is the one tone that stays a badge on both selected and unselected tabs.
+///
+/// Above 9 it becomes «+٩» — three Arabic-Indic digits do not fit a 16dp dot,
+/// and past a handful the exact number stops changing what anyone does.
+class _BadgedIcon extends StatelessWidget {
+  const _BadgedIcon({
+    required this.icon,
+    required this.count,
+    required this.color,
+  });
+
+  final IconData icon;
+  final int count;
+  final Color color;
+
+  /// Diameter of the count bubble.
+  static const double _dot = 16;
+
+  @override
+  Widget build(BuildContext context) {
+    final base = Icon(icon, size: 20, color: color);
+    if (count <= 0) return base;
+
+    final colors = context.colors;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        base,
+        PositionedDirectional(
+          top: -4,
+          // The badge sits on the icon's trailing corner, which in an RTL
+          // layout is the LEFT — PositionedDirectional, not Positioned.
+          end: -6,
+          child: Container(
+            constraints: const BoxConstraints(minWidth: _dot, minHeight: _dot),
+            padding: EdgeInsets.symmetric(horizontal: context.space.xs),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: colors.danger,
+              borderRadius: BorderRadius.circular(_dot),
+              // A ring in the pill's own surface colour, so the badge reads as
+              // a separate object when it overlaps the glyph.
+              border: Border.all(color: colors.surface, width: 1.5),
+            ),
+            child: Text(
+              count > 9 ? '+${formatCount(9)}' : formatCount(count),
+              style: context.text.caption.copyWith(
+                color: colors.onDanger,
+                fontWeight: FontWeight.w700,
+                height: 1,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

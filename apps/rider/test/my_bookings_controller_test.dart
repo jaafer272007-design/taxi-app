@@ -65,4 +65,105 @@ void main() {
       expect(c.upcoming.single.status, BookingStatus.confirmed);
     });
   });
+
+  group('background refresh (poll + pull-to-refresh)', () {
+    test('a failed refresh keeps the bookings and says nothing', () async {
+      final api = FakeBookingApi()
+        ..listMineResult = [mineFixture(id: 'b1', upcoming: true)];
+      final c = MyBookingsController(api: api);
+      await c.load();
+
+      api.listMineError = const ApiException('لا يوجد اتصال بالإنترنت.');
+      await c.refreshSilently();
+
+      expect(c.status, MyBookingsStatus.loaded);
+      expect(c.upcoming.map((b) => b.id), ['b1']);
+      expect(c.error, isNull);
+    });
+
+    test('a refresh never shows the loading state', () async {
+      final api = FakeBookingApi()
+        ..listMineResult = [mineFixture(id: 'b1', upcoming: true)];
+      final c = MyBookingsController(api: api);
+      await c.load();
+
+      final seen = <MyBookingsStatus>[];
+      c.addListener(() => seen.add(c.status));
+      await c.refreshSilently();
+
+      expect(seen, isNot(contains(MyBookingsStatus.loading)));
+    });
+
+    test('a refresh picks up a driver-side status change', () async {
+      final api = FakeBookingApi()
+        ..listMineResult = [mineFixture(id: 'b1', upcoming: true)];
+      final c = MyBookingsController(api: api);
+      await c.load();
+      expect(c.upcoming.single.status, BookingStatus.confirmed);
+
+      // The driver cancelled from their side.
+      api.listMineResult = [
+        mineFixture(id: 'b1', upcoming: true, status: BookingStatus.cancelled),
+      ];
+      await c.refreshSilently();
+
+      expect(c.upcoming.single.status, BookingStatus.cancelled);
+    });
+
+    test('a visible load still surfaces its error', () async {
+      final api = FakeBookingApi()
+        ..listMineError = const ApiException('لا يوجد اتصال بالإنترنت.');
+      final c = MyBookingsController(api: api);
+
+      await c.load();
+
+      expect(c.status, MyBookingsStatus.error);
+      expect(c.error, 'لا يوجد اتصال بالإنترنت.');
+    });
+  });
+
+  group('hasLiveBookings (whether this screen polls at all)', () {
+    Future<MyBookingsController> withBookings(List<Booking> bookings) async {
+      final api = FakeBookingApi()..listMineResult = bookings;
+      final c = MyBookingsController(api: api);
+      await c.load();
+      return c;
+    }
+
+    test('an empty list is not live', () async {
+      expect((await withBookings(const [])).hasLiveBookings, isFalse);
+    });
+
+    test('an upcoming CONFIRMED booking is live', () async {
+      final c = await withBookings([mineFixture(id: 'b1', upcoming: true)]);
+      expect(c.hasLiveBookings, isTrue);
+    });
+
+    test('a finished history is not live', () async {
+      final c = await withBookings([
+        mineFixture(
+            id: 'b1', upcoming: false, status: BookingStatus.completed),
+        mineFixture(
+            id: 'b2', upcoming: false, status: BookingStatus.cancelled),
+      ]);
+      expect(c.hasLiveBookings, isFalse,
+          reason: 'asking the server about settled trips forever');
+    });
+
+    test('an upcoming booking the rider cancelled is not live', () async {
+      final c = await withBookings([
+        mineFixture(id: 'b1', upcoming: true, status: BookingStatus.cancelled),
+      ]);
+      expect(c.hasLiveBookings, isFalse);
+    });
+
+    test('one live booking among finished ones is enough', () async {
+      final c = await withBookings([
+        mineFixture(
+            id: 'b1', upcoming: false, status: BookingStatus.completed),
+        mineFixture(id: 'b2', upcoming: true),
+      ]);
+      expect(c.hasLiveBookings, isTrue);
+    });
+  });
 }

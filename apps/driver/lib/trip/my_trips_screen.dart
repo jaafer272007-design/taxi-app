@@ -60,7 +60,7 @@ class _TripsList extends StatelessWidget {
     final trips = controller.trips;
     return RefreshIndicator(
       color: context.colors.primary,
-      onRefresh: controller.load,
+      onRefresh: controller.refreshSilently,
       child: ListView.separated(
         padding: EdgeInsets.all(space.lg),
         itemCount: trips.length,

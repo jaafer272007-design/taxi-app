@@ -10,6 +10,7 @@ import {
   BookingStatus,
   DriverProfile,
   DriverStatus,
+  NotificationType,
   PaymentStatus,
   Trip,
   TripCreatedBy,
@@ -249,9 +250,10 @@ export class TripService {
 
     // AFTER commit: notify the riders whose bookings were cancelled.
     await this.notifyRiders(affected, {
-      title: 'إلغاء الرحلة',
-      body: 'أُلغيت الرحلة من قبل السائق.',
-      data: { type: 'trip.cancelled', tripId },
+      type: NotificationType.TRIP_CANCELLED,
+      title: 'أُلغيت الرحلة',
+      body: 'ألغى السائق هذه الرحلة. حجزك لم يعد قائماً — ابحث عن رحلة أخرى.',
+      tripId,
     });
     return cancelled;
   }
@@ -286,9 +288,10 @@ export class TripService {
       select: { riderId: true },
     });
     await this.notifyRiders(riders, {
+      type: NotificationType.TRIP_STARTED,
       title: 'انطلقت الرحلة',
-      body: 'انطلقت رحلتك.',
-      data: { type: 'trip.started', tripId },
+      body: 'انطلقت رحلتك. السائق في الطريق إليك.',
+      tripId,
     });
     return updated;
   }
@@ -344,9 +347,10 @@ export class TripService {
       select: { riderId: true },
     });
     await this.notifyRiders(riders, {
+      type: NotificationType.TRIP_COMPLETED,
       title: 'اكتملت الرحلة',
-      body: 'اكتملت رحلتك، قيّم سائقك.',
-      data: { type: 'trip.completed', tripId },
+      body: 'اكتملت رحلتك. قيّم سائقك من صفحة حجوزاتي.',
+      tripId,
     });
     return settled;
   }

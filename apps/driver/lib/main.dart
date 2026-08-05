@@ -28,6 +28,9 @@ Future<void> main() async {
     picker: ImagePickerDocumentPicker(),
   );
   final driverTripApi = DioDriverTripApi(apiClient.dio);
+  final notificationsController = NotificationsController(
+    api: DioNotificationApi(apiClient.dio),
+  );
 
   // Restore any existing session; the UI shows a splash until this resolves.
   authController.bootstrap();
@@ -37,6 +40,7 @@ Future<void> main() async {
     authController: authController,
     driverController: driverController,
     driverTripApi: driverTripApi,
+    notificationsController: notificationsController,
   ));
 }
 
@@ -50,12 +54,14 @@ class DriverApp extends StatelessWidget {
     required this.authController,
     required this.driverController,
     required this.driverTripApi,
+    required this.notificationsController,
   });
 
   final ThemeController themeController;
   final AuthController authController;
   final DriverController driverController;
   final DriverTripApi driverTripApi;
+  final NotificationsController notificationsController;
 
   @override
   Widget build(BuildContext context) {
@@ -68,6 +74,9 @@ class DriverApp extends StatelessWidget {
         // screen depends only on the LinkLauncher interface, so widget tests
         // inject a fake and assert the URL a tap produced.
         Provider<LinkLauncher>(create: (_) => const UrlLinkLauncher()),
+        ChangeNotifierProvider<NotificationsController>.value(
+          value: notificationsController,
+        ),
       ],
       child: TaxiApp(
         title: 'تكسي مشترك — السائق',
@@ -88,7 +97,21 @@ class _DriverRouter extends StatelessWidget {
     return switch (status) {
       AuthStatus.unknown => const SplashScreen(),
       AuthStatus.onboarding => const OnboardingFlow(copy: driverOnboardingCopy),
-      AuthStatus.authenticated => const DriverGate(),
+      // Inside the authenticated branch only: nobody to notify before a
+      // session exists, and the endpoint would 401.
+      AuthStatus.authenticated => PollingScope(
+          interval: kNotificationsPollInterval,
+          onPoll: context.read<NotificationsController>().refreshSilently,
+          child: const NotificationAnnouncer(child: DriverGate()),
+        ),
     };
   }
 }
+
+/// How often the badge re-checks for new events.
+///
+/// 30 seconds, everywhere, on every screen — this is the one poll that is not
+/// tied to a particular view, because the whole point is that a rider learns
+/// their trip was cancelled *whatever they are looking at*. It is also the
+/// cheapest: a list of at most fifty rows and a count.
+const Duration kNotificationsPollInterval = Duration(seconds: 30);

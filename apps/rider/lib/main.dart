@@ -25,6 +25,9 @@ Future<void> main() async {
   final tripSearchController =
       TripSearchController(api: DioTripApi(apiClient.dio));
   final bookingApi = DioBookingApi(apiClient.dio);
+  final notificationsController = NotificationsController(
+    api: DioNotificationApi(apiClient.dio),
+  );
 
   // Restore any existing session; the UI shows a splash until this resolves.
   authController.bootstrap();
@@ -34,6 +37,7 @@ Future<void> main() async {
     authController: authController,
     tripSearchController: tripSearchController,
     bookingApi: bookingApi,
+    notificationsController: notificationsController,
   ));
 }
 
@@ -46,12 +50,14 @@ class RiderApp extends StatelessWidget {
     required this.authController,
     required this.tripSearchController,
     required this.bookingApi,
+    required this.notificationsController,
   });
 
   final ThemeController themeController;
   final AuthController authController;
   final TripSearchController tripSearchController;
   final BookingApi bookingApi;
+  final NotificationsController notificationsController;
 
   @override
   Widget build(BuildContext context) {
@@ -71,6 +77,9 @@ class RiderApp extends StatelessWidget {
         // Opens tel: / wa.me / geo: links — same containment as above: screens
         // depend on the LinkLauncher interface, not on url_launcher.
         Provider<LinkLauncher>(create: (_) => const UrlLinkLauncher()),
+        ChangeNotifierProvider<NotificationsController>.value(
+          value: notificationsController,
+        ),
       ],
       child: TaxiApp(
         title: 'تكسي مشترك — الراكب',
@@ -91,7 +100,22 @@ class _RiderRouter extends StatelessWidget {
     return switch (status) {
       AuthStatus.unknown => const SplashScreen(),
       AuthStatus.onboarding => const OnboardingFlow(copy: riderOnboardingCopy),
-      AuthStatus.authenticated => const HomeShell(),
+      // The announcer and the notification poll live INSIDE the authenticated
+      // branch: there is nobody to notify before a session exists, and polling
+      // an endpoint that would 401 is just noise.
+      AuthStatus.authenticated => PollingScope(
+          interval: kNotificationsPollInterval,
+          onPoll: context.read<NotificationsController>().refreshSilently,
+          child: const NotificationAnnouncer(child: HomeShell()),
+        ),
     };
   }
 }
+
+/// How often the badge re-checks for new events.
+///
+/// 30 seconds, everywhere, on every screen — this is the one poll that is not
+/// tied to a particular view, because the whole point is that a rider learns
+/// their trip was cancelled *whatever they are looking at*. It is also the
+/// cheapest: a list of at most fifty rows and a count.
+const Duration kNotificationsPollInterval = Duration(seconds: 30);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 
+import '../polling/polling_scope.dart';
 import 'app_theme.dart';
 import 'theme_controller.dart';
 
@@ -44,6 +45,10 @@ class TaxiApp extends StatelessWidget {
             debugShowCheckedModeBanner: false,
             title: title,
             navigatorKey: navigatorKey,
+            // Lets PollingScope hear that its route was covered by another, so
+            // a screen behind a pushed detail page stops polling. Registered
+            // here because it has to be on the one Navigator every app uses.
+            navigatorObservers: [appRouteObserver],
             theme: AppTheme.light(),
             darkTheme: AppTheme.dark(),
             themeMode: controller.mode,
