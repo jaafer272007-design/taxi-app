@@ -1,6 +1,7 @@
-/// A door-to-door point the rider marks (a label + coordinates). The map picker
-/// is Phase 2 (PostGIS); for now coordinates default to the city centre and the
-/// rider types the label.
+import 'package:shared/shared.dart';
+
+/// A door-to-door point the rider marks (a label + coordinates), as it goes
+/// over the wire to POST /bookings.
 class GeoPoint {
   const GeoPoint({required this.lat, required this.lng, required this.label});
 
@@ -15,6 +16,11 @@ class GeoPoint {
       );
 
   Map<String, dynamic> toJson() => {'lat': lat, 'lng': lng, 'label': label};
+
+  /// The shared map/location type. Kept as a conversion rather than a swap so
+  /// [toJson] stays the one thing that defines the wire shape.
+  LocationPoint get asLocationPoint =>
+      LocationPoint(lat: lat, lng: lng, label: label);
 }
 
 /// Approximate city-centre coordinates used as a sensible default pickup/dropoff
@@ -75,16 +81,49 @@ class BookingTrip {
       );
 }
 
+/// The driver's phone number for a trip the rider has booked
+/// (GET /trips/:id/contacts).
+///
+/// Never present on a search result or anywhere else: the server returns a
+/// number only to a rider holding a live booking on that trip, so there is no
+/// screen before the booking that could show one.
+class TripContact {
+  const TripContact({
+    required this.userId,
+    required this.name,
+    required this.phone,
+    required this.bookingId,
+  });
+
+  final String userId;
+  final String? name;
+
+  /// E.164, e.g. `+9647701234567`.
+  final String phone;
+  final String bookingId;
+
+  factory TripContact.fromJson(Map<String, dynamic> json) => TripContact(
+        userId: json['userId'] as String,
+        name: json['name'] as String?,
+        phone: json['phone'] as String? ?? '',
+        bookingId: json['bookingId'] as String? ?? '',
+      );
+}
+
 /// A seat booking. GET /bookings/mine returns the [trip] + [upcoming] flag;
 /// POST /bookings and cancel return the booking alone (both null then).
+///
+/// [pickup] / [dropoff] carry coordinates as well as labels, so the rider can
+/// see the points they chose on a map — a reverse-geocoded name is how they
+/// recognise the place, but only the point proves it is the right one.
 class Booking {
   const Booking({
     required this.id,
     required this.seatCount,
     required this.fare,
     required this.status,
-    required this.pickupLabel,
-    required this.dropoffLabel,
+    required this.pickup,
+    required this.dropoff,
     this.trip,
     this.upcoming,
   });
@@ -93,24 +132,37 @@ class Booking {
   final int seatCount;
   final int fare;
   final BookingStatus status;
-  final String pickupLabel;
-  final String dropoffLabel;
+  final LocationPoint pickup;
+  final LocationPoint dropoff;
   final BookingTrip? trip;
 
   /// Server-computed: is the trip's departure still in the future? Null when the
   /// response omits the trip (POST /bookings, cancel).
   final bool? upcoming;
 
+  String get pickupLabel => pickup.label;
+  String get dropoffLabel => dropoff.label;
+
   factory Booking.fromJson(Map<String, dynamic> json) => Booking(
         id: json['id'] as String,
         seatCount: (json['seatCount'] as num).toInt(),
         fare: (json['fare'] as num).toInt(),
         status: bookingStatusFrom(json['status'] as String?),
-        pickupLabel: (json['pickupLabel'] as String?) ?? '',
-        dropoffLabel: (json['dropoffLabel'] as String?) ?? '',
+        pickup: _pointFrom(json, 'pickup'),
+        dropoff: _pointFrom(json, 'dropoff'),
         trip: json['trip'] == null
             ? null
             : BookingTrip.fromJson(json['trip'] as Map<String, dynamic>),
         upcoming: json['upcoming'] as bool?,
       );
 }
+
+/// Read `<prefix>Lat` / `<prefix>Lng` / `<prefix>Label` into a [LocationPoint].
+/// Missing coordinates become 0,0; callers check
+/// [LocationPoint.hasCoordinates] rather than opening a map on Null Island.
+LocationPoint _pointFrom(Map<String, dynamic> json, String prefix) =>
+    LocationPoint(
+      lat: (json['${prefix}Lat'] as num?)?.toDouble() ?? 0,
+      lng: (json['${prefix}Lng'] as num?)?.toDouble() ?? 0,
+      label: json['${prefix}Label'] as String? ?? '',
+    );

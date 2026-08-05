@@ -28,13 +28,27 @@ import { catchableUntil, departNowWindowEndsAt } from './trip-window';
 /** A trip plus the instant riders stop being able to catch it. */
 export type TripWithWindow = Trip & { catchableUntil: Date };
 
-/** A trip's booking as seen by the OWNING driver (rider name resolved). */
+/**
+ * A trip's booking as seen by the OWNING driver (rider name resolved).
+ *
+ * Carries the pickup/dropoff COORDINATES as well as their labels: a
+ * reverse-geocoded neighbourhood ("قرية الغدير السكنية") tells the driver
+ * roughly where to head, but it does not put a pin on a map or feed a
+ * navigation app — which is what actually completes a door-to-door pickup.
+ *
+ * Deliberately NO phone number. The rider's is available from
+ * `GET /trips/:id/contacts` alone (TripContactService).
+ */
 export interface TripBookingView {
   id: string;
   riderId: string;
   riderName: string | null;
   seatCount: number;
+  pickupLat: number;
+  pickupLng: number;
   pickupLabel: string;
+  dropoffLat: number;
+  dropoffLng: number;
   dropoffLabel: string;
   fare: number;
   status: BookingStatus;
@@ -164,7 +178,11 @@ export class TripService {
       riderId: b.riderId,
       riderName: nameById.get(b.riderId) ?? null,
       seatCount: b.seatCount,
+      pickupLat: b.pickupLat,
+      pickupLng: b.pickupLng,
       pickupLabel: b.pickupLabel,
+      dropoffLat: b.dropoffLat,
+      dropoffLng: b.dropoffLng,
       dropoffLabel: b.dropoffLabel,
       fare: b.fare,
       status: b.status,

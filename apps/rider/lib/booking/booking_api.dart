@@ -22,6 +22,15 @@ abstract interface class BookingApi {
   /// POST /bookings/:id/cancel → the cancelled booking. Throws [ApiException]
   /// (409) when past the free-cancel cutoff.
   Future<Booking> cancel(String bookingId);
+
+  /// GET /trips/:id/contacts → the driver's number for a trip this rider has
+  /// booked.
+  ///
+  /// The ONLY endpoint in the app that returns a phone number, so the rule
+  /// "not before a booking exists" has one place to live on the server. A 403
+  /// is a normal answer (no live booking on that trip) and the caller renders
+  /// no contact row — it is not an error to show the rider.
+  Future<TripContact?> driverContact(String tripId);
 }
 
 class DioBookingApi implements BookingApi {
@@ -70,6 +79,20 @@ class DioBookingApi implements BookingApi {
       final res =
           await _dio.post<Map<String, dynamic>>('/bookings/$bookingId/cancel');
       return Booking.fromJson(res.data!);
+    } on DioException catch (e) {
+      throw mapDioError(e);
+    }
+  }
+
+  @override
+  Future<TripContact?> driverContact(String tripId) async {
+    try {
+      final res =
+          await _dio.get<Map<String, dynamic>>('/trips/$tripId/contacts');
+      final list = (res.data?['contacts'] as List<dynamic>?) ?? const [];
+      if (list.isEmpty) return null;
+      // A rider is entitled to exactly one contact — their driver.
+      return TripContact.fromJson(list.first as Map<String, dynamic>);
     } on DioException catch (e) {
       throw mapDioError(e);
     }

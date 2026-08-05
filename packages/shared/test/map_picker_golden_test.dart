@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared/shared.dart';
 
+import 'support/contact_fakes.dart';
 import 'support/map_fakes.dart';
 
 /// Golden tests for the shared [AppMapPicker] — the default pin + confirm bar,
@@ -47,7 +48,53 @@ void main() {
           interact: _tapUseMyLocation);
     });
   });
+
+  // The read-only view: a point somebody else chose, with the hand-off to a
+  // maps app. No confirm bar and no "use my location" — the whole difference
+  // from the picker above is visible in one glance at these two.
+  group('map view', () {
+    testWidgets('light', (t) async {
+      await _golden(t,
+          name: 'map_view_light', brightness: Brightness.light, child: _view());
+    });
+    testWidgets('dark', (t) async {
+      await _golden(t,
+          name: 'map_view_dark', brightness: Brightness.dark, child: _view());
+    });
+  });
+
+  // Reverse geocoding failed. The address line shows coordinates rather than
+  // nothing — a state that IS reached in the field, so it gets a screenshot.
+  group('map view without a label', () {
+    testWidgets('light', (t) async {
+      await _golden(t,
+          name: 'map_view_no_label_light',
+          brightness: Brightness.light,
+          child: _viewNoLabel());
+    });
+    testWidgets('dark', (t) async {
+      await _golden(t,
+          name: 'map_view_no_label_dark',
+          brightness: Brightness.dark,
+          child: _viewNoLabel());
+    });
+  });
 }
+
+AppMapView _view() => AppMapView(
+      point: const LocationPoint(
+          lat: 32.616, lng: 44.0242, label: 'طريق الحر، حي الزيتون'),
+      launcher: FakeLinkLauncher(),
+      title: 'نقطة الانطلاق',
+      usePlaceholderTiles: true,
+    );
+
+AppMapView _viewNoLabel() => AppMapView(
+      point: const LocationPoint(lat: 31.999, lng: 44.3148),
+      launcher: FakeLinkLauncher(),
+      title: 'نقطة النزول',
+      usePlaceholderTiles: true,
+    );
 
 AppMapPicker _picker() => AppMapPicker(
       initialCenter: const LocationPoint(lat: 32.616, lng: 44.024),
@@ -70,6 +117,7 @@ Future<void> _golden(
   required String name,
   required Brightness brightness,
   Future<void> Function(WidgetTester)? interact,
+  Widget? child,
 }) async {
   const width = 390.0;
   const height = 844.0;
@@ -93,7 +141,8 @@ Future<void> _golden(
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      home: Directionality(textDirection: TextDirection.rtl, child: _picker()),
+      home: Directionality(
+          textDirection: TextDirection.rtl, child: child ?? _picker()),
     ),
   );
 

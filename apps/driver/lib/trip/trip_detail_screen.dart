@@ -10,6 +10,17 @@ import 'trip_detail_controller.dart';
 /// (rider name, seats, pickup/dropoff, status) and every lifecycle action —
 /// start, per-rider onboard / no-show, complete (with a cash summary), cancel,
 /// and post-completion rider rating.
+///
+/// ## Getting to the rider
+///
+/// Knowing the neighbourhood is not enough to complete a pickup. Each booking's
+/// pickup and dropoff are tappable and open on a map, with a hand-off to the
+/// driver's own navigation app; and each rider's number sits on their row with
+/// call and WhatsApp beside it — because in a real كراج ride the driver rings
+/// to pin down the exact spot, and that call is part of the job, not a fallback.
+///
+/// Numbers appear only because the server returned them: `GET
+/// /trips/:id/contacts` answers for the trip's own driver and nobody else.
 class TripDetailScreen extends StatefulWidget {
   const TripDetailScreen({super.key});
 
@@ -122,6 +133,18 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     );
   }
 
+  /// Open one end of a booking on a map, with the hand-off to navigation.
+  Future<void> _onShowPoint(LocationPoint point, String title) async {
+    await showMapView(
+      context,
+      point: point,
+      launcher: context.read<LinkLauncher>(),
+      title: title,
+      onNavigationUnavailable: () =>
+          _snack('لا يوجد تطبيق خرائط على هذا الجهاز.'),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.watch<TripDetailController>();
@@ -172,6 +195,11 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                     _onBookingAction(c, () => c.onboard(b.id)),
                 onNoShow: () => _onBookingAction(c, () => c.noShow(b.id)),
                 onRate: () => _onRate(c, b),
+                onShowPickup: () =>
+                    _onShowPoint(b.pickup, 'نقطة انطلاق الراكب'),
+                onShowDropoff: () =>
+                    _onShowPoint(b.dropoff, 'نقطة نزول الراكب'),
+                onContactUnavailable: _snack,
               ),
               SizedBox(height: space.md),
             ],
@@ -474,6 +502,9 @@ class _BookingCard extends StatelessWidget {
     required this.onOnboard,
     required this.onNoShow,
     required this.onRate,
+    required this.onShowPickup,
+    required this.onShowDropoff,
+    required this.onContactUnavailable,
   });
 
   final TripDetailController controller;
@@ -481,6 +512,9 @@ class _BookingCard extends StatelessWidget {
   final VoidCallback onOnboard;
   final VoidCallback onNoShow;
   final VoidCallback onRate;
+  final VoidCallback onShowPickup;
+  final VoidCallback onShowDropoff;
+  final ValueChanged<String> onContactUnavailable;
 
   @override
   Widget build(BuildContext context) {
@@ -488,6 +522,7 @@ class _BookingCard extends StatelessWidget {
     final space = context.space;
     final name = booking.riderName ?? 'راكب';
     final inFlight = controller.bookingActionInFlight(booking.id);
+    final contact = controller.contactFor(booking.id);
 
     return AppCard(
       child: Column(
@@ -524,10 +559,39 @@ class _BookingCard extends StatelessWidget {
               bookingStatusPill(booking.status),
             ],
           ),
-          SizedBox(height: space.md),
-          _PointRow(icon: AppIcons.mapPin, label: 'من: ${booking.pickupLabel}'),
-          SizedBox(height: space.xs),
-          _PointRow(icon: AppIcons.route, label: 'إلى: ${booking.dropoffLabel}'),
+          SizedBox(height: space.sm),
+          // Tappable, because a neighbourhood name does not get a car to a
+          // door. Static text if the API sent no coordinates — a row that
+          // opens a map on Null Island would be worse than one that does
+          // nothing.
+          MapPointRow(
+            title: 'نقطة الانطلاق',
+            point: booking.pickup,
+            icon: AppIcons.mapPin,
+            onTap: onShowPickup,
+          ),
+          MapPointRow(
+            title: 'نقطة النزول',
+            point: booking.dropoff,
+            icon: AppIcons.route,
+            onTap: onShowDropoff,
+          ),
+          // Only present because the server said this driver may have it.
+          if (contact != null) ...[
+            SizedBox(height: space.sm),
+            Divider(height: 1, color: colors.border),
+            SizedBox(height: space.md),
+            ContactRow(
+              phone: contact.phone,
+              name: contact.name,
+              roleLabel: 'الراكب',
+              launcher: context.read<LinkLauncher>(),
+              onUnavailable: onContactUnavailable,
+              // The name is already the card's headline; repeating it above the
+              // number would be the third time it appears on one card.
+              compact: true,
+            ),
+          ],
           if (controller.canTransition(booking)) ...[
             SizedBox(height: space.md),
             Row(
@@ -582,29 +646,6 @@ class _BookingCard extends StatelessWidget {
   }
 }
 
-class _PointRow extends StatelessWidget {
-  const _PointRow({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final space = context.space;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: space.lg, color: colors.textMuted),
-        SizedBox(width: space.sm),
-        Expanded(
-          child: Text(label,
-              style: context.text.body.copyWith(color: colors.textSecondary)),
-        ),
-      ],
-    );
-  }
-}
 
 class _NoBookings extends StatelessWidget {
   const _NoBookings();

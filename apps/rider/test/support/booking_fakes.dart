@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:rider/booking/booking_api.dart';
 import 'package:rider/booking/booking_models.dart';
+import 'package:shared/shared.dart';
 
 /// A scriptable fake of [BookingApi] for tests — no real network.
 class FakeBookingApi implements BookingApi {
@@ -26,6 +27,13 @@ class FakeBookingApi implements BookingApi {
   String? lastCancelledId;
   Booking? cancelResult;
   Object? cancelError;
+
+  // driverContact — null by default, so a test has to opt IN to a number being
+  // available. That is the same default the server enforces: no booking, no
+  // phone.
+  TripContact? driverContactResult;
+  Object? driverContactError;
+  final List<String> driverContactCalls = [];
 
   @override
   Future<Booking> create({
@@ -58,6 +66,13 @@ class FakeBookingApi implements BookingApi {
     return cancelResult ??
         bookingFixture(id: bookingId, status: BookingStatus.cancelled);
   }
+
+  @override
+  Future<TripContact?> driverContact(String tripId) async {
+    driverContactCalls.add(tripId);
+    if (driverContactError != null) throw driverContactError!;
+    return driverContactResult;
+  }
 }
 
 // ── fixtures ───────────────────────────────────────────────────────────────
@@ -71,18 +86,39 @@ Booking bookingFixture({
   String dropoffLabel = 'قرب المستشفى',
   BookingTrip? trip,
   bool? upcoming,
+  /// Real Najaf / Karbala coordinates by default. Pass 0 for the "API sent no
+  /// coordinates" case, which must render as plain text with no map tap.
+  double pickupLat = 31.9990,
+  double pickupLng = 44.3148,
+  double dropoffLat = 32.6160,
+  double dropoffLng = 44.0242,
 }) {
   return Booking(
     id: id,
     seatCount: seatCount,
     fare: fare,
     status: status,
-    pickupLabel: pickupLabel,
-    dropoffLabel: dropoffLabel,
+    pickup: LocationPoint(
+        lat: pickupLat, lng: pickupLng, label: pickupLabel),
+    dropoff: LocationPoint(
+        lat: dropoffLat, lng: dropoffLng, label: dropoffLabel),
     trip: trip,
     upcoming: upcoming,
   );
 }
+
+TripContact contactFixture({
+  String userId = 'd1',
+  String? name = 'أبو علي',
+  String phone = '+9647701234567',
+  String bookingId = 'b1',
+}) =>
+    TripContact(
+      userId: userId,
+      name: name,
+      phone: phone,
+      bookingId: bookingId,
+    );
 
 /// A booking that carries its trip + corridor, as GET /bookings/mine returns.
 Booking mineFixture({

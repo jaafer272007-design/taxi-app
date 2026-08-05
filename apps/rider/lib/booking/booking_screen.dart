@@ -72,6 +72,12 @@ class _BookingScreenState extends State<BookingScreen> {
           departureTime: c.trip.departureTime,
           originCity: c.originCity,
           destCity: c.destCity,
+          // The points the rider chose, from the controller rather than the
+          // response: these are what they picked, and they are what the
+          // confirmation is confirming.
+          pickup: c.pickup.asLocationPoint,
+          dropoff: c.dropoff.asLocationPoint,
+          driverContact: c.driverContact,
         ),
       ),
     );
