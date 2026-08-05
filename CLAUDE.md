@@ -199,6 +199,33 @@ trip with booked seats and the riders found out by arriving at the pickup point.
 
 Every list screen (both apps) has pull-to-refresh regardless of whether it polls.
 
+### The admin panel (`/apps/admin`)
+
+Same rule, different mechanism: the panel is React Server Components, so a
+"refresh" is `router.refresh()` — the RSC payload is re-fetched and re-rendered
+with scroll position, open dialogs and client state intact. There is no client
+data layer to keep in sync.
+
+- One component, `RefreshBar`, does the polling **and** renders the manual
+  control («تحديث» + «آخر تحديث الساعة …»). Every polled view gets it; nothing
+  else sets a timer.
+- **السائقون — 20s.** The one that matters: a driver stuck at «بانتظار
+  المراجعة» cannot post a trip until an admin sees them.
+  **لوحة المعلومات — 60s.** Figures watched over a shift.
+  **الممرات — NOT polled**, deliberately: 306 rows that only change when an
+  admin changes them.
+- Pauses on `document.visibilityState === "hidden"`, resumes on
+  `visibilitychange`/`focus` with one immediate catch-up refresh. A failed
+  refresh leaves the rendered tree and says nothing.
+- The **pending-drivers badge** on the Drivers nav item comes from the layout's
+  dashboard aggregate, so it is as fresh as whatever view is open — on
+  /drivers and /dashboard it follows their beat; on /corridors it is as of page
+  load. Zero draws nothing.
+- `?refreshMs=` (floored at 1s) overrides the beat for one tab. It exists so
+  `e2e/refresh.spec.ts` can prove "it stopped while hidden" in seconds without
+  a build-time flag that would fire `router.refresh()` under every other spec's
+  clicks.
+
 ## In-app notifications
 
 Stored notifications are the half of the event system that works today — FCM

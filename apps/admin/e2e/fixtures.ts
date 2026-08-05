@@ -129,6 +129,19 @@ export function toArabicDigits(input: string | number): string {
   return out;
 }
 
+/** Arabic-Indic → Western, the inverse of {@link toArabicDigits}. */
+export function toWesternDigits(input: string): string {
+  let out = "";
+  for (const ch of input) {
+    const code = ch.codePointAt(0)!;
+    out +=
+      code >= ARABIC_ZERO && code <= ARABIC_ZERO + 9
+        ? String.fromCodePoint(WESTERN_ZERO + (code - ARABIC_ZERO))
+        : ch;
+  }
+  return out;
+}
+
 /** `12000` → `١٢٬٠٠٠`, with the Arabic thousands separator U+066C. */
 export function formatIqd(amount: number): string {
   const digits = Math.abs(Math.trunc(amount)).toString();
