@@ -191,10 +191,41 @@ trip with booked seats and the riders found out by arriving at the pickup point.
   when it may run). No screen writes its own `Timer`.
 - **Never poll a screen nobody is looking at.** `PollingScope` gates on the
   conjunction of three things, and each one alone leaves a real hole:
-  foreground (`WidgetsBindingObserver`), this route is on top
-  (`appRouteObserver`, registered by `TaxiApp`), and this tab is selected
-  (`TickerMode` — an `IndexedStack` keeps every tab mounted and building, so the
-  shells wrap each tab in `TickerMode(enabled: isSelected)`).
+  the app is **visible** (`appIsVisible`, via `WidgetsBindingObserver`), this
+  route is on top (`appRouteObserver`, registered by `TaxiApp`), and this tab is
+  selected (`TickerMode` — an `IndexedStack` keeps every tab mounted and
+  building, so the shells wrap each tab in `TickerMode(enabled: isSelected)`).
+- **Gate on VISIBLE, never on FOCUSED. `AppLifecycleState.inactive` is a
+  visible state.** This one shipped and killed polling everywhere. The gate read
+  `state == AppLifecycleState.resumed`, but `inactive` means *visible without
+  input focus*: on the web a window you clicked away from (the engine binds
+  `window.addEventListener('blur')` straight to it), on Android split screen
+  where the other app is current, a system dialog, or the notification shade.
+  Only `hidden` / `paused` / `detached` mean "not on screen".
+  - The blast radius is the whole app, because `_foreground` is ANDed **outside**
+    the `pauseWhenObscured` escape hatch — so one blur also took down the
+    app-wide notification badge, the one poll that is supposed to survive
+    everything. Opening the driver app to post a trip was enough to do it.
+  - Measured in Chromium against the real web build: 4 requests/40s focused,
+    **0** while blurred-but-visible, and it stayed at zero until focus returned.
+  - Seed the flag from `WidgetsBinding.instance.lifecycleState` at mount.
+    `addObserver` does not replay the current state and the binding only
+    re-sends on a *change*, so an assumed `true` is never corrected.
+- **A widget test cannot discover this class of bug, only pin it.** A widget
+  test decides for itself what `inactive` means, so it will happily agree with
+  whatever the code believes — the old suite asserted *"inactive is enough to
+  stop polling"* and stayed green the entire time polling was dead. Two layers
+  are needed and both are now in CI: `polling_scope_test.dart` drives lifecycle
+  through the **real binding** (a `flutter/lifecycle` platform message, not a
+  direct call on the State — which also proves the scope is registered at all),
+  and `apps/rider/e2e/polling_lifecycle.mjs` runs the real `flutter build web`
+  in Chromium and asserts requests keep flowing across a genuine window blur.
+- **Known, unfixed:** `Poller._inFlight` is a latch, so an `onPoll` future that
+  never completes silences that scope for the life of the screen while
+  `isTicking` still reports true. Dio's timeouts are applied in the adapter —
+  after the interceptor chain — so the `tokenStore.read()` await in `ApiClient`
+  sits outside that budget. A watchdog is the fix but it trades against "polls
+  never stack", so it wants its own change and its own test.
 - **Never poll a terminal screen.** `enabled:` is false when there is nothing
   left to learn — a settled trip, a history of finished bookings.
 - **A background refresh is silent, always.** Controllers take `load({silent})`

@@ -185,3 +185,40 @@ docker volume ls | grep -i taxi                # old volumes (e.g. api_taxi_db_d
 Removing them is safe — they hold no data you need for a fresh start, and none of it
 is shared with Aurora.
 
+
+---
+
+## Running the polling lifecycle E2E (real browser)
+
+`apps/rider/e2e/polling_lifecycle.mjs` is the regression guard for the bug where
+**every poll in the app died the moment the window lost focus** — clicking over
+to the driver app was enough. It is the only test that can catch that class of
+problem, because a widget test decides for itself what
+`AppLifecycleState.inactive` means; only a real engine knows a browser blur *is*
+`inactive`. CI runs it as the `apps/rider (polling lifecycle, real browser)` job.
+
+To run it locally you need the API up (steps 1–3 above), with its output going to
+a file — the dev OTP fallback prints the code there and the test reads it:
+
+```bash
+cd services/api && node dist/main.js > /tmp/api.log 2>&1 &
+
+# The web build. --no-web-resources-cdn keeps CanvasKit local (no gstatic
+# fetch); --pwa-strategy=none stops a stale service worker serving an old
+# bundle. The API_BASE_URL define is REQUIRED: the default is the Android
+# emulator alias 10.0.2.2, which a browser cannot route to.
+cd apps/rider
+flutter build web --release --pwa-strategy=none --no-web-resources-cdn \
+  --dart-define=API_BASE_URL=http://127.0.0.1:3000
+(cd build/web && python3 -m http.server 8088 --bind 127.0.0.1 &)
+
+cd e2e && npm install && npx playwright install chromium
+API_LOG=/tmp/api.log node polling_lifecycle.mjs
+```
+
+It logs in through the real OTP flow, then measures `GET /notifications` across
+three ~70s windows — focused, blurred, refocused — and fails if the middle one
+is silent. Takes about four minutes.
+
+> `apps/rider/web/` exists **for this test**. Phase 1 ships Android only; the web
+> target is a test harness, not a shipping platform.

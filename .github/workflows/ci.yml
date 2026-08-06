@@ -330,3 +330,118 @@ jobs:
             apps/driver/test/goldens/**
             apps/driver/test/failures/**
           if-no-files-found: warn
+
+  # ── The polling lifecycle gate, measured in a real browser ────────────────
+  # Unit and widget tests cannot DISCOVER this class of bug: a widget test
+  # decides for itself what AppLifecycleState.inactive means. Only a real
+  # engine knows that a browser window losing focus IS `inactive`. This job
+  # boots the actual web build against the actual API and asserts that polls
+  # keep flowing across a window blur — the exact thing that happens when the
+  # driver app is brought to the front.
+  rider-polling:
+    name: apps/rider (polling lifecycle, real browser)
+    runs-on: ubuntu-latest
+
+    env:
+      DATABASE_URL: postgresql://taxi:taxi@localhost:5432/taxi_poll?schema=public
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-dummy-jwt-secret-not-for-production-0123456789
+      TZ: Asia/Baghdad
+      ADMIN_PHONE: "+9647700000000"
+      SUPER_ADMIN_USERNAME: e2e-superadmin
+      SUPER_ADMIN_PASSWORD: e2e-password-1234
+      API_URL: http://127.0.0.1:3000
+      WEB_URL: http://127.0.0.1:8088
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: taxi
+          POSTGRES_PASSWORD: taxi
+          POSTGRES_DB: taxi_poll
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U taxi -d taxi_poll"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Same pinned stable as the goldens job.
+      - name: Set up Flutter (pinned stable)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.29.0
+          cache: true
+
+      - name: Build and start the API
+        working-directory: services/api
+        run: |
+          npm ci
+          npx prisma generate
+          npx prisma migrate deploy
+          npx ts-node prisma/seed.ts
+          npm run build
+          # WhatsApp is deliberately unconfigured, so the OTP lands in this log
+          # and the browser test reads it from there.
+          node dist/main.js > "$GITHUB_WORKSPACE/api.log" 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:3000/health && break || sleep 2
+          done
+
+      - name: Build the rider web app
+        working-directory: apps/rider
+        run: |
+          flutter pub get
+          # --no-web-resources-cdn keeps CanvasKit local (no gstatic fetch);
+          # --pwa-strategy=none keeps a stale service worker from serving an
+          # older bundle to the test.
+          flutter build web --release --pwa-strategy=none --no-web-resources-cdn \
+            --dart-define=API_BASE_URL=http://127.0.0.1:3000
+
+      - name: Serve the web build
+        working-directory: apps/rider/build/web
+        run: |
+          python3 -m http.server 8088 --bind 127.0.0.1 &
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8088/ >/dev/null && break || sleep 1
+          done
+
+      - name: Run the polling lifecycle test
+        working-directory: apps/rider/e2e
+        env:
+          API_LOG: ${{ github.workspace }}/api.log
+        run: |
+          npm install --no-package-lock
+          npx playwright install --with-deps chromium
+          node polling_lifecycle.mjs
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rider-polling-failure
+          path: |
+            apps/rider/e2e/*.png
+            api.log
+          if-no-files-found: warn
