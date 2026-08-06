@@ -12,13 +12,39 @@ import 'poller.dart';
 final RouteObserver<ModalRoute<void>> appRouteObserver =
     RouteObserver<ModalRoute<void>>();
 
+/// Whether a lifecycle state means "the user can still see this app".
+///
+/// **[AppLifecycleState.inactive] counts as visible.** This is the whole bug
+/// that made polling look dead in live testing, so it is worth stating exactly
+/// what the framework means by each state (dart:ui `AppLifecycleState`):
+///
+/// * `resumed`  — visible, has input focus.
+/// * `inactive` — **visible, but WITHOUT input focus.** On the web that is a
+///   browser window you have merely clicked away from; on Android it is split
+///   screen where the other app is current, a system dialog, the notification
+///   shade pulled halfway down, or the app switcher.
+/// * `hidden` / `paused` / `detached` — genuinely not on screen. A pocket.
+///
+/// Gating on `== resumed` therefore gates on FOCUS, not on visibility, and one
+/// blur takes down every poller in the app at once — the results list, حجوزاتي,
+/// the driver's trip detail and the app-wide notification badge, which is the
+/// one that is supposed to survive everything. Opening the driver app to post a
+/// trip is enough to do it, which is precisely how this was found.
+bool appIsVisible(AppLifecycleState state) => switch (state) {
+      AppLifecycleState.resumed || AppLifecycleState.inactive => true,
+      AppLifecycleState.hidden ||
+      AppLifecycleState.paused ||
+      AppLifecycleState.detached =>
+        false,
+    };
+
 /// Runs [onPoll] every [interval] while this subtree is genuinely being looked
 /// at, and not otherwise.
 ///
 /// "Being looked at" is the conjunction of three things, and all three are
 /// needed — each one alone leaves a real hole:
 ///
-///  1. **The app is in the foreground** ([AppLifecycleState.resumed]).
+///  1. **The app is visible** ([appIsVisible]) — not merely focused.
 ///     Otherwise a phone in a pocket refreshes all night.
 ///  2. **This route is on top** (via [appRouteObserver]). A rider who opens a
 ///     trip's details is no longer looking at the results behind it.
@@ -80,8 +106,16 @@ class _PollingScopeState extends State<PollingScope>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // SEED, don't assume. addObserver does not replay the current state, and
+    // the binding only re-sends on a CHANGE — so a scope mounted while the app
+    // is already hidden would otherwise believe it is visible forever.
+    final state = WidgetsBinding.instance.lifecycleState;
+    _foreground = state == null || appIsVisible(state);
     if (widget.enabled) _poller.start();
-    _applyGate();
+    // No _applyGate() here: TickerMode has not been read yet, so the gate would
+    // evaluate as "visible tab" and fire one real request from a tab nobody has
+    // selected. didChangeDependencies runs before the first build, so nothing
+    // is lost by waiting for it.
   }
 
   @override
@@ -89,11 +123,7 @@ class _PollingScopeState extends State<PollingScope>
     super.didChangeDependencies();
 
     // TickerMode changes when the owning shell flips a tab's visibility.
-    final visible = TickerMode.of(context);
-    if (visible != _tabVisible) {
-      _tabVisible = visible;
-      _applyGate();
-    }
+    _tabVisible = TickerMode.of(context);
 
     final route = ModalRoute.of(context);
     if (route is ModalRoute<void> && route != _route) {
@@ -101,6 +131,8 @@ class _PollingScopeState extends State<PollingScope>
       _route = route;
       appRouteObserver.subscribe(this, route);
     }
+
+    _applyGate();
   }
 
   @override
@@ -127,7 +159,8 @@ class _PollingScopeState extends State<PollingScope>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    final foreground = state == AppLifecycleState.resumed;
+    // Visible, NOT focused — see [appIsVisible]. `inactive` must keep polling.
+    final foreground = appIsVisible(state);
     if (foreground == _foreground) return;
     _foreground = foreground;
     _applyGate();

@@ -7,6 +7,13 @@ dist/
 build/
 *.tsbuildinfo
 
+# flutter tooling artifacts (no pubspec.lock is committed in this repo)
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+pubspec.lock
+*.iml
+
 # env / secrets — never commit
 .env
 .env.local

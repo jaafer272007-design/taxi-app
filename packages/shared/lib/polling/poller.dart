@@ -101,6 +101,15 @@ class Poller {
     if (_inFlight || _disposed) return;
     _inFlight = true;
     try {
+      // KNOWN HAZARD, deliberately not changed here: [_inFlight] is a latch, so
+      // an `onPoll` future that never completes silences this scope for the
+      // life of the screen while [isTicking] still reports true. Dio's timeouts
+      // are applied in the adapter — AFTER the interceptor chain — so the
+      // `tokenStore.read()` await in `ApiClient` sits outside that budget.
+      // A watchdog (`onPoll().timeout(...)`) is the fix, but it trades against
+      // the locked "polls never stack" rule and was NOT the cause of the dead
+      // poll found in live testing (that was the lifecycle gate, see
+      // [appIsVisible]) — so it belongs in its own change, with its own test.
       await onPoll();
     } catch (_) {
       // ─── FAILURES ARE SILENT, ON PURPOSE ────────────────────────────────

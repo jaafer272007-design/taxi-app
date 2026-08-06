@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared/shared.dart';
 
@@ -33,17 +34,21 @@ void main() {
         ),
       );
 
-  /// Deliver a lifecycle change to the scope.
+  /// Deliver a lifecycle change the way the ENGINE does — a `flutter/lifecycle`
+  /// platform message.
   ///
-  /// Calls the observer callback the binding itself calls. It exercises the
-  /// gate, not the `addObserver` registration one line above it — the reason
-  /// for going through the State rather than the binding is that every public
-  /// way to fake a platform lifecycle message is either deprecated or
-  /// `@protected`, and a test that fails to compile on the next Flutter bump
-  /// is worse than one that starts a step late.
-  void lifecycle(WidgetTester t, AppLifecycleState state) {
-    (t.state(find.byType(PollingScope)) as WidgetsBindingObserver)
-        .didChangeAppLifecycleState(state);
+  /// This used to reach into the State and call `didChangeAppLifecycleState`
+  /// directly, which tested the gate but not the wiring: nothing proved the
+  /// scope was registered with the binding at all, and nothing exercised the
+  /// intermediate states `ServicesBinding` synthesises on the way (resumed →
+  /// paused really arrives as inactive, hidden, paused). Going through the
+  /// messenger is what Flutter's own tests do.
+  Future<void> lifecycle(WidgetTester t, AppLifecycleState state) async {
+    await t.binding.defaultBinaryMessenger.handlePlatformMessage(
+      'flutter/lifecycle',
+      const StringCodec().encodeMessage(state.toString()),
+      (_) {},
+    );
   }
 
   /// Unmount everything, which disposes the scope. Also the assertion that
@@ -98,12 +103,12 @@ void main() {
     expect(calls, 1);
 
     // Phone goes in a pocket.
-    lifecycle(t, AppLifecycleState.paused);
+    await lifecycle(t, AppLifecycleState.paused);
     await t.pump(const Duration(minutes: 10));
     expect(calls, 1, reason: 'a backgrounded app must not refresh all night');
 
     // Phone comes back out.
-    lifecycle(t, AppLifecycleState.resumed);
+    await lifecycle(t, AppLifecycleState.resumed);
     await t.pump();
     expect(calls, 2, reason: 'the data on screen is minutes old — fix it now');
 
@@ -113,16 +118,48 @@ void main() {
     await unmount(t);
   });
 
-  testWidgets('inactive (not just paused) is enough to stop polling',
+  testWidgets('inactive means VISIBLE — it must NOT stop polling', (t) async {
+    // THE REGRESSION. This test used to assert the opposite, which is why the
+    // whole suite stayed green while polling was dead in live use.
+    //
+    // `inactive` is "visible, but without input focus": a browser window you
+    // clicked away from, an Android split screen where the other app is
+    // current, a system dialog, the notification shade. Measured in Chromium
+    // against the real web build, dispatching a plain window `blur` took the
+    // app from 4 requests/40s to ZERO, and it stayed at zero until focus came
+    // back — which is exactly what a driver posting a trip in the other app
+    // does to the rider's open results screen.
+    var calls = 0;
+    await t.pumpWidget(host(onPoll: () async => calls++));
+    await t.pump();
+    expect(calls, 1);
+
+    await lifecycle(t, AppLifecycleState.inactive);
+    await t.pump(const Duration(seconds: 10));
+    expect(calls, 2, reason: 'the user can still see this screen');
+    await t.pump(const Duration(seconds: 10));
+    expect(calls, 3);
+
+    await unmount(t);
+  });
+
+  testWidgets('hidden DOES stop polling — a pocket is still a pocket',
       (t) async {
     var calls = 0;
     await t.pumpWidget(host(onPoll: () async => calls++));
     await t.pump();
     expect(calls, 1);
 
-    lifecycle(t, AppLifecycleState.inactive);
-    await t.pump(const Duration(minutes: 2));
-    expect(calls, 1);
+    // resumed → hidden arrives as inactive, then hidden. The first must not
+    // stop it; the second must.
+    await lifecycle(t, AppLifecycleState.hidden);
+    final atHide = calls;
+    await t.pump(const Duration(minutes: 5));
+    expect(calls, atHide, reason: 'nothing is on screen to refresh');
+
+    await lifecycle(t, AppLifecycleState.resumed);
+    await t.pump();
+    expect(calls, greaterThan(atHide), reason: 'back on screen: refresh now');
 
     await unmount(t);
   });
@@ -232,9 +269,29 @@ void main() {
       await t.pump();
       expect(calls, 1);
 
-      lifecycle(t, AppLifecycleState.paused);
+      await lifecycle(t, AppLifecycleState.paused);
       await t.pump(const Duration(minutes: 10));
       expect(calls, 1, reason: 'a pocket is a pocket, app-wide or not');
+
+      await unmount(t);
+    });
+
+    testWidgets('survives losing focus — this is the badge that must not die',
+        (t) async {
+      // `_foreground` is ANDed OUTSIDE the pauseWhenObscured escape hatch, so
+      // before the fix a single blur killed this poll too — the one whose
+      // entire purpose is to reach the rider wherever they are. Both reported
+      // symptoms had this one shared cause.
+      var calls = 0;
+      await t.pumpWidget(
+        host(onPoll: () async => calls++, pauseWhenObscured: false),
+      );
+      await t.pump();
+      expect(calls, 1);
+
+      await lifecycle(t, AppLifecycleState.inactive);
+      await t.pump(const Duration(seconds: 10));
+      expect(calls, 2, reason: 'a cancellation must still reach an idle user');
 
       await unmount(t);
     });
