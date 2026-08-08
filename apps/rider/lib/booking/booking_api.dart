@@ -19,6 +19,14 @@ abstract interface class BookingApi {
   /// and an `upcoming` flag.
   Future<List<Booking>> listMine();
 
+  /// PATCH /bookings/:id → the booking with its new seat count.
+  ///
+  /// The answer to "I need one more seat". Booking the same trip twice is
+  /// refused by the server (409), so this is the only way to change a booking —
+  /// and it holds the seats the rider already has instead of making them cancel
+  /// and race someone else for them.
+  Future<Booking> changeSeats({required String bookingId, required int seatCount});
+
   /// POST /bookings/:id/cancel → the cancelled booking. Throws [ApiException]
   /// (409) when past the free-cancel cutoff.
   Future<Booking> cancel(String bookingId);
@@ -77,6 +85,22 @@ class DioBookingApi implements BookingApi {
       return (res.data ?? const [])
           .map((e) => Booking.fromJson(e as Map<String, dynamic>))
           .toList();
+    } on DioException catch (e) {
+      throw mapDioError(e);
+    }
+  }
+
+  @override
+  Future<Booking> changeSeats({
+    required String bookingId,
+    required int seatCount,
+  }) async {
+    try {
+      final res = await _dio.patch<Map<String, dynamic>>(
+        '/bookings/$bookingId',
+        data: {'seatCount': seatCount},
+      );
+      return Booking.fromJson(res.data!);
     } on DioException catch (e) {
       throw mapDioError(e);
     }

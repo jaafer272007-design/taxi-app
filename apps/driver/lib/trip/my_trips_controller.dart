@@ -25,6 +25,18 @@ class MyTripsController extends ChangeNotifier {
   bool get hasLoaded => _hasLoaded;
   bool get isEmpty => _trips.isEmpty;
 
+  /// Whether anything in this list can still change without the driver doing
+  /// something — i.e. a rider can book or cancel a seat under them.
+  ///
+  /// This is the whole reason رحلاتي polls: the seat counts on these cards are
+  /// what a driver reads to decide whether to wait for another passenger, and
+  /// they used to be as old as the last time the screen was opened. A list of
+  /// finished trips cannot change and must not be polled.
+  bool get hasLiveTrips => _trips.any((t) =>
+      t.status == TripStatus.open ||
+      t.status == TripStatus.locked ||
+      t.status == TripStatus.enRoute);
+
   Corridor? corridorFor(String corridorId) => _corridors[corridorId];
 
   /// A BACKGROUND refresh: no skeleton, and no error page on failure.

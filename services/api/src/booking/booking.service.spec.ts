@@ -20,6 +20,9 @@ function makeTx() {
       create: jest.fn((a: any) => Promise.resolve({ id: 'bk1', ...a.data })),
       updateMany: jest.fn(),
       findUniqueOrThrow: jest.fn(),
+      // The one-booking-per-rider-per-trip guard. Null = this rider holds no
+      // live booking on this trip, which is the case every test here assumes.
+      findFirst: jest.fn().mockResolvedValue(null),
     },
   };
 }

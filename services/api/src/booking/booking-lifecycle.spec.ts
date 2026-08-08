@@ -13,11 +13,20 @@ describe('isBookingUpcoming', () => {
   const LATER = new Date('2026-08-05T18:00:00Z'); // still in the future
   const EARLIER = new Date('2026-08-05T06:00:00Z'); // already passed
 
+  // `departNow: false` is stated, not defaulted, and that is the point: every
+  // case in this file used to omit it because the input type had no such field,
+  // so the entire suite silently tested SCHEDULED trips only — and passed
+  // throughout the live bug. See the departNow block at the bottom.
   const at = (
     bookingStatus: BookingStatus,
     tripStatus: TripStatus,
     departureTime: Date,
-  ) => isBookingUpcoming({ bookingStatus, tripStatus, departureTime }, NOW);
+    departNow = false,
+  ) =>
+    isBookingUpcoming(
+      { bookingStatus, tripStatus, departureTime, departNow },
+      NOW,
+    );
 
   describe('a terminal BOOKING is past, whatever the clock says', () => {
     // The reported bug, exactly: driver completes a trip scheduled for tonight
@@ -60,7 +69,7 @@ describe('isBookingUpcoming', () => {
     });
   });
 
-  describe('otherwise the clock decides', () => {
+  describe('otherwise the TRIP WINDOW decides — not a raw clock', () => {
     it.each([TripStatus.OPEN, TripStatus.LOCKED])(
       '%s in the future is upcoming',
       (tripStatus) => {
@@ -76,6 +85,47 @@ describe('isBookingUpcoming', () => {
     );
   });
 
+  describe('a departNow trip is LIVE, not already gone', () => {
+    // The live bug. A «الآن» trip is posted with departureTime = now, so the
+    // old `departureTime > now` was false the instant it existed: a rider could
+    // book a trip search was still offering and watch it file itself under
+    // «سابقة», where the app draws no cancel button. Everything in this file
+    // passed the whole time, because nothing here had a departNow trip in it.
+    const JUST_POSTED = NOW; // exactly now: what departNow records
+    const TWENTY_MIN_AGO = new Date(NOW.getTime() - 20 * 60_000);
+    const FORTY_MIN_AGO = new Date(NOW.getTime() - 40 * 60_000);
+
+    it('is upcoming at the instant it is posted', () => {
+      expect(at(BookingStatus.CONFIRMED, TripStatus.OPEN, JUST_POSTED, true))
+        .toBe(true);
+    });
+
+    it('is still upcoming inside the 30-minute window', () => {
+      expect(at(BookingStatus.CONFIRMED, TripStatus.OPEN, TWENTY_MIN_AGO, true))
+        .toBe(true);
+    });
+
+    it('is past once the window has shut', () => {
+      expect(at(BookingStatus.CONFIRMED, TripStatus.OPEN, FORTY_MIN_AGO, true))
+        .toBe(false);
+    });
+
+    it('the SAME departure time on a scheduled trip is past — this is the whole difference', () => {
+      // Identical inputs but for departNow. If this pair ever agrees again, the
+      // raw clock is back.
+      expect(at(BookingStatus.CONFIRMED, TripStatus.OPEN, TWENTY_MIN_AGO, false))
+        .toBe(false);
+      expect(at(BookingStatus.CONFIRMED, TripStatus.OPEN, TWENTY_MIN_AGO, true))
+        .toBe(true);
+    });
+
+    it('a terminal booking on a live departNow trip is still past', () => {
+      // Status wins over the window, in that order.
+      expect(at(BookingStatus.CANCELLED, TripStatus.OPEN, JUST_POSTED, true))
+        .toBe(false);
+    });
+  });
+
   it('defaults `now` to the real clock', () => {
     const wayBack = new Date('2000-01-01T00:00:00Z');
     expect(
@@ -83,6 +133,7 @@ describe('isBookingUpcoming', () => {
         bookingStatus: BookingStatus.CONFIRMED,
         tripStatus: TripStatus.OPEN,
         departureTime: wayBack,
+        departNow: false,
       }),
     ).toBe(false);
   });

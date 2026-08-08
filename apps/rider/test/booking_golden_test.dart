@@ -120,6 +120,37 @@ void main() {
           child: await _myBookings());
     });
   });
+
+  // The replacement for booking the same trip twice, which the server now
+  // refuses. If this sheet is unreachable or unreadable, the rider is left with
+  // strictly less than the workaround gave them.
+  group('my bookings — تعديل عدد المقاعد', () {
+    testWidgets('light', (t) async {
+      await _golden(t,
+          name: 'seat_count_sheet_light',
+          brightness: Brightness.light,
+          child: await _myBookings(),
+          afterPump: _openSeatSheet);
+    });
+    testWidgets('dark', (t) async {
+      await _golden(t,
+          name: 'seat_count_sheet_dark',
+          brightness: Brightness.dark,
+          child: await _myBookings(),
+          afterPump: _openSeatSheet);
+    });
+  });
+}
+
+/// Open the seat-count sheet and let it settle.
+///
+/// The 2 × 300ms is not padding: `AppCard`/`AppButton` cross-fade over 120ms
+/// and the sheet slides in, so a golden taken any earlier catches a colour
+/// mid-`lerp` and ships a design bug that does not exist. (CLAUDE.md → goldens.)
+Future<void> _openSeatSheet(WidgetTester tester) async {
+  await tester.tap(find.text('تعديل عدد المقاعد'));
+  await tester.pump(const Duration(milliseconds: 300));
+  await tester.pump(const Duration(milliseconds: 300));
 }
 
 Widget _bookingForm() {
@@ -293,7 +324,18 @@ Future<void> _golden(
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: theme,
-        home: Directionality(textDirection: TextDirection.rtl, child: child),
+        // RTL via `builder`, NOT by wrapping `home` — a modal route (the seat
+        // sheet, the cancel dialog) is pushed ABOVE home, so a Directionality
+        // around home does not reach it. Wrapping home was enough while every
+        // golden was a plain screen; the first sheet golden rendered
+        // left-to-right, with «عدد المقاعد» on the wrong edge and the seat
+        // choices running ١→٤ backwards, which is not what the app does:
+        // `TaxiApp` sets locale ar + RTL on the MaterialApp itself.
+        builder: (context, routeChild) => Directionality(
+          textDirection: TextDirection.rtl,
+          child: routeChild!,
+        ),
+        home: child,
       ),
     ),
   );

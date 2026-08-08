@@ -227,5 +227,26 @@ replacing `crypto.subtle.decrypt` — the async step inside
 real build with no hook in the app, and asserts the poller keeps trying and
 recovers instead of latching. Also about four minutes.
 
-> `apps/rider/web/` exists **for this test**. Phase 1 ships Android only; the web
-> target is a test harness, not a shipping platform.
+`apps/driver/e2e/my_trips_refresh.mjs` is the third, and the only one that needs
+**both** apps at once — the whole point is that a RIDER's action must change
+what the DRIVER is looking at:
+
+```bash
+# build and serve the driver app alongside the rider one
+cd apps/driver
+flutter build web --release --pwa-strategy=none --no-web-resources-cdn \
+  --dart-define=API_BASE_URL=http://127.0.0.1:3000
+(cd build/web && python3 -m http.server 8089 --bind 127.0.0.1 &)
+
+cd e2e && npm install --no-package-lock
+API_LOG=/tmp/api.log DRIVER_URL=http://127.0.0.1:8089 \
+  SUPER_ADMIN_USERNAME=… SUPER_ADMIN_PASSWORD=… node my_trips_refresh.mjs
+```
+
+It logs the driver in through the real OTP flow, opens رحلاتي, books a seat as a
+rider **over the API**, and asserts the card goes from «٤ مقاعد متاحة» to
+«٣ مقاعد متاحة» without the driver app being touched again. Needs the seed to
+have run (it approves the driver through the real admin API). About two minutes.
+
+> `apps/rider/web/` and `apps/driver/web/` exist **for these tests**. Phase 1
+> ships Android only; the web target is a test harness, not a shipping platform.

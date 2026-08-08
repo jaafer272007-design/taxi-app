@@ -21,9 +21,25 @@ import { DriverService } from '../driver/driver.service';
 import { NotificationService, NotificationPayload } from '../notification/notification.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { SearchTripsDto } from './dto/search-trips.dto';
-import { catchableTripFilter, isCatchable } from '../trip/trip-window';
-import { isBookingUpcoming, isRatableByRider } from './booking-lifecycle';
+import { catchableTripFilter, catchableUntil, isCatchable } from '../trip/trip-window';
+import {
+  isBookingUpcoming,
+  isRatableByRider,
+  TERMINAL_BOOKING_STATUSES,
+} from './booking-lifecycle';
 
+/**
+ * How long before a trip stops being catchable the rider loses free cancellation.
+ *
+ * Measured from `catchableUntil`, **not** from `departureTime**. For a scheduled
+ * trip the two are the same and this is exactly the old rule (15 minutes before
+ * departure). For a **departNow** trip `departureTime` IS the moment it was
+ * posted, so a cutoff measured from it had already expired before the booking
+ * row existed: every rider who booked a «الآن» trip got
+ * «فات وقت الإلغاء المجاني» on their first tap, and their seats stayed held for
+ * a trip they could not get out of. Measured from the window's end instead,
+ * they get the first 15 minutes of the 30-minute window.
+ */
 const CANCEL_CUTOFF_MINUTES = 15;
 
 @Injectable()
@@ -174,6 +190,31 @@ export class BookingService {
         throw new ConflictException('لم يعد المقعد متاحاً.');
       }
 
+      // ─── ONE BOOKING PER RIDER PER TRIP ──────────────────────────────────
+      // Deliberately AFTER the updateMany above, which is what makes this
+      // race-safe without a new index: that statement takes a row lock on the
+      // trip, so a second concurrent booking by the same rider blocks here
+      // until the first commits and then sees it. A pre-transaction check
+      // would let a double-tap through.
+      //
+      // Why block at all: a second row is never what the rider means — they
+      // mean "more seats" — and it silently defeats the 4-seat cap the DTO
+      // enforces (4 + 4 = 8). It also gives the driver two entries for one
+      // passenger group at one pickup point. `changeSeats` is the real answer.
+      const existing = await tx.seatBooking.findFirst({
+        where: {
+          tripId: dto.tripId,
+          riderId: userId,
+          status: { notIn: [...TERMINAL_BOOKING_STATUSES] },
+        },
+        select: { id: true },
+      });
+      if (existing) {
+        throw new ConflictException(
+          'لديك حجز على هذه الرحلة بالفعل. يمكنك تعديل عدد المقاعد بدل حجز جديد.',
+        );
+      }
+
       const afterTrip = await tx.trip.findUniqueOrThrow({ where: { id: dto.tripId } });
       // Auto-lock the trip when it fills up (business rule: lock at seatsAvailable=0).
       if (afterTrip.seatsAvailable === 0) {
@@ -268,6 +309,9 @@ export class BookingService {
           {
             bookingStatus: b.status,
             tripStatus: b.trip.status,
+            // departNow travels with departureTime or the bucket cannot tell
+            // "leaving now" from "already gone". See booking-lifecycle.ts.
+            departNow: b.trip.departNow,
             departureTime: b.trip.departureTime,
           },
           now,
@@ -280,6 +324,89 @@ export class BookingService {
         ratable: isRatableByRider(b.status, b.trip.status),
         ratedDriver: driver ? ratedPairs.has(`${b.tripId}:${driver.userId}`) : false,
       };
+    });
+  }
+
+  /**
+   * Change how many seats a booking holds (owning rider).
+   *
+   * ## Why this exists
+   *
+   * Until now there was no way to edit a booking at all, so a rider who needed
+   * one more seat booked the same trip a second time. That workaround is now
+   * refused (see `book`), which would leave them strictly worse off if this did
+   * not exist — cancel-and-rebook risks losing the seats to someone else in the
+   * gap, on a corridor where a trip fills in minutes.
+   *
+   * The seat delta goes through the SAME atomic guard as a first booking:
+   * growing re-runs the overbooking-safe `updateMany`, shrinking returns seats
+   * and reopens a trip that had locked. Never a read-then-write.
+   */
+  async changeSeats(userId: string, bookingId: string, seatCount: number): Promise<SeatBooking> {
+    const booking = await this.prisma.seatBooking.findUnique({
+      where: { id: bookingId },
+      include: { trip: true },
+    });
+    if (!booking) {
+      throw new NotFoundException('الحجز غير موجود.');
+    }
+    if (booking.riderId !== userId) {
+      throw new ForbiddenException('هذا ليس حجزك.');
+    }
+    if (booking.status !== BookingStatus.CONFIRMED) {
+      throw new ConflictException('لا يمكن تعديل هذا الحجز.');
+    }
+    const trip = booking.trip;
+    if (trip.status === TripStatus.EN_ROUTE || trip.status === TripStatus.COMPLETED) {
+      throw new ConflictException('لا يمكن التعديل بعد بدء الرحلة.');
+    }
+    // The same deadline as cancelling, for the same reason and from the same
+    // source of truth — a rider must not be able to shrink a booking at a
+    // moment they would not be allowed to drop it.
+    const cutoffMs = catchableUntil(trip).getTime() - CANCEL_CUTOFF_MINUTES * 60 * 1000;
+    if (Date.now() >= cutoffMs) {
+      throw new ConflictException('فات وقت تعديل الحجز (قبل 15 دقيقة من المغادرة).');
+    }
+    // Idempotent: asking for the count it already has is success, not a 409.
+    if (seatCount === booking.seatCount) return booking;
+
+    const delta = seatCount - booking.seatCount;
+
+    return this.prisma.$transaction(async (tx) => {
+      if (delta > 0) {
+        // Same WHERE guard as booking: exactly one UPDATE wins the last seat.
+        const reserved = await tx.trip.updateMany({
+          where: { id: trip.id, status: TripStatus.OPEN, seatsAvailable: { gte: delta } },
+          data: { seatsAvailable: { decrement: delta } },
+        });
+        if (reserved.count !== 1) {
+          throw new ConflictException('المقاعد المطلوبة غير متاحة.');
+        }
+        const afterTrip = await tx.trip.findUniqueOrThrow({ where: { id: trip.id } });
+        if (afterTrip.seatsAvailable === 0) {
+          await tx.trip.update({ where: { id: trip.id }, data: { status: TripStatus.LOCKED } });
+        }
+      } else {
+        await tx.trip.update({
+          where: { id: trip.id },
+          data: { seatsAvailable: { increment: -delta } },
+        });
+        // Freed seats make a full trip bookable again — same rule as cancel.
+        const afterTrip = await tx.trip.findUniqueOrThrow({ where: { id: trip.id } });
+        if (afterTrip.status === TripStatus.LOCKED && isCatchable(afterTrip)) {
+          await tx.trip.update({ where: { id: trip.id }, data: { status: TripStatus.OPEN } });
+        }
+      }
+
+      // Re-assert CONFIRMED so a concurrent cancel cannot be overwritten.
+      const changed = await tx.seatBooking.updateMany({
+        where: { id: bookingId, status: BookingStatus.CONFIRMED },
+        data: { seatCount, fare: trip.pricePerSeat * seatCount },
+      });
+      if (changed.count !== 1) {
+        throw new ConflictException('تم تغيير حالة الحجز. حدّث الصفحة وحاول مرة أخرى.');
+      }
+      return tx.seatBooking.findUniqueOrThrow({ where: { id: bookingId } });
     });
   }
 
@@ -302,7 +429,7 @@ export class BookingService {
     if (trip.status === TripStatus.EN_ROUTE || trip.status === TripStatus.COMPLETED) {
       throw new ConflictException('لا يمكن الإلغاء بعد بدء الرحلة.');
     }
-    const cutoffMs = trip.departureTime.getTime() - CANCEL_CUTOFF_MINUTES * 60 * 1000;
+    const cutoffMs = catchableUntil(trip).getTime() - CANCEL_CUTOFF_MINUTES * 60 * 1000;
     if (Date.now() >= cutoffMs) {
       throw new ConflictException('فات وقت الإلغاء المجاني (قبل 15 دقيقة من المغادرة).');
     }
@@ -323,9 +450,15 @@ export class BookingService {
         data: { seatsAvailable: { increment: booking.seatCount } },
       });
 
-      // Reopen a full-but-not-departed trip so freed seats are bookable again.
+      // Reopen a full-but-still-live trip so freed seats are bookable again.
+      //
+      // `isCatchable`, NOT `departureTime > now` — which is what this said, and
+      // was the same departNow bug in a fourth place: a rider cancelling a seat
+      // on a full «الآن» trip left it LOCKED for the rest of its window, so the
+      // freed seat was never offered to anyone and the driver drove with an
+      // empty place.
       const afterTrip = await tx.trip.findUniqueOrThrow({ where: { id: trip.id } });
-      if (afterTrip.status === TripStatus.LOCKED && afterTrip.departureTime.getTime() > Date.now()) {
+      if (afterTrip.status === TripStatus.LOCKED && isCatchable(afterTrip)) {
         await tx.trip.update({ where: { id: trip.id }, data: { status: TripStatus.OPEN } });
       }
 
