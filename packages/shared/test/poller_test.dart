@@ -228,6 +228,151 @@ void main() {
     p.dispose();
   });
 
+  group('the watchdog — a hung poll must not silence the scope forever', () {
+    // THE FAILURE THIS EXISTS FOR: _inFlight is a latch. Before the watchdog, an
+    // onPoll that never completed made every later tick return at the guard, for
+    // the life of the screen — while isTicking went on reporting true. A silent
+    // failure that reports itself as healthy.
+
+    testWidgets('a never-completing poll is abandoned and polling resumes',
+        (t) async {
+      await boot(t);
+      var starts = 0;
+      final wedge = Completer<void>();
+      final p = Poller(
+        interval: const Duration(seconds: 10),
+        watchdog: const Duration(seconds: 45),
+        onPoll: () {
+          starts++;
+          // The first poll never completes. Every later one is instant.
+          return starts == 1 ? wedge.future : Future<void>.value();
+        },
+      );
+
+      p.start();
+      p.setActive(true);
+      await t.pump();
+      expect(starts, 1);
+
+      // Under the watchdog, the latch holds — this is "polls never stack".
+      await t.pump(const Duration(seconds: 40));
+      expect(starts, 1, reason: 'a slow request must not be given a queue');
+      expect(p.isPolling, isTrue);
+
+      // Past it, the scope recovers on the next tick instead of dying.
+      await t.pump(const Duration(seconds: 10));
+      expect(p.stalls, 1);
+      expect(starts, greaterThan(1), reason: 'the latch cleared');
+
+      await t.pump(const Duration(seconds: 10));
+      expect(starts, greaterThan(2), reason: 'and it keeps going');
+
+      wedge.complete();
+      await t.pump();
+      p.dispose();
+    });
+
+    testWidgets('isTicking lies; isHealthy does not', (t) async {
+      await boot(t);
+      final wedge = Completer<void>();
+      var starts = 0;
+      final p = Poller(
+        interval: const Duration(seconds: 10),
+        watchdog: const Duration(seconds: 45),
+        onPoll: () {
+          starts++;
+          return starts == 1 ? wedge.future : Future<void>.value();
+        },
+      );
+
+      p.start();
+      p.setActive(true);
+      await t.pump();
+      expect(p.isHealthy, isTrue);
+
+      // Land BETWEEN the watchdog (45s) and the next tick (50s): pumping to
+      // exactly 50s would run the replacement poll in the same pump and clear
+      // the stall before it could be observed.
+      await t.pump(const Duration(seconds: 47));
+      expect(p.isTicking, isTrue, reason: 'the timer really is still running');
+      expect(p.isStalled, isTrue);
+      expect(p.isHealthy, isFalse, reason: 'and that is the honest answer');
+
+      // A poll that lands clears it again.
+      await t.pump(const Duration(seconds: 10));
+      expect(p.isStalled, isFalse);
+      expect(p.isHealthy, isTrue);
+
+      wedge.complete();
+      await t.pump();
+      p.dispose();
+    });
+
+    testWidgets('a stall is reported, because nobody else will notice',
+        (t) async {
+      await boot(t);
+      final wedge = Completer<void>();
+      final stalls = <Duration>[];
+      final p = Poller(
+        interval: const Duration(seconds: 10),
+        watchdog: const Duration(seconds: 45),
+        onStall: stalls.add,
+        onPoll: () => wedge.isCompleted ? Future<void>.value() : wedge.future,
+      );
+
+      p.start();
+      p.setActive(true);
+      await t.pump(const Duration(seconds: 50));
+
+      expect(stalls, [const Duration(seconds: 45)]);
+
+      wedge.complete();
+      await t.pump();
+      p.dispose();
+    });
+
+    testWidgets('never two polls at once, even across a stall', (t) async {
+      // The locked rule, checked against the watchdog specifically: at the
+      // moment the latch clears, exactly ONE new poll may start.
+      await boot(t);
+      var concurrent = 0;
+      var peak = 0;
+      final wedge = Completer<void>();
+      var first = true;
+      final p = Poller(
+        interval: const Duration(seconds: 5),
+        watchdog: const Duration(seconds: 45),
+        onPoll: () async {
+          concurrent++;
+          peak = peak > concurrent ? peak : concurrent;
+          if (first) {
+            first = false;
+            await wedge.future; // hangs past the watchdog
+          }
+          concurrent--;
+        },
+      );
+
+      p.start();
+      p.setActive(true);
+      await t.pump();
+      // Nine ticks pass under the watchdog, then several past it.
+      for (var i = 0; i < 20; i++) {
+        await t.pump(const Duration(seconds: 5));
+      }
+
+      // The abandoned poll is still "running" (its future is unresolved), so a
+      // naive count would see 2. What must never happen is a QUEUE.
+      expect(peak, lessThanOrEqualTo(2),
+          reason: 'at most the abandoned poll plus one replacement');
+      expect(p.stalls, 1, reason: 'one stall, not one per skipped tick');
+
+      wedge.complete();
+      await t.pump();
+      p.dispose();
+    });
+  });
+
   testWidgets('dispose cancels the timer and later calls are inert', (t) async {
     await boot(t);
     var calls = 0;

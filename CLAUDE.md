@@ -220,12 +220,51 @@ trip with booked seats and the riders found out by arriving at the pickup point.
   direct call on the State — which also proves the scope is registered at all),
   and `apps/rider/e2e/polling_lifecycle.mjs` runs the real `flutter build web`
   in Chromium and asserts requests keep flowing across a genuine window blur.
-- **Known, unfixed:** `Poller._inFlight` is a latch, so an `onPoll` future that
-  never completes silences that scope for the life of the screen while
-  `isTicking` still reports true. Dio's timeouts are applied in the adapter —
-  after the interceptor chain — so the `tokenStore.read()` await in `ApiClient`
-  sits outside that budget. A watchdog is the fix but it trades against "polls
-  never stack", so it wants its own change and its own test.
+- **Every await on the poll path is BOUNDED, and `isTicking` is not a health
+  check.** `Poller._inFlight` is a latch: until an `onPoll` future completes,
+  every later tick returns at the guard. One await that never finishes therefore
+  silenced that screen for as long as it stayed open — and `isTicking` went on
+  reporting true, a silent failure that reported itself as healthy. Measured in
+  Chromium: **one** hung read, then the scope was dead, and it **never recovered
+  even after the fault cleared**.
+- **`connectTimeout + receiveTimeout` is NOT a total request bound.** Believing
+  it was is the trap. On web it happens to be one (`dio_web_adapter` sets
+  `xhr.timeout = connect + receive`; a stalled endpoint was measured aborting at
+  15s, one request at a time). **On Android it is not:** `receiveTimeout` is an
+  inter-chunk idle timer, re-armed on every chunk (dio
+  `response_stream_handler.dart`: "between received chunks"), so a peer dripping
+  a byte every 14s keeps one request alive for ever.
+  - So the total bound is ours: `kRequestDeadline` (45s) armed by the **first**
+    interceptor in `ApiClient`. Dio reads `requestOptions.cancelToken` *lazily*,
+    inside the closure it wraps each interceptor in (`dio_mixin.dart`
+    `requestInterceptorWrapper` → `listenCancelForAsyncTask`, i.e.
+    `Future.any([work, cancelToken.whenCancel])`), so a token armed there bounds
+    every later interceptor — including the JWT read — and the adapter.
+  - It **cancels**, it does not merely give up. That is what makes the whole
+    design safe against "polls never stack": when the poller recovers there is
+    provably nothing still on the wire. `Future.timeout` does NOT cancel
+    (dart-sdk `future.dart` — it completes a *new* future and leaves the source
+    running), so a watchdog alone would have allowed exactly the overlap the
+    rule forbids.
+  - `kTokenReadTimeout` (5s) bounds the JWT read specifically and **rejects**
+    rather than continuing unauthenticated — a 401 would read as "your session
+    expired" and bounce the user to login over a keystore hiccup. It rejects
+    with a `DioException` so `mapDioError` still speaks Arabic; an error thrown
+    out of an interceptor is not one, and would sail past every mapper.
+  - `kPollWatchdog` (150s) is the last resort for an await nobody bounded. Its
+    value is arithmetic, not taste: the slowest `onPoll` is حجوزاتي, which awaits
+    `listMine` and *then* fans out to the contact endpoints — two sequential
+    request phases, so 2 × 45s = 90s, and 150s clears that.
+  - Ask `isHealthy`, not `isTicking`. `stalls` counts watchdog trips and stays 0
+    in a healthy app.
+- **Inducing a hang needs no test hook.** On web `flutter_secure_storage`
+  decrypts the JWT with `crypto.subtle.decrypt`, so replacing that one browser
+  API with a promise that never resolves hangs the token read exactly as a
+  wedged platform channel would — in the real production build.
+  `apps/rider/e2e/poll_recovery.mjs` does that and counts token-read ATTEMPTS
+  (nothing reaches the wire once the read is bounded, because the request is
+  rejected before the adapter): **1 attempt = latched, one per interval =
+  alive.** Measured 1 before the fix, 3 after.
 - **Never poll a terminal screen.** `enabled:` is false when there is nothing
   left to learn — a settled trip, a history of finished bookings.
 - **A background refresh is silent, always.** Controllers take `load({silent})`
