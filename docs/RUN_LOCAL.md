@@ -220,5 +220,12 @@ It logs in through the real OTP flow, then measures `GET /notifications` across
 three ~70s windows — focused, blurred, refocused — and fails if the middle one
 is silent. Takes about four minutes.
 
+`poll_recovery.mjs` is the second guard, run the same way
+(`API_LOG=/tmp/api.log node poll_recovery.mjs`). It hangs the JWT read by
+replacing `crypto.subtle.decrypt` — the async step inside
+`flutter_secure_storage`'s web read — so a wedged keystore is reproduced in the
+real build with no hook in the app, and asserts the poller keeps trying and
+recovers instead of latching. Also about four minutes.
+
 > `apps/rider/web/` exists **for this test**. Phase 1 ships Android only; the web
 > target is a test harness, not a shipping platform.

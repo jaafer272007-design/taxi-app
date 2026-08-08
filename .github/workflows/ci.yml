@@ -427,14 +427,28 @@ jobs:
             curl -sf http://127.0.0.1:8088/ >/dev/null && break || sleep 1
           done
 
-      - name: Run the polling lifecycle test
+      - name: Install browser test deps
         working-directory: apps/rider/e2e
-        env:
-          API_LOG: ${{ github.workspace }}/api.log
         run: |
           npm install --no-package-lock
           npx playwright install --with-deps chromium
-          node polling_lifecycle.mjs
+
+      # Does a blur kill every poll? (AppLifecycleState.inactive is VISIBLE.)
+      - name: Polling survives losing window focus
+        working-directory: apps/rider/e2e
+        env:
+          API_LOG: ${{ github.workspace }}/api.log
+        run: node polling_lifecycle.mjs
+
+      # Does one hung request silence a screen for ever? Hangs the token read
+      # by replacing crypto.subtle.decrypt — the async step inside
+      # flutter_secure_storage's web read — so the fault is induced in the real
+      # production build with no test hook in the app.
+      - name: A hung poll recovers instead of latching
+        working-directory: apps/rider/e2e
+        env:
+          API_LOG: ${{ github.workspace }}/api.log
+        run: node poll_recovery.mjs
 
       - name: Upload failure artifacts
         if: failure()
