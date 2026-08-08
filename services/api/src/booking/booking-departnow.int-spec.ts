@@ -7,6 +7,7 @@ import { StorageService } from '../storage/storage.service';
 import { NotificationService } from '../notification/notification.service';
 import { TripService } from '../trip/trip.service';
 import { BookingService } from './booking.service';
+import { NoShowService } from './no-show.service';
 
 /**
  * THE MONEY BUG, against a REAL database.
@@ -177,8 +178,9 @@ beforeAll(async () => {
   const notifications = new NotificationService(prisma, config);
   const drivers = new DriverService(prisma, {} as StorageService);
   const corridors = new CorridorService(prisma);
-  trips = new TripService(prisma, drivers, corridors, notifications);
-  bookings = new BookingService(prisma, drivers, notifications);
+  const noShows = new NoShowService(prisma, config);
+  trips = new TripService(prisma, drivers, corridors, notifications, noShows);
+  bookings = new BookingService(prisma, drivers, notifications, noShows);
 });
 
 afterAll(async () => {

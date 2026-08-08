@@ -20,6 +20,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { DriverService } from '../driver/driver.service';
 import { CorridorService } from '../corridor/corridor.service';
+import { NoShowService } from '../booking/no-show.service';
 import { NotificationService, NotificationPayload } from '../notification/notification.service';
 import { CreateTripDto } from './dto/create-trip.dto';
 import { UpdateTripDto } from './dto/update-trip.dto';
@@ -44,6 +45,14 @@ export interface TripBookingView {
   id: string;
   riderId: string;
   riderName: string | null;
+  /**
+   * Non-voided no-shows by this rider inside the policy window.
+   *
+   * A COUNT, never a label. The driver carries the cost of a no-show and is
+   * entitled to see the record; deciding what the number means about a person
+   * is theirs, not the app's.
+   */
+  riderNoShowCount: number;
   seatCount: number;
   pickupLat: number;
   pickupLng: number;
@@ -65,6 +74,7 @@ export class TripService {
     private readonly drivers: DriverService,
     private readonly corridors: CorridorService,
     private readonly notifications: NotificationService,
+    private readonly noShows: NoShowService,
   ) {}
 
   /** Driver posts a trip. Only an APPROVED driver may create one. */
@@ -168,16 +178,29 @@ export class TripService {
     }
 
     const riderIds = [...new Set(bookings.map((b) => b.riderId))];
-    const riders = await this.prisma.user.findMany({
-      where: { id: { in: riderIds } },
-      select: { id: true, name: true },
-    });
+    const [riders, noShowCounts] = await Promise.all([
+      this.prisma.user.findMany({
+        where: { id: { in: riderIds } },
+        select: { id: true, name: true },
+      }),
+      // How many times each rider has failed to turn up recently.
+      //
+      // The driver is the one who eats the cost of a no-show — a quarter of a
+      // four-seat trip's income — so they are the one who should be able to see
+      // it coming. Kept as a plain COUNT and never a label: this screen shows
+      // people the driver is about to spend an hour in a car with, and
+      // «unreliable» is a judgement the app has no business making on the
+      // strength of three rows.
+      this.noShows.countsFor(riderIds),
+    ]);
     const nameById = new Map(riders.map((r) => [r.id, r.name]));
 
     return bookings.map((b) => ({
       id: b.id,
       riderId: b.riderId,
       riderName: nameById.get(b.riderId) ?? null,
+      /** Non-voided no-shows inside the policy window. 0 for almost everyone. */
+      riderNoShowCount: noShowCounts.get(b.riderId) ?? 0,
       seatCount: b.seatCount,
       pickupLat: b.pickupLat,
       pickupLng: b.pickupLng,

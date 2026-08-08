@@ -6,6 +6,7 @@ import { StorageService } from '../storage/storage.service';
 import { ConfigService } from '@nestjs/config';
 import { TripService } from '../trip/trip.service';
 import { BookingService } from '../booking/booking.service';
+import { NoShowService } from '../booking/no-show.service';
 import { NotificationService } from './notification.service';
 
 /**
@@ -152,8 +153,9 @@ beforeAll(async () => {
   const notifications = new NotificationService(prisma, config);
   const drivers = new DriverService(prisma, {} as StorageService);
   const corridors = new CorridorService(prisma);
-  trips = new TripService(prisma, drivers, corridors, notifications);
-  bookings = new BookingService(prisma, drivers, notifications);
+  const noShows = new NoShowService(prisma, config);
+  trips = new TripService(prisma, drivers, corridors, notifications, noShows);
+  bookings = new BookingService(prisma, drivers, notifications, noShows);
 });
 
 afterAll(async () => {

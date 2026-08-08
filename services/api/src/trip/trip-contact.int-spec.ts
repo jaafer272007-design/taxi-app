@@ -1,3 +1,4 @@
+import { ConfigService } from '@nestjs/config';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { BookingStatus, DriverStatus, Gender, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -6,6 +7,7 @@ import { CorridorService } from '../corridor/corridor.service';
 import { NotificationService } from '../notification/notification.service';
 import { StorageService } from '../storage/storage.service';
 import { BookingService } from '../booking/booking.service';
+import { NoShowService } from '../booking/no-show.service';
 import { TripService } from './trip.service';
 import { TripContactService } from './trip-contact.service';
 
@@ -175,8 +177,10 @@ beforeAll(async () => {
   const notifications = { send: async () => {} } as unknown as NotificationService;
   const drivers = new DriverService(prisma, {} as StorageService);
   const corridors = new CorridorService(prisma);
-  trips = new TripService(prisma, drivers, corridors, notifications);
-  bookings = new BookingService(prisma, drivers, notifications);
+  const config = { get: () => undefined } as unknown as ConfigService;
+  const noShows = new NoShowService(prisma, config);
+  trips = new TripService(prisma, drivers, corridors, notifications, noShows);
+  bookings = new BookingService(prisma, drivers, notifications, noShows);
   contacts = new TripContactService(prisma, drivers);
 });
 
