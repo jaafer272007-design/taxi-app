@@ -339,7 +339,7 @@ jobs:
   # keep flowing across a window blur — the exact thing that happens when the
   # driver app is brought to the front.
   rider-polling:
-    name: apps/rider (polling lifecycle, real browser)
+    name: apps/rider + apps/driver (refresh & polling, real browser)
     runs-on: ubuntu-latest
 
     env:
@@ -427,6 +427,21 @@ jobs:
             curl -sf http://127.0.0.1:8088/ >/dev/null && break || sleep 1
           done
 
+      # The driver app too: the رحلاتي guard needs BOTH apps against one API,
+      # because the whole point is that a RIDER's action changes what the
+      # DRIVER is looking at.
+      - name: Build and serve the driver web app
+        working-directory: apps/driver
+        run: |
+          flutter pub get
+          flutter build web --release --pwa-strategy=none --no-web-resources-cdn \
+            --dart-define=API_BASE_URL=http://127.0.0.1:3000
+          cd build/web
+          python3 -m http.server 8089 --bind 127.0.0.1 &
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8089/ >/dev/null && break || sleep 1
+          done
+
       - name: Install browser test deps
         working-directory: apps/rider/e2e
         run: |
@@ -449,6 +464,22 @@ jobs:
         env:
           API_LOG: ${{ github.workspace }}/api.log
         run: node poll_recovery.mjs
+
+      # Does the driver's رحلاتي notice a rider taking a seat? Two real web
+      # builds, one real API, and the driver app is never touched after the tab
+      # is opened. A widget test cannot find this: nothing was calling the
+      # controller at all.
+      - name: The driver's رحلاتي refreshes without being touched
+        working-directory: apps/driver/e2e
+        env:
+          # SUPER_ADMIN_* come from the job env, which is what the seed above
+          # ran with — overriding them here would authenticate as an admin that
+          # was never created.
+          API_LOG: ${{ github.workspace }}/api.log
+          DRIVER_URL: http://127.0.0.1:8089
+        run: |
+          npm install --no-package-lock
+          node my_trips_refresh.mjs
 
       - name: Upload failure artifacts
         if: failure()

@@ -1,0 +1,12 @@
+{
+  "name": "driver-e2e",
+  "private": true,
+  "type": "module",
+  "description": "Browser-level regression guard: رحلاتي must refresh on its own when a rider books. Not shipped.",
+  "scripts": {
+    "test:refresh": "node my_trips_refresh.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1"
+  }
+}

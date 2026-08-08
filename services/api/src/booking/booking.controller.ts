@@ -1,7 +1,18 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { BookingService } from './booking.service';
+import { ChangeSeatsDto } from './dto/change-seats.dto';
 import { CreateBookingDto } from './dto/create-booking.dto';
 
 @Controller('bookings')
@@ -17,6 +28,16 @@ export class BookingController {
   @Get('mine')
   mine(@CurrentUser('id') userId: string) {
     return this.bookings.listMine(userId);
+  }
+
+  /** Change the seat count on a live booking — the answer to "I need one more". */
+  @Patch(':id')
+  changeSeats(
+    @CurrentUser('id') userId: string,
+    @Param('id') id: string,
+    @Body() dto: ChangeSeatsDto,
+  ) {
+    return this.bookings.changeSeats(userId, id, dto.seatCount);
   }
 
   @Post(':id/cancel')

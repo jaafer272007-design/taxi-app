@@ -65,6 +65,11 @@ class MyBookingsController extends ChangeNotifier {
   bool canCancel(Booking b) =>
       (b.upcoming ?? false) && b.status == BookingStatus.confirmed;
 
+  /// The seat count can be changed under exactly the same conditions as
+  /// cancelling — the server derives both from the same deadline, and an action
+  /// the UI offers and the server refuses is worse than no action.
+  bool canChangeSeats(Booking b) => canCancel(b);
+
   /// A BACKGROUND refresh: no spinner, and **no clearing on failure**.
   ///
   /// This is what the poll and the pull-to-refresh call. A rider watching for
@@ -152,6 +157,34 @@ class MyBookingsController extends ChangeNotifier {
       (b.upcoming ?? false) &&
       b.status != BookingStatus.cancelled;
 
+  /// Change how many seats a booking holds.
+  ///
+  /// Returns null on success, else a ready-to-show Arabic message — notably the
+  /// server's «المقاعد المطلوبة غير متاحة.» when the rider asks for more seats
+  /// than the trip still has. Reuses the [_cancelling] latch so the card's
+  /// buttons are busy together and a double-tap cannot fire two changes.
+  Future<String?> changeSeats(String bookingId, int seatCount) async {
+    if (_cancelling.contains(bookingId)) return null;
+    _cancelling.add(bookingId);
+    notifyListeners();
+    try {
+      final updated =
+          await _api.changeSeats(bookingId: bookingId, seatCount: seatCount);
+      _bookings = [
+        for (final b in _bookings)
+          if (b.id == bookingId) _withSeats(b, updated) else b,
+      ];
+      return null;
+    } on ApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'تعذّر تعديل الحجز. حاول مرة أخرى.';
+    } finally {
+      _cancelling.remove(bookingId);
+      notifyListeners();
+    }
+  }
+
   /// Cancel a booking. Returns null on success, else an Arabic message (e.g.
   /// past the cutoff) for the caller to surface. Guards double-cancel.
   Future<String?> cancel(String bookingId) async {
@@ -178,6 +211,24 @@ class MyBookingsController extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  /// Take the seat count and fare from the server's answer, keep everything the
+  /// PATCH response does not carry (it returns the booking alone, so `trip`,
+  /// `upcoming` and the rating fields are absent and must not be dropped).
+  Booking _withSeats(Booking b, Booking updated) => Booking(
+        id: b.id,
+        seatCount: updated.seatCount,
+        fare: updated.fare,
+        status: updated.status,
+        pickup: b.pickup,
+        dropoff: b.dropoff,
+        trip: b.trip,
+        upcoming: b.upcoming,
+        driverUserId: b.driverUserId,
+        driverName: b.driverName,
+        ratable: b.ratable,
+        ratedDriver: b.ratedDriver,
+      );
 
   Booking _withStatus(Booking b, BookingStatus status) => Booking(
         id: b.id,

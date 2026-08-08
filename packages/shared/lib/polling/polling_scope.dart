@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'poller.dart';
@@ -66,6 +68,7 @@ class PollingScope extends StatefulWidget {
     required this.child,
     this.enabled = true,
     this.pauseWhenObscured = true,
+    this.refreshWhenVisible = false,
   });
 
   final Duration interval;
@@ -85,6 +88,28 @@ class PollingScope extends StatefulWidget {
   /// booking form would silence it — which is exactly the screen someone is on
   /// while the driver cancels underneath them.
   final bool pauseWhenObscured;
+
+  /// Refresh ONCE whenever this screen comes back into view, even when
+  /// [enabled] is false.
+  ///
+  /// ─── WHY "DOES IT TICK" AND "IS IT STALE" ARE DIFFERENT QUESTIONS ────────
+  ///
+  /// [enabled] answers *can this change while I watch it*. It is false for the
+  /// driver's أرباحي (earnings move when they complete a trip, on another
+  /// screen) and for حجوزاتي holding no live booking — and rightly so: a beat
+  /// there would ask the server the same question forever.
+  ///
+  /// But every one of those screens loads once, guarded by `hasLoaded`, and
+  /// then never loads again. So the driver completed a trip and أرباحي kept
+  /// showing yesterday's total until the app was restarted, and a rider who
+  /// opened حجوزاتي before their first booking saw «لا توجد حجوزات بعد» for
+  /// ever. Nothing was polling because nothing *should* have been polling; the
+  /// missing piece was re-asking on the way back in.
+  ///
+  /// Fires on transitions only — never on the first gate application, because
+  /// the screen's own `initState` does that first load and it must be the
+  /// visible one that can show a spinner and an error.
+  final bool refreshWhenVisible;
 
   @override
   State<PollingScope> createState() => _PollingScopeState();
@@ -180,10 +205,24 @@ class _PollingScopeState extends State<PollingScope>
     _applyGate();
   }
 
+  /// The last gate result. Null until the first application, which is what
+  /// keeps [PollingScope.refreshWhenVisible] from firing on mount.
+  bool? _onScreen;
+
   void _applyGate() {
     final onScreen =
         widget.pauseWhenObscured ? (_routeOnTop && _tabVisible) : true;
-    _poller.setActive(_foreground && onScreen);
+    final active = _foreground && onScreen;
+    final cameBack = _onScreen == false && active;
+    _onScreen = active;
+
+    _poller.setActive(active);
+
+    // When enabled, `setActive` already fires `pollOnResume` — firing again
+    // here would put two requests on the wire for one tab switch.
+    if (cameBack && !widget.enabled && widget.refreshWhenVisible) {
+      unawaited(_poller.pollNow());
+    }
   }
 
   @override

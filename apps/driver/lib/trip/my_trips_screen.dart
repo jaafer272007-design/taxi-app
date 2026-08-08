@@ -10,6 +10,20 @@ import 'trip_detail_screen.dart';
 
 /// "رحلاتي": the driver's posted trips (GET /trips/mine), newest first, each with
 /// route, time, seats, price and a status pill.
+///
+/// ## Why this polls
+///
+/// The seat count on these cards is the number a driver reads to decide whether
+/// to wait for another passenger, and it changes because a RIDER acted — which
+/// is precisely the kind of change the driver cannot cause and therefore cannot
+/// anticipate. This screen shipped with no poller at all: the in-app
+/// notification for a new booking arrived (that poll is app-wide and was fine),
+/// while the list behind it kept showing the seat count from whenever the tab
+/// was first opened. The only way to correct it was to tap into a trip.
+///
+/// [kMyTripsPollInterval] while any trip is still live; a finished history has
+/// nothing to learn and is not polled. `refreshWhenVisible` covers the gap that
+/// leaves — coming back to a list of only-finished trips still re-asks once.
 class MyTripsScreen extends StatefulWidget {
   const MyTripsScreen({super.key});
 
@@ -32,6 +46,16 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
   Widget build(BuildContext context) {
     final c = context.watch<MyTripsController>();
 
+    return PollingScope(
+      interval: kMyTripsPollInterval,
+      enabled: c.hasLiveTrips,
+      refreshWhenVisible: true,
+      onPoll: c.refreshSilently,
+      child: _body(c),
+    );
+  }
+
+  Widget _body(MyTripsController c) {
     return AppScaffold(
       title: 'رحلاتي',
       padded: false,
@@ -48,6 +72,13 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
     );
   }
 }
+
+/// How often رحلاتي re-asks while any trip is still live.
+///
+/// 20 seconds — the same beat as the driver's trip detail, and for the same
+/// reason: what changes here is a rider taking or releasing a seat, and the
+/// driver may be about to pull away on the strength of that number.
+const Duration kMyTripsPollInterval = Duration(seconds: 20);
 
 class _TripsList extends StatelessWidget {
   const _TripsList({required this.controller});

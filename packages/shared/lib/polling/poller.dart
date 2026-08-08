@@ -136,6 +136,15 @@ class Poller {
     }
   }
 
+  /// Run one poll right now, outside the timer and without starting it.
+  ///
+  /// For a screen that has nothing to learn while you watch it but everything
+  /// to learn when you come back to it — the driver's أرباحي changes only when
+  /// they complete a trip, which happens on a different screen. Deliberately
+  /// routed through [_tick] rather than calling `onPoll` directly, so it
+  /// inherits the no-stacking latch and the watchdog like every other poll.
+  Future<void> pollNow() => _tick();
+
   void dispose() {
     _disposed = true;
     _timer?.cancel();

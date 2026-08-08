@@ -28,6 +28,11 @@ class FakeBookingApi implements BookingApi {
   Booking? cancelResult;
   Object? cancelError;
 
+  // changeSeats
+  final List<({String bookingId, int seatCount})> changeSeatsCalls = [];
+  Booking? changeSeatsResult;
+  Object? changeSeatsError;
+
   // driverContact — null by default, so a test has to opt IN to a number being
   // available. That is the same default the server enforces: no booking, no
   // phone.
@@ -70,6 +75,17 @@ class FakeBookingApi implements BookingApi {
     if (cancelError != null) throw cancelError!;
     return cancelResult ??
         bookingFixture(id: bookingId, status: BookingStatus.cancelled);
+  }
+
+  @override
+  Future<Booking> changeSeats({
+    required String bookingId,
+    required int seatCount,
+  }) async {
+    changeSeatsCalls.add((bookingId: bookingId, seatCount: seatCount));
+    if (changeSeatsError != null) throw changeSeatsError!;
+    return changeSeatsResult ??
+        bookingFixture(id: bookingId, seatCount: seatCount);
   }
 
   @override

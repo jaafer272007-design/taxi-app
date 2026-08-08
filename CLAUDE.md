@@ -281,10 +281,43 @@ trip with booked seats and the riders found out by arriving at the pickup point.
 |---|---|---|
 | rider — نتائج البحث | **15s** | always on screen (an «الآن» trip appears *and expires* inside 30 min) |
 | rider — حجوزاتي | **30s** | any upcoming, non-cancelled, non-completed booking |
+| driver — رحلاتي | **20s** | any trip `OPEN` / `LOCKED` / `EN_ROUTE` |
 | driver — تفاصيل الرحلة | **20s** | `OPEN` / `LOCKED` / `EN_ROUTE` |
+| driver — أرباحي | — | never polls; `refreshWhenVisible` only |
 | both — notification badge | **30s** | authenticated (app-shell wide, so a cancellation reaches the user on *any* screen) |
 
 Every list screen (both apps) has pull-to-refresh regardless of whether it polls.
+
+- **"Does it tick" and "is it stale" are DIFFERENT questions, and answering only
+  the first left three screens frozen.** Every list loads once behind
+  `if (!c.hasLoaded) c.load()` and then never again, so a screen with no reason
+  to *tick* also had no way to ever *reload*. `PollingScope(refreshWhenVisible:
+  true)` re-asks exactly once when the screen comes back into view, independent
+  of `enabled`; it fires on transitions only, so the screen's own `initState`
+  still owns the first, visible load.
+  - driver **رحلاتي** shipped with no `PollingScope` at all. The rider's booking
+    notification arrived (that poll is app-wide) while the card behind it kept
+    the seat count from whenever the tab was opened — a driver decides whether
+    to wait for another passenger on that number. Measured in Chromium:
+    **stale for 60s+ without the scope, correct in ~20s with it.**
+  - driver **أرباحي** is deliberately `enabled: false` — earnings move only when
+    the driver completes a trip, on another screen — but it needed
+    `refreshWhenVisible`, or it showed the total from before their own trip
+    until the app was restarted.
+  - rider **حجوزاتي** polls only while it holds a live booking, which is right,
+    but a rider who opened it *before* booking anything had an empty list, no
+    tick, and no reload — so their first booking never appeared.
+- **A widget test cannot find this class of bug.** It asserts what a controller
+  does when something calls it; here nothing was calling it. The guard is
+  `apps/driver/e2e/my_trips_refresh.mjs`, which runs BOTH real web builds against
+  one real backend, books a seat over the API, and asserts the driver's card
+  changes with **no interaction at all**. Verified by deletion: remove the scope
+  and it fails.
+  - **Assert the rendered Arabic, not a digit.** The first version of that spec
+    booked 2 seats and looked for «٢» — which can never appear, because
+    `SeatGlyphs.label(2)` is the dual «مقعدان متاحان» and the label always ends
+    «من ٤» with the total. It books **1** seat and matches «٣ مقاعد متاحة».
+    Same trap as the golden fixtures: at 2 there is no numeral to see.
 
 ### The admin panel (`/apps/admin`)
 
@@ -379,6 +412,66 @@ sends an event any other way. Details and the per-side event matrix are in
 - **حماية الفرع (يُفعّلها الأدمن مرة واحدة):** Settings → Branches → Add rule على
   `main` → فعّل "Require status checks to pass" واختَر فحص
   `services/api (build, migrate, test)` — بعدها ما ينــدمج أي PR إلا والـ CI أخضر.
+
+## `departNow` is LIVE, not "already gone" (locked rule)
+
+**A «الآن» trip is posted with `departureTime = now`, so any hand-written
+`departureTime > now` is false the instant it exists.** That single expression is
+why `trip-window.ts` was created — and it then came back in three more places,
+where it cost riders money:
+
+- `isBookingUpcoming` filed a booking on a trip *search was still offering* under
+  «سابقة» before the tap finished.
+- From there the app's `canCancel` (which requires `upcoming`) drew **no cancel
+  button**, `canContact` hid the driver's number, and `hasLiveBookings` was false
+  so حجوزاتي **stopped polling** — which is why a second booking appeared in
+  neither tab.
+- `BookingService.cancel`'s cutoff was `departureTime − 15min`, already expired
+  when the row was created, so even calling the API directly answered
+  «فات وقت الإلغاء المجاني». **The seats were held with no way out.**
+- `cancel`'s reopen check left a full departNow trip `LOCKED` for the rest of its
+  window, so a freed seat was never re-offered and the driver carried an empty
+  place.
+
+**Never write the clock out by hand. Ask `catchableUntil` / `isCatchable`.** The
+bucket takes `departNow` as a *required* field for exactly this reason — the
+type system now refuses a caller who has not thought about it, which is what
+caught the old unit spec that had silently tested scheduled trips only.
+
+The cancel/edit deadline is `catchableUntil(trip) − 15min`: unchanged for a
+scheduled trip (departure − 15min), and a real 15-minute window for «الآن».
+
+> Known boundary, deliberately not widened: once a departNow window shuts the
+> trip goes `LOCKED` and the booking becomes past, so a rider whose driver never
+> started can no longer cancel. Releasing that seat is then the driver's action
+> (cancel / no-show).
+
+## One booking per rider per trip (locked decision)
+
+**A rider may NOT book the same trip twice.** Two rows for one journey is not a
+concept the product has — a rider travelling with family books N seats in one
+booking, which is what `WOMEN_FAMILY` already contemplates. Concretely it:
+
+- **defeated the 4-seat cap**: `@Max(4)` is per booking, so 4 + 4 put 8 seats
+  behind one rider — measured, not theorised;
+- gave the driver two entries for one passenger group at one pickup point;
+- forced a special case into rating (`_markRated` already had to mark "every
+  booking on the SAME trip"), which is the smell that duplicates were never
+  modelled.
+
+It is refused with «لديك حجز على هذه الرحلة بالفعل. يمكنك تعديل عدد المقاعد بدل
+حجز جديد.» The guard runs **inside** the seat transaction, after the row-locking
+`updateMany`, which is what makes it race-safe without a new index — and the
+rollback is what keeps a refused attempt from eating seats.
+
+**So `PATCH /bookings/:id` (change seat count) is in scope and shipped with it.**
+Blocking the duplicate without it would leave riders strictly worse off than the
+workaround they invented: cancel-and-rebook risks losing the seats to someone
+else on a corridor where a trip fills in minutes. Same deadline as cancelling,
+same atomic guard, and it reopens a trip it un-fills.
+
+Bookings that already exist as duplicates stay visible and cancellable — the
+block is on creating new ones.
 
 ## «قادمة» / «سابقة», and rating (locked rule)
 

@@ -55,6 +55,25 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     _snack(err);
   }
 
+  /// Change the seat count on a live booking.
+  ///
+  /// This is what a rider used to do by booking the same trip a second time —
+  /// which the server now refuses, because two rows for one journey defeated
+  /// the 4-seat cap and gave the driver two entries for one pickup point.
+  Future<void> _onChangeSeats(
+    MyBookingsController c,
+    Booking booking,
+  ) async {
+    final chosen = await _seatCountSheet(context, current: booking.seatCount);
+    if (chosen == null || chosen == booking.seatCount) return;
+    if (!mounted) return;
+    final err = await c.changeSeats(booking.id, chosen);
+    if (!mounted) return;
+    // The failure that actually happens: the rider asked for more seats than
+    // the trip still has. The server's Arabic message says so precisely.
+    _snack(err ?? 'تم تحديث عدد المقاعد.');
+  }
+
   void _snack(String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -108,6 +127,13 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       // A finished history cannot change on its own; asking about it forever
       // is the definition of polling a screen with nothing to learn.
       enabled: c.hasLiveBookings,
+      // …but coming BACK to this tab must always re-ask, and that is a
+      // different question. A rider who opened حجوزاتي before booking anything
+      // has an empty list, so `hasLiveBookings` is false and nothing ticks —
+      // and `initState` will not load again because `hasLoaded` is already
+      // true. Their first booking was therefore invisible here until the app
+      // was restarted.
+      refreshWhenVisible: true,
       onPoll: c.refreshSilently,
       child: _body(c),
     );
@@ -132,6 +158,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                 showPast: _showPast,
                 onSelectPast: (v) => setState(() => _showPast = v),
                 onCancel: _onCancel,
+                onChangeSeats: _onChangeSeats,
                 onShowPoint: _onShowPoint,
                 onContactUnavailable: _snack,
                 onRate: _onRate,
@@ -157,6 +184,7 @@ class _BookingsList extends StatelessWidget {
     required this.showPast,
     required this.onSelectPast,
     required this.onCancel,
+    required this.onChangeSeats,
     required this.onShowPoint,
     required this.onContactUnavailable,
     required this.onRate,
@@ -167,6 +195,7 @@ class _BookingsList extends StatelessWidget {
   final bool showPast;
   final ValueChanged<bool> onSelectPast;
   final Future<void> Function(MyBookingsController, Booking) onCancel;
+  final Future<void> Function(MyBookingsController, Booking) onChangeSeats;
   final Future<void> Function(LocationPoint, String) onShowPoint;
   final ValueChanged<String> onContactUnavailable;
   final Future<void> Function(MyBookingsController, Booking) onRate;
@@ -225,6 +254,9 @@ class _BookingsList extends StatelessWidget {
                 contact: controller.contactFor(b.id),
                 onCancel: controller.canCancel(b)
                     ? () => onCancel(controller, b)
+                    : null,
+                onChangeSeats: controller.canChangeSeats(b)
+                    ? () => onChangeSeats(controller, b)
                     : null,
                 onShowPoint: onShowPoint,
                 onContactUnavailable: onContactUnavailable,
@@ -395,6 +427,7 @@ class _BookingCard extends StatelessWidget {
     required this.onContactUnavailable,
     this.contact,
     this.onCancel,
+    this.onChangeSeats,
     this.onRate,
   });
 
@@ -408,6 +441,11 @@ class _BookingCard extends StatelessWidget {
   final Future<void> Function(LocationPoint, String) onShowPoint;
   final ValueChanged<String> onContactUnavailable;
   final VoidCallback? onCancel;
+
+  /// Change the seat count. Null when the booking is no longer editable — the
+  /// same condition as [onCancel], because the server derives both deadlines
+  /// from one place.
+  final VoidCallback? onChangeSeats;
 
   /// Rate the driver of this completed ride. Null once rated, or when the ride
   /// never happened — the server would refuse either, and an action that
@@ -512,6 +550,20 @@ class _BookingCard extends StatelessWidget {
                       onUnavailable: onContactUnavailable,
                     ),
                   ],
+                  // «تعديل المقاعد» — the action whose absence made riders
+                  // book the same trip a second time to get another seat.
+                  // That workaround is now refused by the server, so this is
+                  // the replacement, not an extra.
+                  if (onChangeSeats != null) ...[
+                    SizedBox(height: space.md),
+                    AppButton(
+                      label: 'تعديل عدد المقاعد',
+                      variant: AppButtonVariant.secondary,
+                      icon: AppIcons.seat,
+                      loading: cancelling,
+                      onPressed: onChangeSeats,
+                    ),
+                  ],
                   if (onCancel != null) ...[
                     SizedBox(height: space.md),
                     AppButton(
@@ -594,6 +646,107 @@ Widget _statusBadge(BookingStatus status) {
     BookingStatus.unknown => ('—', AppBadgeTone.neutral, AppIcons.info),
   };
   return AppBadge(label: label, tone: tone, icon: icon);
+}
+
+/// Pick a new seat count, 1..[kMaxSeatsPerBooking].
+///
+/// A row of choices rather than a stepper: on a phone, four taps to get from 1
+/// to 4 is three taps too many, and the cap is small enough to show whole.
+Future<int?> _seatCountSheet(BuildContext context, {required int current}) {
+  return showModalBottomSheet<int>(
+    context: context,
+    backgroundColor: context.colors.surface,
+    shape: RoundedRectangleBorder(borderRadius: context.radii.sheetTop),
+    builder: (ctx) {
+      final space = ctx.space;
+      final colors = ctx.colors;
+      return SafeArea(
+        child: Padding(
+          padding: EdgeInsets.all(space.lg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('عدد المقاعد',
+                  style: ctx.text.h2.copyWith(color: colors.textPrimary)),
+              SizedBox(height: space.sm),
+              Text(
+                'يمكنك زيادة أو إنقاص مقاعد حجزك ما دامت الرحلة لم تبدأ.',
+                style: ctx.text.body.copyWith(color: colors.textSecondary),
+              ),
+              SizedBox(height: space.lg),
+              Row(
+                children: [
+                  for (var n = 1; n <= kMaxSeatsPerBooking; n++) ...[
+                    if (n > 1) SizedBox(width: space.sm),
+                    Expanded(
+                      child: _SeatChoice(
+                        count: n,
+                        selected: n == current,
+                        onTap: () => Navigator.of(ctx).pop(n),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              SizedBox(height: space.md),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+/// The server's `@Max(4)` on a booking, mirrored so the sheet cannot offer a
+/// number the API would reject.
+const int kMaxSeatsPerBooking = 4;
+
+class _SeatChoice extends StatelessWidget {
+  const _SeatChoice({
+    required this.count,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final int count;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: formatSeats(count),
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 56),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? colors.textPrimary : colors.surface,
+            borderRadius: context.radii.cardAll,
+            border: Border.all(
+              color: selected ? colors.textPrimary : colors.border,
+            ),
+          ),
+          // The numeral alone — no separator anywhere near an Arabic-Indic
+          // digit, and no «مقاعد» word that would force plural agreement into
+          // a box this narrow.
+          child: Text(
+            formatCount(count),
+            style: context.text.title.tabular.copyWith(
+              color: selected ? colors.background : colors.textPrimary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 Future<bool?> _confirmCancelDialog(BuildContext context) {

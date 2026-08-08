@@ -45,6 +45,25 @@ class _EarningsScreenState extends State<EarningsScreen> {
   Widget build(BuildContext context) {
     final c = context.watch<EarningsController>();
 
+    // NOT polled, and that is the right answer for this screen: earnings move
+    // when the driver completes a trip, which they do on a different screen.
+    // Nothing can change while they sit here watching, so a beat would ask the
+    // server the same question all shift.
+    //
+    // What was missing is the other half — this screen loaded once and never
+    // again, so a driver who completed a trip came back to أرباحي and saw the
+    // total from before it. `refreshWhenVisible` re-asks exactly once, on the
+    // way back in.
+    return PollingScope(
+      interval: kEarningsRefreshInterval,
+      enabled: false,
+      refreshWhenVisible: true,
+      onPoll: c.refreshSilently,
+      child: _body(c),
+    );
+  }
+
+  Widget _body(EarningsController c) {
     return AppScaffold(
       title: 'أرباحي',
       padded: false,
@@ -59,6 +78,10 @@ class _EarningsScreenState extends State<EarningsScreen> {
     );
   }
 }
+
+/// Required by [PollingScope] but never used to schedule anything here — this
+/// screen passes `enabled: false` and refreshes only on becoming visible.
+const Duration kEarningsRefreshInterval = Duration(seconds: 60);
 
 class _Loaded extends StatelessWidget {
   const _Loaded({required this.controller});
