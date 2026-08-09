@@ -252,6 +252,9 @@ IconData _iconFor(AppNotificationType type) => switch (type) {
       AppNotificationType.tripCancelled => AppIcons.warning,
       AppNotificationType.driverApproved => AppIcons.success,
       AppNotificationType.driverRejected => AppIcons.warning,
+      // The route the rider asked about now has a trip on it — the domain
+      // glyph, not a bell: the bell is what they tapped to ask.
+      AppNotificationType.routeAvailable => AppIcons.route,
       AppNotificationType.unknown => AppIcons.bell,
     };
 

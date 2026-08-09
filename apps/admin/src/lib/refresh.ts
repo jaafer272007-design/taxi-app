@@ -26,6 +26,20 @@ export const DRIVERS_REFRESH_MS = 20_000;
 export const DASHBOARD_REFRESH_MS = 60_000;
 
 /**
+ * 60s — route requests.
+ *
+ * Same beat as the dashboard and for the same reason: this is a demand figure
+ * read across a shift while deciding where to recruit drivers, not a queue
+ * where someone is blocked until an admin acts. A rider tapping «أبلغنا» is
+ * not waiting on us — they have already left the screen.
+ *
+ * It polls at all (unlike corridors) because the rows DO change without an
+ * admin touching anything: every tap adds one, and every trip a driver posts
+ * clears a corridor off the actionable list.
+ */
+export const ROUTE_REQUESTS_REFRESH_MS = 60_000;
+
+/**
  * `?refreshMs=` — an opt-in override of the beat for the tab you are in.
  *
  * Two reasons it exists rather than a build-time flag. Asserting "the beat

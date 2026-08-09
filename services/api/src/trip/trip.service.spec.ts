@@ -18,6 +18,7 @@ import { TripService } from './trip.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DriverService } from '../driver/driver.service';
 import { CorridorService } from '../corridor/corridor.service';
+import { RouteRequestService } from '../corridor/route-request.service';
 import { TRIP_PRICE_OUT_OF_RANGE } from './trip-errors';
 
 /**
@@ -53,6 +54,7 @@ describe('TripService.createTrip', () => {
       // No no-shows in these fixtures; the count itself is covered against a
       // real database in no-show.int-spec.ts.
       { countsFor: jest.fn().mockResolvedValue(new Map()) } as unknown as NoShowService,
+      { fulfillForTrip: jest.fn().mockResolvedValue({ notified: 0 }) } as unknown as RouteRequestService,
     );
   });
 
@@ -267,6 +269,7 @@ describe('TripService.updateTrip (booking-aware seat guard)', () => {
       // No no-shows in these fixtures; the count itself is covered against a
       // real database in no-show.int-spec.ts.
       { countsFor: jest.fn().mockResolvedValue(new Map()) } as unknown as NoShowService,
+      { fulfillForTrip: jest.fn().mockResolvedValue({ notified: 0 }) } as unknown as RouteRequestService,
     );
   });
 
@@ -322,6 +325,7 @@ describe('TripService lifecycle (start / complete)', () => {
       {} as CorridorService,
       notifications,
       { countsFor: jest.fn().mockResolvedValue(new Map()) } as unknown as NoShowService,
+      { fulfillForTrip: jest.fn().mockResolvedValue({ notified: 0 }) } as unknown as RouteRequestService,
     );
   });
 
@@ -452,6 +456,7 @@ describe('TripService.listBookings (driver view of its bookings)', () => {
       // No no-shows in these fixtures; the count itself is covered against a
       // real database in no-show.int-spec.ts.
       { countsFor: jest.fn().mockResolvedValue(new Map()) } as unknown as NoShowService,
+      { fulfillForTrip: jest.fn().mockResolvedValue({ notified: 0 }) } as unknown as RouteRequestService,
     );
   });
 

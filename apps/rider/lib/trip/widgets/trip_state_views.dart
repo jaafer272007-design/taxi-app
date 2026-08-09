@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared/shared.dart';
 
 import '../trip_models.dart';
+import '../trip_search_controller.dart' show RouteRequestStatus;
 
 /// Centered message with an icon badge — base for empty/error states.
 class _CenteredMessage extends StatelessWidget {
@@ -76,17 +77,32 @@ class _CenteredMessage extends StatelessWidget {
 /// and [onClearFilters] is provided, the copy is tailored to the active filter
 /// and a one-tap "إزالة الفلاتر" action is offered — female drivers are rare, so
 /// a filtered-empty result is common and should feel intentional, not broken.
+///
+/// On an UNFILTERED empty result it also offers «أبلغنا أنك تريد هذا المسار»
+/// ([onRequestRoute]). That is the only place in the app that turns a dead end
+/// into information: 306 corridors exist and drivers post on a handful, so this
+/// screen is where we find out which of the other 300 anyone actually wants.
+/// Optional, one tap, no form — a rider who ignores it loses nothing.
 class TripEmptyView extends StatelessWidget {
   const TripEmptyView({
     super.key,
     this.tripType,
     this.driverGender,
     this.onClearFilters,
+    this.onRequestRoute,
+    this.routeRequestStatus = RouteRequestStatus.idle,
+    this.routeRequestError,
   });
 
   final TripType? tripType;
   final Gender? driverGender;
   final VoidCallback? onClearFilters;
+
+  /// Record demand for the corridor currently searched. `null` hides the
+  /// action entirely — there is no disabled state and no upsell.
+  final VoidCallback? onRequestRoute;
+  final RouteRequestStatus routeRequestStatus;
+  final String? routeRequestError;
 
   bool get _filtersActive => tripType != null || driverGender != null;
 
@@ -120,10 +136,90 @@ class TripEmptyView extends StatelessWidget {
     }
     // Shown both when a corridor has no trips yet AND when the picked city pair
     // has no corridor at all — either way it's a normal state, not a bug.
-    return const _CenteredMessage(
+    return _CenteredMessage(
       icon: AppIcons.route,
       title: 'لا توجد رحلات متاحة على هذا المسار حالياً',
       subtitle: 'جرّب مساراً أو تاريخاً آخر.',
+      action: onRequestRoute == null ? null : _RouteRequestAction(
+        status: routeRequestStatus,
+        error: routeRequestError,
+        onPressed: onRequestRoute!,
+      ),
+    );
+  }
+}
+
+/// The «أبلغنا أنك تريد هذا المسار» action and its three answers.
+///
+/// The confirmation REPLACES the button rather than sitting beside it: the
+/// question has been answered, and leaving a live button under «سنخبرك» invites
+/// a second tap that does nothing visible.
+class _RouteRequestAction extends StatelessWidget {
+  const _RouteRequestAction({
+    required this.status,
+    required this.error,
+    required this.onPressed,
+  });
+
+  final RouteRequestStatus status;
+  final String? error;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final space = context.space;
+
+    if (status == RouteRequestStatus.sent) {
+      return Container(
+        padding: EdgeInsets.symmetric(horizontal: space.lg, vertical: space.md),
+        decoration: BoxDecoration(
+          // Opaque tonal fill — an alpha tint measures differently against the
+          // page background than inside a card.
+          color: colors.successTonal,
+          borderRadius: context.radii.cardAll,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(AppIcons.success, color: colors.success, size: space.lg),
+            SizedBox(width: space.sm),
+            Flexible(
+              child: Text(
+                // No timeframe is promised, because we do not have one. The
+                // honest sentence is the whole point of the confirmation.
+                'سنخبرك عندما تتوفر رحلات على هذا المسار',
+                style: context.text.body.copyWith(color: colors.success),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AppButton(
+          label: 'أبلغنا أنك تريد هذا المسار',
+          variant: AppButtonVariant.secondary,
+          icon: AppIcons.bell,
+          expand: false,
+          loading: status == RouteRequestStatus.sending,
+          onPressed: onPressed,
+        ),
+        if (status == RouteRequestStatus.failed && error != null) ...[
+          SizedBox(height: space.sm),
+          Text(
+            // The rider asked for this, so a failure is theirs to see — unlike
+            // a background refresh, which fails in silence.
+            error!,
+            style: context.text.caption.copyWith(color: colors.danger),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ],
     );
   }
 }

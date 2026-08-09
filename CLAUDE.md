@@ -334,6 +334,11 @@ data layer to keep in sync.
   **لوحة المعلومات — 60s.** Figures watched over a shift.
   **الممرات — NOT polled**, deliberately: 306 rows that only change when an
   admin changes them.
+  **طلبات المسارات — 60s.** Unlike corridors, these rows DO move without an
+  admin: every rider tap adds one, and every trip a driver posts clears a
+  corridor off the actionable list. Its filter lives in the URL
+  (`?unserved=1`) precisely because the page re-renders itself every minute —
+  a filter held in component state would be wiped on every beat.
 - Pauses on `document.visibilityState === "hidden"`, resumes on
   `visibilitychange`/`focus` with one immediate catch-up refresh. A failed
   refresh leaves the rendered tree and says nothing.
@@ -689,6 +694,68 @@ own private data and no support task needs them. Every `select` in
 `admin-support.int-spec.ts` guards it by searching the serialised payloads for
 the number rather than checking fields — one future `include: { user: true }`
 would attach the whole row with no unit test failing.
+
+## Route requests: turning an empty search into a signal (locked decision)
+
+**306 corridors exist and drivers post on a handful.** A rider who searched an
+unserved pair saw a correct empty state and left, and we learned nothing — we
+were guessing which routes to recruit drivers for. The empty state now carries
+one optional tap, «أبلغنا أنك تريد هذا المسار», and the panel ranks corridors by
+what comes back.
+
+- **It is NOT `SeatRequest`** (reserved for Phase 2). That is a live seat
+  request entering real-time matching; this is a market signal that books
+  nothing and commits to nothing. Do not build one on the other.
+- **The dedupe is a UNIQUE INDEX, not an application guard.**
+  `(riderId, corridorId, requestedDay)`. Two taps on a slow Iraqi network
+  arrive together and sail past any read-then-write check — and the count is
+  the entire value of the feature, so an inflated one sends a driver to a route
+  nobody wanted. A duplicate is **idempotent success** (200, `alreadyRequested`),
+  never an error: the rider meant the same thing both times, and the same rule
+  already governs a 409 from `POST /ratings`.
+- **"Day" means the BAGHDAD day.** `baghdadDayKey` in `route-request-policy.ts`,
+  not `toISOString().slice(0,10)` — a tap at 01:00 Baghdad is 22:00Z the
+  *previous* day, so a UTC key would fold a rider's 11pm and 1am taps into one
+  row for what are two different days to them. Iraq is UTC+3 year-round (no DST
+  since 2008), so this is arithmetic, not a timezone library.
+- **The fan-out CLAIMS, then reads: `updateMany` stamps `fulfilledByTripId`,
+  then the rows carrying that stamp are the ones to notify.** Read-then-notify
+  would let two drivers posting at the same instant both read the same pending
+  rows and notify the rider twice. The trip id is fresh on every call, which is
+  what makes the read-back exact — Prisma's `updateMany` does not return rows,
+  and this replaces raw SQL. **One rider, one notification**: a rider can hold
+  two pending requests for one corridor (asked yesterday and today), and two
+  pings for one trip reads as a bug.
+- **`fulfillForTrip` never throws.** It runs after the trip is committed and
+  bookable; a notification failure must not report a posted trip as failed —
+  the same reason `NotificationService.send` swallows.
+- **Expiry is a WINDOW, not a lifetime.** `ROUTE_REQUEST_TTL_DAYS` (30, from
+  env, malformed falls back). An older request notifies nobody and is not
+  counted — and stays `fulfilledAt: null`, because "fulfilled" means "its owner
+  was told" and marking it would be a lie in the record. **The fan-out and the
+  admin aggregate use the SAME cutoff**; if they diverged the panel would show
+  demand whose owner will never be notified.
+- **Requests and riders are separate columns.** Five taps from one determined
+  person is not five people, and only the second number tells them apart —
+  which is the difference between a real route and a false positive.
+- **Supply is a STATUS question** (`OPEN`/`LOCKED`/`EN_ROUTE`), never a
+  hand-written clock. Same trap as everywhere else: a «الآن» trip's departure
+  passes the instant it is posted, and it is exactly the trip that means the
+  corridor is served *right now*.
+- **The rider action appears on the UNFILTERED empty state only.** A
+  filtered-empty result has a cheaper remedy to try first («إزالة الفلاتر»), one
+  screen gets one primary action, and demand recorded from a filtered search is
+  demand for a corridor whose real supply was never asked about.
+- **The confirmation promises no timeframe** — «سنخبرك عندما تتوفر رحلات على هذا
+  المسار», with no «قريباً» and no number of days. We do not have one, and
+  `route_request_test.dart` asserts the absence rather than trusting the copy to
+  stay honest. It also resets when the route changes, or the promise would sit
+  under a route we never recorded.
+- Server-side Arabic city names live in `corridor/cities.ts` (`cityAr` /
+  `routeLabelAr`) — a **fourth** mirror of the city list, forced by the locked
+  rule that notification copy is composed at emit time. It is safe only because
+  `cities.spec.ts` asserts the map covers every canonical city, so a nineteenth
+  one cannot ship half-translated as «Najaf إلى Karbala».
 
 ## Splitting work into several PRs (locked rule)
 

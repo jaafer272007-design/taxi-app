@@ -292,3 +292,26 @@ export interface AdminAction {
   reason: string;
   createdAt: string;
 }
+
+// ── Route requests (demand for corridors nobody is serving) ──────────────
+
+/** One corridor's outstanding demand, as ranked by the panel. */
+export interface CorridorDemand {
+  corridorId: string;
+  originCity: string;
+  destCity: string;
+  corridorActive: boolean;
+  /** Outstanding requests inside the policy window. The ranking key. */
+  requestCount: number;
+  /** How many DISTINCT riders are behind that count. */
+  riderCount: number;
+  lastRequestedAt: string;
+  /** Live trips on this corridor right now. Zero = demand with no supply. */
+  activeTrips: number;
+}
+
+export interface RouteRequestsPayload {
+  /** The window the backend applied, so the page can state it rather than imply it. */
+  policy: { ttlDays: number };
+  corridors: CorridorDemand[];
+}

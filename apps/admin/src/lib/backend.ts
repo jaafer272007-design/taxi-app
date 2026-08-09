@@ -15,6 +15,7 @@ import type {
   DriverSupportView,
   RiderSupportView,
   SupportSearchResult,
+  RouteRequestsPayload,
   TripSupportView,
 } from "./types";
 
@@ -295,3 +296,17 @@ export const voidNoShowFromSupport = (token: string, recordId: string, reason: s
 
 export const liftBlockFromSupport = (token: string, riderId: string, reason: string) =>
   intervene(token, `/admin/support/riders/${riderId}/lift-block`, reason);
+
+// ── Route requests ───────────────────────────────────────────────────────
+//
+// Riders tapping «أبلغنا أنك تريد هذا المسار» on an empty search. This is the
+// only signal we have about the ~300 corridors nobody posts on, so the panel
+// exists to turn it into a recruitment list.
+
+export function listRouteRequests(
+  token: string,
+  opts: { unservedOnly?: boolean } = {},
+): Promise<RouteRequestsPayload> {
+  const query = opts.unservedOnly ? "?unservedOnly=true" : "";
+  return request<RouteRequestsPayload>(`/admin/route-requests${query}`, { token });
+}

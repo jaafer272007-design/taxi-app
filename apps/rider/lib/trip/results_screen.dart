@@ -63,6 +63,12 @@ class ResultsScreen extends StatelessWidget {
                         c.search();
                       }
                     : null,
+                // `canRequestRoute` owns the whole rule (unfiltered, empty, a
+                // corridor exists). `null` here draws nothing at all — no
+                // disabled button, no invitation.
+                onRequestRoute: c.canRequestRoute ? c.requestRoute : null,
+                routeRequestStatus: c.routeRequestStatus,
+                routeRequestError: c.routeRequestError,
               ),
             ),
           TripSearchStatus.results => _ResultsList(controller: c),

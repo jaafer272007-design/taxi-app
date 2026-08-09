@@ -30,6 +30,9 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
 
+  /// Index of the البحث tab.
+  static const int _searchTab = 0;
+
   /// Index of the حجوزاتي tab — where every booking- and trip-shaped event is
   /// actionable, including «انتهت رحلتك» and the rate action it leads to.
   static const int _bookingsTab = 1;
@@ -40,6 +43,11 @@ class _HomeShellState extends State<HomeShell> {
   /// the start, the cancellation, and — the one that had nowhere to go until
   /// now — the completion, whose whole point is to reach the rate action.
   /// A driver-approval event concerns the driver app and stays put.
+  ///
+  /// «توفّرت رحلة على مسار طلبته» is the exception, and it goes to البحث: the
+  /// rider has no booking yet — the entire point of the event is that they can
+  /// now make one, and the seat goes to whoever books first. Landing them on an
+  /// empty حجوزاتي would be a dead end at the one moment speed matters.
   void _openNotification(AppNotification n) {
     switch (n.type) {
       case AppNotificationType.bookingConfirmed:
@@ -48,6 +56,13 @@ class _HomeShellState extends State<HomeShell> {
       case AppNotificationType.tripCompleted:
       case AppNotificationType.tripCancelled:
         setState(() => _index = _bookingsTab);
+      case AppNotificationType.routeAvailable:
+        // The search form keeps the route the rider last picked, which is
+        // overwhelmingly the one they asked about — so this usually lands them
+        // one tap from the trip. It is NOT pre-filled from the event: the
+        // notification carries a tripId, and adding a corridorId column to
+        // every stored event to prefill one screen is not worth the schema.
+        setState(() => _index = _searchTab);
       case AppNotificationType.bookingCreated:
       case AppNotificationType.bookingCancelledByRider:
       case AppNotificationType.driverApproved:

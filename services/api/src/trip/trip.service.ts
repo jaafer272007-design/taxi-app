@@ -20,6 +20,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { DriverService } from '../driver/driver.service';
 import { CorridorService } from '../corridor/corridor.service';
+import { RouteRequestService } from '../corridor/route-request.service';
 import { NoShowService } from '../booking/no-show.service';
 import { NotificationService, NotificationPayload } from '../notification/notification.service';
 import { CreateTripDto } from './dto/create-trip.dto';
@@ -75,6 +76,7 @@ export class TripService {
     private readonly corridors: CorridorService,
     private readonly notifications: NotificationService,
     private readonly noShows: NoShowService,
+    private readonly routeRequests: RouteRequestService,
   ) {}
 
   /** Driver posts a trip. Only an APPROVED driver may create one. */
@@ -120,7 +122,7 @@ export class TripService {
       );
     }
 
-    return this.prisma.trip.create({
+    const trip = await this.prisma.trip.create({
       data: {
         corridorId: corridor.id,
         driverId: profile.id,
@@ -135,6 +137,15 @@ export class TripService {
         tripType: dto.tripType ?? TripType.GENERAL,
       },
     });
+
+    // Riders who asked for this corridor while nobody was serving it are the
+    // reason they bothered to tell us. AFTER the commit and deliberately not
+    // awaited into the trip's own success: the trip exists and is bookable, so
+    // a notification failure must not report a posted trip as failed.
+    // `fulfillForTrip` never throws — see its doc comment.
+    await this.routeRequests.fulfillForTrip(trip, corridor);
+
+    return trip;
   }
 
   /**

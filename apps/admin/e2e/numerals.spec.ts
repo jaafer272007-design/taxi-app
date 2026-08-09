@@ -108,7 +108,13 @@ function findFusions(chars: Painted[]): string[] {
   return problems;
 }
 
-for (const path of ["/drivers", "/dashboard", "/corridors", "/no-shows"]) {
+for (const path of [
+  "/drivers",
+  "/dashboard",
+  "/corridors",
+  "/no-shows",
+  "/route-requests",
+]) {
   test(`${path}: no dot-like separator is painted against an Arabic-Indic digit`, async ({
     page,
   }) => {

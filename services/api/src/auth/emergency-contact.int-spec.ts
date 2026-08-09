@@ -4,6 +4,7 @@ import { DriverStatus, Gender, UserRole } from '@prisma/client';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { CorridorService } from '../corridor/corridor.service';
+import { RouteRequestService } from '../corridor/route-request.service';
 import { DriverService } from '../driver/driver.service';
 import { NotificationService } from '../notification/notification.service';
 import { StorageService } from '../storage/storage.service';
@@ -152,7 +153,8 @@ beforeAll(async () => {
   const drivers = new DriverService(prisma, {} as StorageService);
   const corridors = new CorridorService(prisma);
   const noShows = new NoShowService(prisma, config);
-  trips = new TripService(prisma, drivers, corridors, notifications, noShows);
+  const routeRequests = new RouteRequestService(prisma, notifications, config);
+  trips = new TripService(prisma, drivers, corridors, notifications, noShows, routeRequests);
   bookings = new BookingService(prisma, drivers, notifications, noShows);
   contacts = new TripContactService(prisma, drivers);
   auth = new AuthService(

@@ -192,6 +192,25 @@ void main() {
     });
   });
 
+  // The empty state after the rider taps «أبلغنا أنك تريد هذا المسار». The
+  // confirmation REPLACES the button, and promises no timeframe.
+  group('empty_route_requested', () {
+    testWidgets('light', (t) async {
+      await _golden(t,
+          name: 'empty_route_requested_light',
+          brightness: Brightness.light,
+          controller: await _routeRequestedController(),
+          child: const ResultsScreen());
+    });
+    testWidgets('dark', (t) async {
+      await _golden(t,
+          name: 'empty_route_requested_dark',
+          brightness: Brightness.dark,
+          controller: await _routeRequestedController(),
+          child: const ResultsScreen());
+    });
+  });
+
   group('empty_filtered', () {
     testWidgets('light', (t) async {
       await _golden(t,
@@ -366,6 +385,13 @@ Future<TripSearchController> _emptyController() async {
   final c = TripSearchController(api: api);
   await c.ensureCorridorsLoaded();
   await c.search();
+  return c;
+}
+
+/// The empty state with the request already recorded — the confirmation shot.
+Future<TripSearchController> _routeRequestedController() async {
+  final c = await _emptyController();
+  await c.requestRoute();
   return c;
 }
 
