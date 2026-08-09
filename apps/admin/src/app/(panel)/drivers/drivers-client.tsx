@@ -31,15 +31,13 @@ import { RefreshBar } from "@/components/refresh-bar";
 import { cn } from "@/lib/utils";
 import { formatRating, formatSeats, formatTrips } from "@/lib/format";
 import { DRIVERS_REFRESH_MS } from "@/lib/refresh";
+import { DRIVER_STATUS_AR } from "@/lib/labels";
 import type { DocStatus, DocType, Driver, DriverStatus } from "@/lib/types";
 import { approveDriverAction, rejectDriverAction, suspendDriverAction } from "./actions";
 
-const STATUS_LABEL: Record<DriverStatus, string> = {
-  PENDING: "بانتظار المراجعة",
-  APPROVED: "معتمد",
-  SUSPENDED: "موقوف",
-  REJECTED: "مرفوض",
-};
+// One definition, shared with the support screens — a status that reads
+// «معتمد» here and something else there looks like two different states.
+const STATUS_LABEL = DRIVER_STATUS_AR;
 
 const DOC_LABEL: Record<DocType, string> = {
   NATIONAL_ID: "الهوية",

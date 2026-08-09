@@ -252,6 +252,30 @@ export class TripService {
   /** Cancel a trip. Allowed any time before EN_ROUTE, by the owning driver. */
   async cancelTrip(userId: string, tripId: string): Promise<Trip> {
     const { trip } = await this.getOwnedTrip(userId, tripId);
+    return this.cancelTripRow(trip);
+  }
+
+  /**
+   * Cancel a trip on the driver's behalf, from the admin panel.
+   *
+   * Same body as the driver's own cancel — including the fan-out that tells
+   * every affected rider their booking is gone. That fan-out is the reason
+   * this is not an admin-side `UPDATE`: riders whose seats vanish silently
+   * discover it by standing at a pickup point, which is the exact failure the
+   * notification centre was built to prevent.
+   *
+   * No extra permissiveness: `EN_ROUTE` and later are refused here too.
+   */
+  async cancelTripAsAdmin(tripId: string): Promise<Trip> {
+    const trip = await this.prisma.trip.findUnique({ where: { id: tripId } });
+    if (!trip) {
+      throw new NotFoundException('الرحلة غير موجودة.');
+    }
+    return this.cancelTripRow(trip);
+  }
+
+  private async cancelTripRow(trip: Trip): Promise<Trip> {
+    const tripId = trip.id;
     if (trip.status !== TripStatus.OPEN && trip.status !== TripStatus.LOCKED) {
       throw new ConflictException('لا يمكن إلغاء الرحلة بحالتها الحالية.');
     }

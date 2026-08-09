@@ -9,8 +9,13 @@ import { NoShowService } from './no-show.service';
   imports: [DriverModule], // findProfileByUserId → "can't book your own trip" check
   controllers: [BookingController, TripSearchController],
   providers: [BookingService, NoShowService],
-  // The admin module needs it for the appeal path (history / void / lift), and
-  // the trip module for the count beside each passenger.
-  exports: [NoShowService],
+  // NoShowService: the admin module needs it for the appeal path (history /
+  // void / lift), and the trip module for the count beside each passenger.
+  //
+  // BookingService: an admin cancelling a booking on a rider's behalf runs
+  // THIS method — the row-locked seat return, the LOCKED→OPEN reopen and both
+  // notifications. Exporting it is what keeps the support tools from growing
+  // their own copy of the seat transaction.
+  exports: [NoShowService, BookingService],
 })
 export class BookingModule {}

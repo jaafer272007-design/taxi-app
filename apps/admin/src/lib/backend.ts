@@ -11,6 +11,11 @@ import type {
   Driver,
   DriverStatus,
   RiderNoShowHistory,
+  AdminAction,
+  DriverSupportView,
+  RiderSupportView,
+  SupportSearchResult,
+  TripSupportView,
 } from "./types";
 
 /**
@@ -218,3 +223,75 @@ export function liftRiderBlock(token: string, riderId: string, reason: string): 
     body: JSON.stringify({ reason }),
   });
 }
+
+// ── Support tools ────────────────────────────────────────────────────────
+//
+// Phone numbers come back from these and are shown to admins by necessity —
+// support begins with a number someone is calling from. That is a PRIVILEGED
+// view, not a public one. Emergency contacts are never included: the backend
+// does not select them, and its integration spec asserts so.
+
+export function supportSearch(token: string, q: string): Promise<SupportSearchResult> {
+  return request<SupportSearchResult>(
+    `/admin/support/search?q=${encodeURIComponent(q)}`,
+    { token },
+  );
+}
+
+export function getRiderView(token: string, userId: string): Promise<RiderSupportView> {
+  return request<RiderSupportView>(`/admin/support/riders/${userId}`, { token });
+}
+
+export function getDriverView(token: string, profileId: string): Promise<DriverSupportView> {
+  return request<DriverSupportView>(`/admin/support/drivers/${profileId}`, { token });
+}
+
+export function getTripView(token: string, tripId: string): Promise<TripSupportView> {
+  return request<TripSupportView>(`/admin/support/trips/${tripId}`, { token });
+}
+
+export function listAdminActions(
+  token: string,
+  filter: { adminId?: string; entityType?: string; entityId?: string } = {},
+): Promise<AdminAction[]> {
+  const params = new URLSearchParams();
+  if (filter.adminId) params.set("adminId", filter.adminId);
+  if (filter.entityType) params.set("entityType", filter.entityType);
+  if (filter.entityId) params.set("entityId", filter.entityId);
+  const query = params.toString();
+  return request<AdminAction[]>(`/admin/support/actions${query ? `?${query}` : ""}`, {
+    token,
+  });
+}
+
+export function listActionAdmins(
+  token: string,
+): Promise<{ adminId: string; adminUsername: string }[]> {
+  return request<{ adminId: string; adminUsername: string }[]>(
+    "/admin/support/actions/admins",
+    { token },
+  );
+}
+
+/** Every intervention takes a reason; the acting admin comes from the JWT. */
+function intervene(token: string, path: string, reason: string): Promise<unknown> {
+  return request(path, { method: "POST", token, body: JSON.stringify({ reason }) });
+}
+
+export const cancelBookingAsAdmin = (token: string, id: string, reason: string) =>
+  intervene(token, `/admin/support/bookings/${id}/cancel`, reason);
+
+export const cancelTripAsAdmin = (token: string, id: string, reason: string) =>
+  intervene(token, `/admin/support/trips/${id}/cancel`, reason);
+
+export const suspendDriverAsAdmin = (token: string, profileId: string, reason: string) =>
+  intervene(token, `/admin/support/drivers/${profileId}/suspend`, reason);
+
+export const unsuspendDriverAsAdmin = (token: string, profileId: string, reason: string) =>
+  intervene(token, `/admin/support/drivers/${profileId}/unsuspend`, reason);
+
+export const voidNoShowFromSupport = (token: string, recordId: string, reason: string) =>
+  intervene(token, `/admin/support/no-shows/${recordId}/void`, reason);
+
+export const liftBlockFromSupport = (token: string, riderId: string, reason: string) =>
+  intervene(token, `/admin/support/riders/${riderId}/lift-block`, reason);

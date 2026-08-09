@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { DriverStatus, NotificationType, Prisma, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationService } from '../notification/notification.service';
@@ -56,6 +56,28 @@ export class AdminService {
   suspend(id: string) {
     // Suspension is not a rejection — leave rejectionReason untouched, no push.
     return this.setStatus(id, { status: DriverStatus.SUSPENDED });
+  }
+
+  /**
+   * Undo a suspension: SUSPENDED → APPROVED.
+   *
+   * Only from SUSPENDED. A PENDING driver has never been reviewed and a
+   * REJECTED one was turned down for a reason — quietly approving either
+   * through the "undo" button would launder a decision nobody made.
+   *
+   * Deliberately NOT `approve()`: that sends «تم اعتماد حسابك» to someone who
+   * was already approved and then paused, which reads as a new decision. A
+   * lifted suspension is a return to where they were.
+   */
+  async unsuspend(id: string) {
+    const existing = await this.prisma.driverProfile.findUnique({ where: { id } });
+    if (!existing) {
+      throw new NotFoundException('السائق غير موجود.');
+    }
+    if (existing.status !== DriverStatus.SUSPENDED) {
+      throw new ConflictException('هذا السائق غير موقوف.');
+    }
+    return this.setStatus(id, { status: DriverStatus.APPROVED });
   }
 
   /** Aggregate counts for the admin dashboard. Kept to a handful of queries. */

@@ -16,5 +16,9 @@ import { TripExpiryJob } from './trip-expiry.job';
   // TripExpiryJob has no consumers — it is driven by the scheduler. It is
   // registered here so it lives next to the rule it enforces.
   providers: [TripService, TripContactService, TripExpiryJob],
+  // The admin support tools cancel a trip through this service so the
+  // rider-notification fan-out runs — riders whose seats vanish silently
+  // find out by standing at a pickup point.
+  exports: [TripService],
 })
 export class TripModule {}

@@ -2,7 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Route, IdCard, ShieldCheck, UserX } from "lucide-react";
+import {
+  ClipboardList,
+  IdCard,
+  LayoutDashboard,
+  LifeBuoy,
+  Route,
+  ShieldCheck,
+  UserX,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { formatCount } from "@/lib/format";
@@ -22,6 +30,8 @@ const ITEMS: NavItem[] = [
   { href: "/corridors", label: "الممرات والتسعير", icon: Route },
   { href: "/drivers", label: "السائقون", icon: IdCard, badge: "pendingDrivers" },
   { href: "/no-shows", label: "عدم الحضور", icon: UserX },
+  { href: "/support", label: "الدعم", icon: LifeBuoy },
+  { href: "/actions", label: "سجل الإجراءات", icon: ClipboardList },
   { href: "/admins", label: "إدارة المدراء", icon: ShieldCheck, superAdminOnly: true },
 ];
 

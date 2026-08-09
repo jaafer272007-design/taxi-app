@@ -283,6 +283,126 @@ async function seedDrivers(): Promise<void> {
   console.log(`✔ Drivers: ${DRIVERS.length} rebuilt (${DRIVERS.map((d) => d.status).join(', ')})`);
 }
 
+/**
+ * A live support case: an approved driver, an OPEN trip, and a rider holding a
+ * confirmed booking on it.
+ *
+ * The support spec CANCELS this booking, so it is rebuilt from scratch every
+ * run — and the seat count is what the assertion turns on, which is why the
+ * trip is created here rather than reused from another fixture that some other
+ * spec might book against.
+ */
+const SUPPORT_CASE = {
+  driverPhone: '+9647730000001',
+  driverName: 'سائق الدعم',
+  riderPhone: '+9647730000002',
+  riderName: 'راكب الدعم',
+  plate: 'E2E-SUP-1',
+  seatsTotal: 4,
+  seatCount: 1,
+  pricePerSeat: 12000,
+} as const;
+
+async function seedSupportCase(): Promise<void> {
+  // Rebuilt every run: the spec cancels the booking, and a second run has to
+  // start from a bookable trip again.
+  for (const phone of [SUPPORT_CASE.driverPhone, SUPPORT_CASE.riderPhone]) {
+    const user = await prisma.user.findUnique({
+      where: { phone },
+      include: { driver: true },
+    });
+    if (!user) continue;
+    if (user.driver) {
+      await prisma.seatBooking.deleteMany({
+        where: { trip: { driverId: user.driver.id } },
+      });
+      await prisma.trip.deleteMany({ where: { driverId: user.driver.id } });
+      await prisma.earningsRecord.deleteMany({ where: { driverId: user.driver.id } });
+      await prisma.vehicle.deleteMany({ where: { driverId: user.driver.id } });
+      await prisma.document.deleteMany({ where: { driverId: user.driver.id } });
+      await prisma.driverProfile.delete({ where: { id: user.driver.id } });
+    }
+    await prisma.seatBooking.deleteMany({ where: { riderId: user.id } });
+    await prisma.noShowRecord.deleteMany({ where: { riderId: user.id } });
+    await prisma.notification.deleteMany({ where: { userId: user.id } });
+    await prisma.user.delete({ where: { id: user.id } });
+  }
+  // The audit log is append-only in production; the seed clears only what
+  // previous runs of this suite wrote, so an assertion on "one row" holds.
+  await prisma.adminAction.deleteMany({});
+
+  const corridor = await prisma.corridor.findFirstOrThrow({
+    where: { originCity: 'Najaf', destCity: 'Karbala' },
+  });
+
+  const driver = await prisma.user.create({
+    data: {
+      phone: SUPPORT_CASE.driverPhone,
+      name: SUPPORT_CASE.driverName,
+      gender: Gender.MALE,
+      roles: [UserRole.RIDER, UserRole.DRIVER],
+      driver: {
+        create: {
+          status: DriverStatus.APPROVED,
+          vehicle: {
+            create: {
+              make: 'Toyota',
+              model: 'Corolla',
+              plate: SUPPORT_CASE.plate,
+              color: 'أبيض',
+              seats: SUPPORT_CASE.seatsTotal,
+            },
+          },
+        },
+      },
+    },
+    include: { driver: { include: { vehicle: true } } },
+  });
+
+  const rider = await prisma.user.create({
+    data: {
+      phone: SUPPORT_CASE.riderPhone,
+      name: SUPPORT_CASE.riderName,
+      gender: Gender.MALE,
+      roles: [UserRole.RIDER],
+    },
+  });
+
+  // Three hours out: comfortably inside every catchability window, and far
+  // enough away that the expiry sweep cannot retire it mid-suite.
+  const trip = await prisma.trip.create({
+    data: {
+      corridorId: corridor.id,
+      driverId: driver.driver!.id,
+      vehicleId: driver.driver!.vehicle!.id,
+      departureTime: new Date(Date.now() + 3 * 60 * 60 * 1000),
+      seatsTotal: SUPPORT_CASE.seatsTotal,
+      seatsAvailable: SUPPORT_CASE.seatsTotal - SUPPORT_CASE.seatCount,
+      pricePerSeat: SUPPORT_CASE.pricePerSeat,
+    },
+  });
+
+  await prisma.seatBooking.create({
+    data: {
+      tripId: trip.id,
+      riderId: rider.id,
+      pickupLat: 31.999,
+      pickupLng: 44.3148,
+      pickupLabel: 'حي السلام',
+      dropoffLat: 32.616,
+      dropoffLng: 44.0242,
+      dropoffLabel: 'قرب المستشفى',
+      seatCount: SUPPORT_CASE.seatCount,
+      fare: SUPPORT_CASE.pricePerSeat * SUPPORT_CASE.seatCount,
+    },
+  });
+
+  console.log(
+    `✔ Support case: trip with ${SUPPORT_CASE.seatsTotal - SUPPORT_CASE.seatCount} of ` +
+      `${SUPPORT_CASE.seatsTotal} seats free, one confirmed booking`,
+  );
+}
+
 async function seedNoShowRider(): Promise<void> {
   // Rebuilt from scratch: a previous run's spec may have voided a record or
   // lifted the block entirely, and a voided row updated in place would still
@@ -358,6 +478,7 @@ async function main(): Promise<void> {
   await seedCorridors();
   await seedDrivers();
   await seedNoShowRider();
+  await seedSupportCase();
   await resetLoginThrottle();
 }
 

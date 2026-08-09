@@ -645,6 +645,51 @@ is the admin panel, and making part of it public inverts its threat model.
 And the payoff is small: the rider is *in the car* and can send another
 message. The WhatsApp message alone is the value, and it ships.
 
+## Admin intervention (locked rule)
+
+**Every admin action runs the SAME service method the apps use.** No admin
+endpoint writes state directly — not one.
+
+The panel can now cancel a booking on a rider's behalf, cancel a trip on a
+driver's behalf, suspend a driver, and void a no-show. Before that the only
+intervention tool was typing SQL into `psql`, which happened three times during
+testing and leaves no trace of who did it or why.
+
+- **Why it has to be the same method.** A raw `UPDATE` on a booking row skips
+  the row-locked seat return, the `LOCKED`→`OPEN` reopen and both
+  notifications — i.e. the zero-overbooking guarantee, silently, on the one
+  code path used when something has already gone wrong. `cancelAsAdmin` /
+  `cancelTripAsAdmin` are three lines each: they call the private core the
+  owner's path calls. **The only difference is the ownership check.**
+- **An intervention is never MORE permissive than the action it stands in
+  for.** An admin cannot cancel on an `EN_ROUTE` trip, because a rider cannot.
+  The state machine is the product's rule, not a rider-facing courtesy.
+  Verified by mutation: swapping `cancelAsAdmin` for a direct write fails three
+  integration tests — the seat return, the reopen, and the `EN_ROUTE` refusal.
+- **A reason is mandatory on every action** (`InterveneDto`, ≥3 chars) and
+  every action writes an `AdminAction` row. **Act first, then record**: a log
+  written first fills with actions the state machine refused, and an audit log
+  that lies is worse than none.
+- **The acting admin comes from the JWT, never the request body.** An audit log
+  that accepts the actor's identity from the client is a text field, not a
+  record.
+- **`adminUsername` is copied into the row, not joined.** Audit logs outlive
+  accounts, and a row that says «adm_x9f2 cancelled a booking» is useless
+  exactly when an incident is being reviewed.
+
+### The panel is a privileged view, not a public one
+
+**Phone numbers are visible to admins by necessity** — support begins with a
+number someone is calling from, and there is no other way to reach their
+account. That is a privileged view behind an admin session.
+
+**Emergency contacts (#47) appear nowhere in the panel.** They are the rider's
+own private data and no support task needs them. Every `select` in
+`admin-support.service.ts` is explicit for that reason, and
+`admin-support.int-spec.ts` guards it by searching the serialised payloads for
+the number rather than checking fields — one future `include: { user: true }`
+would attach the whole row with no unit test failing.
+
 ## Splitting work into several PRs (locked rule)
 
 **Every PR targets `main` directly, and they are merged in order. Never stack a
