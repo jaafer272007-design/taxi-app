@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared/shared.dart';
 
 import 'support/driver_fakes.dart';
+import 'support/pool_fakes.dart';
 
 void main() {
   testWidgets('DriverApp builds and shows the splash before bootstrap resolves',
@@ -25,6 +26,7 @@ void main() {
       authController: auth,
       driverController: driver,
       driverTripApi: FakeDriverTripApi(),
+      poolApi: FakePoolApi(),
     ));
     await tester.pump();
 

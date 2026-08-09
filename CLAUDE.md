@@ -3,7 +3,7 @@
 
 ## المشروع
 منصة نقل **مشترك بالمقعد (pooled)** بين المحافظات، عراقية.
-**Phase 1 مكتملة، وPhase 2 Stage 1 (الخلفية) مبنيّة.**
+**Phase 1 مكتملة، وPhase 2 مكتملة بمراحلها الثلاث.**
 
 اتجاهان الآن، ويتقاطعان عند نفس الصفوف:
 - **يبدأه السائق (Phase 1):** السائق يعلن رحلة والراكب يحجز مقعداً.
@@ -19,14 +19,15 @@ door-to-door، cash، Android.
 - ❌ **microservices** — النظام modular monolith. أضف modules، لا خدمات منفصلة.
 - ❌ **موقع لحظي للسائقين، إرسال موجَّه، تتبّع توفّر** — لا شيء منها موجود،
   واكتساب السائق في Phase 2 **لوحة يتصفّحها ويستلم منها**. راجع «التجميع».
-- ❌ **تحسين المسار / تقليل الانحراف** — خارج نطاق Phase 2 Stage 1؛ السائق يرى
-  النقاط ويقرّر.
+- ❌ **تحسين المسار / تقليل الانحراف** — خارج نطاق Phase 2 كلها؛ السائق يرى
+  النقاط ويقرّر. (لوحة السائق تعرض **تباعد نقاط الصعود** بخط مستقيم — رقمٌ
+  يقرأه، لا ترتيبٌ يُقترح عليه.)
 
-> **Phase 2 Stage 1 (الخلفية) وStage 2 (واجهة الراكب) مبنيّتان.**
-> `Trip.createdBy = SYSTEM` و`SeatRequest` — القيم التي وُضعت في المخطط منذ
-> Phase 1 لهذه اللحظة — تعملان، والراكب يطلب مقعداً ويتابع طلبه ويردّ على رفع
-> السعر. **واجهة السائق (Stage 3: اللوحة والاستلام واقتراح الرفع) لم تُبنَ
-> بعد**؛ مساراتها موجودة في الـAPI بلا شاشة تستدعيها.
+> **Phase 2 مكتملة بمراحلها الثلاث.** الخلفية (Stage 1)، وواجهة الراكب
+> (Stage 2)، ولوحة السائق ومسار رفع السعر (Stage 3). الحلقة كاملة ومختبَرة
+> من طرف إلى طرف مقابل قاعدة بيانات حقيقية:
+> **يطلب راكب ← يتكوّن تجمّع ← يستلمه سائق ← تمضي الرحلة ← تكتمل ← تُسجَّل
+> الأرباح** (`services/api/src/pool/phase2-loop.int-spec.ts`).
 
 ## الـ Stack
 NestJS (monolith، modules نظيفة) · Prisma + PostgreSQL (PostGIS متاح، غير مستخدم بالـ Phase 1) · Redis · Flutter (Android) · React/Next.js (admin) · JWT + WhatsApp OTP · FCM.
@@ -917,6 +918,54 @@ asserts each of these rather than trusting the copy to stay honest:
   as a decline, so a rider who puts the phone down knows that is safe.
 - **«الرفض مجاني تماماً: لا رسوم، ولا يُحتسب غياباً»** in words, because that is
   the fear the sheet exists to answer.
+
+### The driver UI (stage 3) — the board and the raise
+
+- **The board is a SEGMENT inside the first tab, not a sixth destination.**
+  `FloatingPillNav` asserts a maximum of five and the driver already had five,
+  which forced the question — and the answer turned out to be the better model:
+  posting a trip and claiming a pool are two answers to *one* question ("how do
+  I fill this morning?"), so they belong on one surface («العمل») where a driver
+  can compare them, not in two places they must remember to check. The nav badge
+  carries the board's size, so a driver who has never opened it still learns
+  pools exist; the board is therefore loaded **once at shell mount**, not only
+  when the tab is opened, or the badge would only appear after you had already
+  found the thing it points at.
+- **A card answers one question — «is this worth driving?»** — in four blocks:
+  where and when (the **window**, never a single time), how full versus the
+  vehicle, what it pays **now and with a full car**, and whether the stops are
+  practical. The «لو امتلأت السيارة» line is dropped when the pool already fills
+  the car: printing the same number twice asks the driver to compare a figure
+  with itself.
+- **Stop spread is a straight-line measure, and that is not route optimisation.**
+  It computes no order and suggests no path — it answers "are these stops near
+  each other or across town?", which is otherwise only knowable by opening every
+  point on a map. Coarse buckets on purpose: a yes/no call, not a measurement.
+- **Refusals carry a CODE, and the app branches on the code.** «استلم سائق آخر»
+  means *look for another pool*, «انخفض العدد» means *wait*, and
+  «يتجاوز سعة سيارتك» means *this was never yours* — three opposite
+  instructions. `POOL_ALREADY_CLAIMED` / `POOL_EXPIRED` / `POOL_WINDOW_PASSED` /
+  `POOL_NOT_VIABLE` / `POOL_EXCEEDS_CAPACITY`, same structured-409 shape as
+  `RIDER_BLOCKED_NO_SHOW`. Matching the Arabic instead would have broken
+  silently on the first wording improvement — and the pre-claim check used to
+  answer «لم يعد متاحاً» for *both* "someone took it" and "it expired", which
+  are different facts.
+- **`canPropose` is server-computed from the SAME conditions `proposeRaise`
+  enforces**, and `blockedReason` says why in Arabic when it is false. An action
+  the UI offers and the server refuses is worse than no action — the same locked
+  rule as `ratable` and `stage`. A greyed-out button with no reason is what
+  generates support calls.
+- **The raise sheet shows three outcomes, not one.** Now, if everyone accepts,
+  and **if only the minimum accepts** — because a decliner is *released*, so a
+  higher price per seat can mean less money and fewer passengers. The arithmetic
+  lives in `raise_projection.dart`, pure and unit-tested, since the whole
+  decision rests on it. At exactly `POOL_MIN_SEATS` the copy changes register:
+  the driver is not risking a smaller fare, they are risking the entire trip.
+  The stepper opens **one step above the current price, never at the cap**, so
+  the screen never reads as a recommendation to charge the maximum.
+- **A released rider stays ON the response list, flagged.** "Where did the third
+  one go?" is a question the driver asks, and deleting the row makes the answer a
+  disappearance.
 
 ## Splitting work into several PRs (locked rule)
 

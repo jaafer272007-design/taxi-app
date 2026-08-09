@@ -7,10 +7,15 @@ import 'package:provider/provider.dart';
 import 'package:shared/shared.dart';
 
 import 'support/driver_fakes.dart';
+import 'support/pool_fakes.dart';
 
-Widget _host(TripDetailController c) =>
-    ChangeNotifierProvider<TripDetailController>.value(
-      value: c,
+Widget _host(TripDetailController c) => MultiProvider(
+      providers: [
+        ChangeNotifierProvider<TripDetailController>.value(value: c),
+        // No pool: this screen is mostly driver-posted trips, and the panel
+        // draws nothing for them.
+        raiseProvider(),
+      ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light(),

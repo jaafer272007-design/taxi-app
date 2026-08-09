@@ -32,6 +32,20 @@ export class PoolController {
     return this.pools.board(driverUserId);
   }
 
+  /**
+   * حالة تجمّع رحلة استلمتها — السعر والسقف والمهلة وردود الركّاب.
+   *
+   * `null` جواب صحيح لا خطأ: رحلة أعلنها السائق بنفسه لا تجمّع لها، والتطبيق
+   * يستدعي هذا على كل رحلة بلا أن يعرف مسبقاً أيّها من تجمّع.
+   */
+  @Get('mine/:tripId')
+  mine(
+    @CurrentUser('id') driverUserId: string,
+    @Param('tripId') tripId: string,
+  ) {
+    return this.pools.driverPoolForTrip(driverUserId, tripId);
+  }
+
   /** استلام تجمّع → يصير رحلة بحجوزات. أول من يستلم يأخذه. */
   @Post(':id/claim')
   @HttpCode(HttpStatus.OK)

@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:shared/shared.dart';
 
 import 'support/driver_fakes.dart';
+import 'support/pool_fakes.dart';
 
 /// Getting to the rider: the pickup/dropoff points on a map, and the phone
 /// number on the booking row.
@@ -37,6 +38,7 @@ void main() {
         providers: [
           ChangeNotifierProvider<TripDetailController>.value(value: c),
           Provider<LinkLauncher>.value(value: launcher),
+          raiseProvider(),
         ],
         child: MaterialApp(
           debugShowCheckedModeBanner: false,

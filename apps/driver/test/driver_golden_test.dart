@@ -22,6 +22,7 @@ import 'package:provider/provider.dart';
 import 'package:shared/shared.dart';
 
 import 'support/driver_fakes.dart';
+import 'support/pool_fakes.dart';
 
 /// Golden (visual snapshot) tests for the driver onboarding + post-trip screens,
 /// BOTH light and dark, RTL, Arabic, real Cairo + Lucide fonts, at a 390×844
@@ -253,6 +254,7 @@ Widget _hostDetail(TripDetailController c) => MultiProvider(
       providers: [
         ChangeNotifierProvider<TripDetailController>.value(value: c),
         Provider<LinkLauncher>.value(value: const _InertLauncher()),
+        raiseProvider(),
       ],
       child: const TripDetailScreen(),
     );

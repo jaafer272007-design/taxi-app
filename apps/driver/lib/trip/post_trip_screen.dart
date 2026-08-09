@@ -12,10 +12,14 @@ import 'driver_trip_models.dart';
 /// + seat count (capped at the vehicle) + the price per seat the DRIVER sets,
 /// prefilled with the corridor's suggestion and bounded by its allowed range.
 class PostTripScreen extends StatelessWidget {
-  const PostTripScreen({super.key, required this.onPosted});
+  const PostTripScreen({super.key, required this.onPosted, this.header});
 
   /// Called after a trip is posted successfully (switch to رحلاتي).
   final VoidCallback onPosted;
+
+  /// Optional bar pinned under the app bar — the shell puts the «انشر رحلة /
+  /// التجمّعات» mode selector here so it sits in the same place in both modes.
+  final Widget? header;
 
   Future<void> _submit(BuildContext context, PostTripController c) async {
     final ok = await c.submit();
@@ -42,6 +46,7 @@ class PostTripScreen extends StatelessWidget {
 
     return AppScaffold(
       title: 'انشر رحلة',
+      header: header,
       scrollable: true,
       bottomBar: AppButton(
         label: 'انشر الرحلة',

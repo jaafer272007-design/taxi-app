@@ -8,6 +8,7 @@ import 'driver/driver_api.dart';
 import 'driver/driver_controller.dart';
 import 'driver/driver_gate.dart';
 import 'driver/image_picker_document_picker.dart';
+import 'pool/pool_api.dart';
 import 'trip/driver_trip_api.dart';
 
 Future<void> main() async {
@@ -28,6 +29,7 @@ Future<void> main() async {
     picker: ImagePickerDocumentPicker(),
   );
   final driverTripApi = DioDriverTripApi(apiClient.dio);
+  final poolApi = DioPoolApi(apiClient.dio);
   final notificationsController = NotificationsController(
     api: DioNotificationApi(apiClient.dio),
   );
@@ -40,6 +42,7 @@ Future<void> main() async {
     authController: authController,
     driverController: driverController,
     driverTripApi: driverTripApi,
+    poolApi: poolApi,
     notificationsController: notificationsController,
   ));
 }
@@ -54,6 +57,7 @@ class DriverApp extends StatelessWidget {
     required this.authController,
     required this.driverController,
     required this.driverTripApi,
+    required this.poolApi,
     required this.notificationsController,
   });
 
@@ -61,6 +65,7 @@ class DriverApp extends StatelessWidget {
   final AuthController authController;
   final DriverController driverController;
   final DriverTripApi driverTripApi;
+  final PoolApi poolApi;
   final NotificationsController notificationsController;
 
   @override
@@ -70,6 +75,7 @@ class DriverApp extends StatelessWidget {
         ChangeNotifierProvider<AuthController>.value(value: authController),
         ChangeNotifierProvider<DriverController>.value(value: driverController),
         Provider<DriverTripApi>.value(value: driverTripApi),
+        Provider<PoolApi>.value(value: poolApi),
         // Opens tel: / wa.me / geo: links. The concrete impl lives here; every
         // screen depends only on the LinkLauncher interface, so widget tests
         // inject a fake and assert the URL a tap produced.

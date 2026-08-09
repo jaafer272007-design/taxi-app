@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared/shared.dart';
 
+import '../pool/pool_api.dart';
+import '../pool/raise_controller.dart';
 import 'driver_trip_api.dart';
 import 'driver_trip_models.dart';
 import 'my_trips_controller.dart';
@@ -132,10 +134,21 @@ class _TripCard extends StatelessWidget {
   Future<void> _open(BuildContext context) async {
     final api = context.read<DriverTripApi>();
     final myTrips = context.read<MyTripsController>();
+    final poolApi = context.read<PoolApi>();
     await Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => ChangeNotifierProvider<TripDetailController>(
-        create: (_) =>
-            TripDetailController(api: api, trip: trip, corridor: corridor),
+      builder: (_) => MultiProvider(
+        providers: [
+          ChangeNotifierProvider<TripDetailController>(
+            create: (_) =>
+                TripDetailController(api: api, trip: trip, corridor: corridor),
+          ),
+          // Asked for EVERY trip, not only pooled ones: the app has no way to
+          // know which came from a pool, and the endpoint answering `null` is
+          // the answer rather than an error.
+          ChangeNotifierProvider<RaiseController>(
+            create: (_) => RaiseController(api: poolApi, tripId: trip.id),
+          ),
+        ],
         child: const TripDetailScreen(),
       ),
     ));

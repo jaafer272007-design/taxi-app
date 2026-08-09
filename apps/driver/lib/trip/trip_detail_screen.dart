@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared/shared.dart';
 
+import '../pool/raise_controller.dart';
+import '../pool/raise_panel.dart';
 import 'driver_trip_models.dart';
 import 'rate_rider_sheet.dart';
 import 'trip_detail_controller.dart';
@@ -162,11 +164,19 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     final c = context.watch<TripDetailController>();
     final space = context.space;
 
+    final raise = context.watch<RaiseController>();
+
     return PollingScope(
       interval: kTripDetailPollInterval,
-      // Nothing left to learn about a finished trip.
-      enabled: c.isLive,
-      onPoll: c.refreshSilently,
+      // Nothing left to learn about a finished trip — EXCEPT an open price
+      // raise, which the server resolves on its own when the deadline passes.
+      // That is the one thing on this screen that changes with neither the
+      // driver nor a rider touching anything.
+      enabled: c.isLive || raise.isLive,
+      onPoll: () => Future.wait([
+        c.refreshSilently(),
+        raise.refreshSilently(),
+      ]),
       child: AppScaffold(
         title: 'تفاصيل الرحلة',
         padded: false,
@@ -183,6 +193,10 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                 _SummaryCard(summary: c.summary!),
               ],
               SizedBox(height: space.lg),
+              // Phase 2. Draws NOTHING for a trip the driver posted themselves,
+              // which is most of them — the panel is an addition to a screen
+              // that already works without it.
+              const RaisePanel(),
               Text('الحجوزات',
                   style: context.text.h2
                       .copyWith(color: context.colors.textPrimary)),
