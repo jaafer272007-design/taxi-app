@@ -9,9 +9,11 @@ import 'package:rider/booking/booking_models.dart';
 import 'package:rider/booking/booking_screen.dart';
 import 'package:rider/booking/my_bookings_controller.dart';
 import 'package:rider/booking/my_bookings_screen.dart';
+import 'package:rider/pool/seat_request_models.dart';
 import 'package:shared/shared.dart';
 
 import 'support/booking_fakes.dart';
+import 'support/pool_fakes.dart';
 import 'support/fakes.dart';
 import 'support/trip_fakes.dart';
 
@@ -170,6 +172,47 @@ void main() {
     });
   });
 
+  // ── Phase 2: a seat request living on the same screen ─────────────────
+  //
+  // This is the shot that proves the two systems share one surface. The
+  // request card sits ABOVE the bookings, under a rule, so that when a driver
+  // claims the pool the row disappears and a booking takes its place in the
+  // same list — one thing becoming another, rather than something vanishing
+  // here and appearing over there.
+  group('حجوزاتي — طلب مقعد قيد الانتظار', () {
+    testWidgets('light', (t) async {
+      await _golden(t,
+          name: 'my_bookings_request_light',
+          brightness: Brightness.light,
+          child: await _myBookings(seatRequests: [_pendingRequest]));
+    });
+    testWidgets('dark', (t) async {
+      await _golden(t,
+          name: 'my_bookings_request_dark',
+          brightness: Brightness.dark,
+          child: await _myBookings(seatRequests: [_pendingRequest]));
+    });
+  });
+
+  // A rider who has asked but not yet booked anything: no bookings at all,
+  // and the screen must NOT tell them «لا توجد حجوزات» over their own request.
+  group('حجوزاتي — طلب بلا حجوزات بعد', () {
+    testWidgets('light', (t) async {
+      await _golden(t,
+          name: 'my_bookings_request_only_light',
+          brightness: Brightness.light,
+          child: await _myBookings(
+              withBookings: false, seatRequests: [_formingRequest]));
+    });
+    testWidgets('dark', (t) async {
+      await _golden(t,
+          name: 'my_bookings_request_only_dark',
+          brightness: Brightness.dark,
+          child: await _myBookings(
+              withBookings: false, seatRequests: [_formingRequest]));
+    });
+  });
+
   // The share preview. What the rider reads before anything leaves their
   // phone — so the message itself is the thing being reviewed here, including
   // that the plate survives as Western digits inside an RTL sheet.
@@ -192,6 +235,18 @@ void main() {
 }
 
 const _emergency = EmergencyContact(name: 'أم علي', phone: '+9647701112233');
+
+/// Enough riders gathered; now it needs a driver from the board.
+final _pendingRequest =
+    seatRequestFixture(stage: SeatRequestStage.waitingForDriver);
+
+/// Still gathering. Three seats, never two: `formatSeats(2)` is the Arabic dual
+/// «مقعدان» and carries no digit at all, so a two-seat fixture renders clean
+/// straight past a fused-`٠` bug.
+final _formingRequest = seatRequestFixture(
+  stage: SeatRequestStage.waitingForRiders,
+  seatCount: 3,
+);
 
 /// Open the share sheet before the snapshot.
 Future<void> _openShareSheet(WidgetTester tester) async {
@@ -282,33 +337,41 @@ Future<Widget> _myBookings({
   /// the Arabic dual «مقعدان», which carries no digit at all, so a fixture of
   /// 2 renders clean straight past a broken numeral path (CLAUDE.md).
   int seatCount = 2,
+  /// Pending seat requests (Phase 2). Empty by default, so every pre-existing
+  /// golden here renders exactly the screen it did before pooling existed.
+  List<SeatRequest> seatRequests = const [],
+  /// Drop the bookings entirely — the state a rider is in between sending
+  /// their first request and a driver claiming it.
+  bool withBookings = true,
 }) async {
   final api = FakeBookingApi()
-    ..listMineResult = [
-      mineFixture(
-        id: 'b1',
-        seatCount: seatCount,
-        fare: 6000 * seatCount,
-        status: BookingStatus.confirmed,
-        upcoming: true,
-        hourUtc: 4,
-        minute: 30,
-        tripStatus: tripStatus,
-      ),
-      mineFixture(
-        id: 'b2',
-        seatCount: 1,
-        fare: 6000,
-        status: BookingStatus.completed,
-        upcoming: false,
-        hourUtc: 6,
-        minute: 0,
-        // Completed and unrated → the rate prompt rides at the top of the
-        // screen and the card below carries «قيّم السائق».
-        ratable: true,
-        driverName: 'أبو علي',
-      ),
-    ]
+    ..listMineResult = !withBookings
+        ? const []
+        : [
+            mineFixture(
+              id: 'b1',
+              seatCount: seatCount,
+              fare: 6000 * seatCount,
+              status: BookingStatus.confirmed,
+              upcoming: true,
+              hourUtc: 4,
+              minute: 30,
+              tripStatus: tripStatus,
+            ),
+            mineFixture(
+              id: 'b2',
+              seatCount: 1,
+              fare: 6000,
+              status: BookingStatus.completed,
+              upcoming: false,
+              hourUtc: 6,
+              minute: 0,
+              // Completed and unrated → the rate prompt rides at the top of
+              // the screen and the card below carries «قيّم السائق».
+              ratable: true,
+              driverName: 'أبو علي',
+            ),
+          ]
     // The fake returns this for any trip, but only the UPCOMING booking is ever
     // asked about — so the past card below has no contact row, which is the
     // rule made visible.
@@ -321,6 +384,7 @@ Future<Widget> _myBookings({
     providers: [
       ChangeNotifierProvider<MyBookingsController>.value(value: c),
       ChangeNotifierProvider<AuthController>.value(value: auth),
+      seatRequestsProvider(requests: seatRequests),
     ],
     child: const MyBookingsScreen(),
   );

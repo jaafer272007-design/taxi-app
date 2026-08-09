@@ -17,6 +17,7 @@ import 'package:rider/trip/trip_search_controller.dart';
 import 'package:shared/shared.dart';
 
 import 'support/booking_fakes.dart';
+import 'support/pool_fakes.dart';
 import 'support/fakes.dart';
 import 'support/trip_fakes.dart';
 
@@ -295,7 +296,10 @@ void main() {
 
     Widget screen(MyBookingsController c) => host(
           const MyBookingsScreen(),
-          extra: [ChangeNotifierProvider<MyBookingsController>.value(value: c)],
+          extra: [
+            ChangeNotifierProvider<MyBookingsController>.value(value: c),
+            seatRequestsProvider(),
+          ],
         );
 
     testWidgets('an upcoming booking shows the driver number', (t) async {

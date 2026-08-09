@@ -7,6 +7,7 @@ import 'package:rider/booking/my_bookings_screen.dart';
 import 'package:shared/shared.dart';
 
 import 'support/booking_fakes.dart';
+import 'support/pool_fakes.dart';
 import 'support/fakes.dart';
 
 /// The two bugs from live end-to-end testing, at the level they were seen:
@@ -20,6 +21,9 @@ void main() {
         providers: [
           Provider<LinkLauncher>.value(value: _NullLauncher()),
           ChangeNotifierProvider<MyBookingsController>.value(value: c),
+          // حجوزاتي also reads the rider's seat requests; empty here, so
+          // the screen is exactly what it was before Phase 2.
+          seatRequestsProvider(),
           // The screen reads the rider's own emergency contact from the
           // AuthController, which the real tree always provides at the app
           // shell. Tests that care about the contact pass a bootstrapped one;

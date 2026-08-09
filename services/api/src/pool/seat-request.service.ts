@@ -19,6 +19,7 @@ import { CreateSeatRequestDto } from './dto/create-seat-request.dto';
 import {
   PoolPolicy,
   intersectWindows,
+  isViable,
   maxWindowMs,
   overlappingPoolFilter,
   poolJoinFilter,
@@ -31,6 +32,27 @@ const LIVE_REQUEST_STATUSES = [
   SeatRequestStatus.PENDING,
   SeatRequestStatus.MATCHED,
 ] as const;
+
+/**
+ * حالة الطلب **كما يفهمها الراكب**، لا كما تُخزَّن.
+ *
+ * `SeatRequestStatus` يجيب «كيف انتهى هذا الصف»، وهذا يجيب «ماذا أنتظر الآن»
+ * — وهما سؤالان مختلفان: `PENDING` وحدها لا تفرّق بين «ما زلنا نجمّع ركّاباً»
+ * و«اكتمل العدد وننتظر سائقاً»، والفرق هو كل ما يريد الراكب معرفته.
+ */
+export type SeatRequestStage =
+  | 'WAITING_FOR_RIDERS'
+  | 'WAITING_FOR_DRIVER'
+  | 'RAISE_PENDING'
+  | 'CLAIMED'
+  | 'CANCELLED'
+  | 'DECLINED'
+  | 'EXPIRED';
+
+/** صفّ طلب مع ممرّه وتجمّعه ورفع التجمّع — ما يحتاجه `serialize`. */
+type SeatRequestWithPool = Prisma.SeatRequestGetPayload<{
+  include: { corridor: true; pool: { include: { raise: true } } };
+}>;
 
 @Injectable()
 export class SeatRequestService {
@@ -55,7 +77,7 @@ export class SeatRequestService {
    * الفحص لما بعد، لكان راكب موقوف يدخل تجمّعاً ويُخرَج منه لاحقاً، وهو أسوأ
    * من رفضه الآن: السائق يكون قد استلم على أساس مقاعده.
    */
-  async create(riderId: string, dto: CreateSeatRequestDto): Promise<SeatRequest> {
+  async create(riderId: string, dto: CreateSeatRequestDto) {
     const corridor = await this.prisma.corridor.findUnique({
       where: { id: dto.corridorId },
     });
@@ -120,7 +142,7 @@ export class SeatRequestService {
       );
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const created = await this.prisma.$transaction(async (tx) => {
       const pool = await this.joinOrOpenPool(tx, corridor, window, dto.seatCount);
       return tx.seatRequest.create({
         data: {
@@ -140,6 +162,18 @@ export class SeatRequestService {
         },
       });
     });
+
+    // **نفس شكل `GET /seat-requests/mine`**، لا صفّ Prisma خام.
+    //
+    // الصفّ الخام يخرج بلا `stage` وبلا `corridor` وبنقاط مسطّحة
+    // (`pickupLat`…)، أي شكل ثانٍ لنفس الشيء — والتطبيق كان سيحتاج مُحلِّلاً
+    // ثانياً له، وهو بالضبط ما يجعل حقلاً جديداً يُضاف في مكان وينسى في الآخر.
+    // القراءة الإضافية ثمن بسيط مقابل مسار تسلسل واحد.
+    const full = await this.prisma.seatRequest.findUniqueOrThrow({
+      where: { id: created.id },
+      include: { corridor: true, pool: { include: { raise: true } } },
+    });
+    return this.serialize(full);
   }
 
   /**
@@ -207,6 +241,44 @@ export class SeatRequestService {
     });
   }
 
+  /**
+   * ما يراه الراكب عن طلبه، **محسوباً على الخادم**.
+   *
+   * الفرق بين «ننتظر ركّاباً» و«ننتظر سائقاً» يتطلّب `POOL_MIN_SEATS`، وهو رقم
+   * سياسة. لو أرسلنا `poolSeats` وتركنا التطبيق يقارنه بـ٢ مكتوبة في Dart،
+   * لصار للسياسة نسختان — وأول تغيير للعتبة يجعل التطبيق يكذب على الراكب.
+   *
+   * نفس القاعدة المثبّتة في «قادمة/سابقة»: القرار يعيش في مكان واحد، والتطبيق
+   * **يضع البطاقة حيث يُقال له** ولا يعيد اشتقاق الحكم.
+   */
+  private stageOf(r: {
+    status: SeatRequestStatus;
+    raiseResponse: unknown;
+    pool: { status: PoolStatus; totalSeats: number; raise: unknown } | null;
+  }): SeatRequestStage {
+    switch (r.status) {
+      case SeatRequestStatus.CANCELLED:
+        return 'CANCELLED';
+      case SeatRequestStatus.DECLINED:
+        return 'DECLINED';
+      case SeatRequestStatus.EXPIRED:
+        return 'EXPIRED';
+      case SeatRequestStatus.MATCHED:
+        // رفعٌ مفتوح لم يردّ عليه الراكب بعد هو الحالة الوحيدة التي تطلب منه
+        // فعلاً الآن — ولذلك تسبق «تأكّدت».
+        if (r.pool?.status === PoolStatus.RAISE_PENDING && r.raiseResponse == null) {
+          return 'RAISE_PENDING';
+        }
+        return 'CLAIMED';
+      case SeatRequestStatus.PENDING:
+      default:
+        if (!r.pool) return 'WAITING_FOR_RIDERS';
+        return isViable(r.pool.totalSeats, this.policy)
+          ? 'WAITING_FOR_DRIVER'
+          : 'WAITING_FOR_RIDERS';
+    }
+  }
+
   /** طلبات هذا الراكب، الأحدث أولاً، مع حالة تجمّعها. */
   async listMine(riderId: string) {
     const requests = await this.prisma.seatRequest.findMany({
@@ -216,9 +288,21 @@ export class SeatRequestService {
       take: 50,
     });
 
-    return requests.map((r) => ({
+    return requests.map((r) => this.serialize(r));
+  }
+
+  /**
+   * شكل الطلب كما يراه الراكب — **مسار تسلسل واحد** لكل من الإنشاء والقائمة.
+   *
+   * التطبيق يحلّل شكلاً واحداً؛ نسختان كانتا ستعنيان أن حقلاً يُضاف هنا ويُنسى
+   * هناك، ولن يكشفه شيء حتى تظهر شاشة ناقصة عند المستخدم.
+   */
+  private serialize(r: SeatRequestWithPool) {
+    return {
       id: r.id,
       status: r.status,
+      /** ما يُعرض للراكب — محسوب هنا، لا يُشتقّ في التطبيق. */
+      stage: this.stageOf(r),
       seatCount: r.seatCount,
       windowStart: r.windowStart.toISOString(),
       windowEnd: r.windowEnd.toISOString(),
@@ -248,7 +332,7 @@ export class SeatRequestService {
             }
           : null,
       createdAt: r.createdAt.toISOString(),
-    }));
+    };
   }
 
   /**

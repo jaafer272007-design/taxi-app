@@ -4,6 +4,10 @@ import 'package:shared/shared.dart';
 
 import 'booking_models.dart';
 import 'my_bookings_controller.dart';
+import '../pool/price_raise_sheet.dart';
+import '../pool/seat_request_card.dart';
+import '../pool/seat_request_models.dart';
+import '../pool/seat_requests_controller.dart';
 
 /// "حجوزاتي": the rider's bookings, filtered upcoming/past.
 ///
@@ -42,6 +46,11 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       if (!mounted) return;
       final c = context.read<MyBookingsController>();
       if (!c.hasLoaded) c.load();
+      // The requests load on the same first frame. Separate controllers, one
+      // trigger: a rider arriving here from the «أرسلنا طلبك» screen must find
+      // their request already on the list, not after a poll interval.
+      final requests = context.read<SeatRequestsController>();
+      if (!requests.hasLoaded) requests.load();
     });
   }
 
@@ -72,6 +81,49 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     // The failure that actually happens: the rider asked for more seats than
     // the trip still has. The server's Arabic message says so precisely.
     _snack(err ?? 'تم تحديث عدد المقاعد.');
+  }
+
+  /// Cancel a request nobody has claimed yet.
+  ///
+  /// A confirm dialog, unlike the route-request tap: this one holds a seat in
+  /// a forming pool, and undoing it means asking again and waiting again.
+  Future<void> _onCancelRequest(SeatRequest request) async {
+    final c = context.read<SeatRequestsController>();
+    final confirmed = await showAppConfirmDialog(
+      context,
+      title: 'إلغاء الطلب؟',
+      message: 'سيُلغى طلبك على هذا المسار. يمكنك إرساله من جديد في أي وقت.',
+      confirmLabel: 'إلغاء الطلب',
+      cancelLabel: 'تراجع',
+      confirmVariant: AppButtonVariant.danger,
+    );
+    if (!confirmed || !mounted) return;
+    final message = await c.cancel(request.id);
+    if (!mounted) return;
+    _snack(message ?? 'أُلغي طلبك.');
+  }
+
+  /// Open the price-raise offer.
+  Future<void> _onRespondToRaise(SeatRequest request) async {
+    final c = context.read<SeatRequestsController>();
+    await PriceRaiseSheet.show(
+      context,
+      request: request,
+      onRespond: ({required bool accept}) =>
+          c.respondToRaise(request.id, accept: accept),
+    );
+    if (!mounted) return;
+    // Whatever they chose, the list below has already been reloaded by the
+    // controller — the confirmation is the card changing, plus one line.
+    final answered = c.all.firstWhere(
+      (r) => r.id == request.id,
+      orElse: () => request,
+    );
+    if (answered.stage == SeatRequestStage.declined) {
+      _snack('رفضت السعر الجديد. أُلغي حجزك بلا أي رسوم.');
+    } else if (answered.stage == SeatRequestStage.claimed) {
+      _snack('وافقت على السعر الجديد. حجزك مؤكد.');
+    }
   }
 
   void _snack(String message) {
@@ -150,12 +202,18 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   @override
   Widget build(BuildContext context) {
     final c = context.watch<MyBookingsController>();
+    final requests = context.watch<SeatRequestsController>();
 
     return PollingScope(
       interval: kBookingsPollInterval,
       // A finished history cannot change on its own; asking about it forever
       // is the definition of polling a screen with nothing to learn.
-      enabled: c.hasLiveBookings,
+      //
+      // A live seat request counts too, and it is the more time-sensitive of
+      // the two: a pool being claimed, or a price raise with a response
+      // deadline, both land here. A rider watching this screen with a pending
+      // request and no booking would otherwise see nothing tick.
+      enabled: c.hasLiveBookings || requests.hasLiveRequests,
       // …but coming BACK to this tab must always re-ask, and that is a
       // different question. A rider who opened حجوزاتي before booking anything
       // has an empty list, so `hasLiveBookings` is false and nothing ticks —
@@ -163,12 +221,25 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       // true. Their first booking was therefore invisible here until the app
       // was restarted.
       refreshWhenVisible: true,
-      onPoll: c.refreshSilently,
-      child: _body(c),
+      // Both, on one beat. Two scopes would mean two independent timers on one
+      // screen, and the claim moment — a request disappearing as a booking
+      // appears — would arrive as two separate flickers instead of one change.
+      //
+      // CONCURRENT, not sequential, and that is about the claim moment too.
+      // The two endpoints are read at two instants; if a driver claims between
+      // them, one list has the news and the other does not. Read sequentially,
+      // that window is a whole round trip — long enough for a rider to watch
+      // their journey vanish from BOTH lists (bookings answered before the
+      // claim, requests after it) with nothing on screen at all. Issued
+      // together, the window shrinks to the difference in server response
+      // times, so any inconsistency lasts at most a frame.
+      onPoll: () =>
+          Future.wait([c.refreshSilently(), requests.refreshSilently()]),
+      child: _body(c, requests),
     );
   }
 
-  Widget _body(MyBookingsController c) {
+  Widget _body(MyBookingsController c, SeatRequestsController requests) {
     return AppScaffold(
       title: 'حجوزاتي',
       padded: false,
@@ -180,10 +251,17 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
             message: c.error ?? 'حدث خطأ. حاول مرة أخرى.',
             onRetry: c.load,
           ),
-        MyBookingsStatus.loaded => c.isEmpty
+        // The empty state has to account for BOTH: a rider whose only live
+        // thing is a seat request has no bookings yet, and telling them «لا
+        // توجد حجوزات» while their request sits waiting would be a screen
+        // contradicting itself.
+        MyBookingsStatus.loaded => c.isEmpty && requests.live.isEmpty
             ? const _EmptyView()
             : _BookingsList(
                 controller: c,
+                requests: requests,
+                onCancelRequest: _onCancelRequest,
+                onRespondToRaise: _onRespondToRaise,
                 showPast: _showPast,
                 onSelectPast: (v) => setState(() => _showPast = v),
                 onCancel: _onCancel,
@@ -216,6 +294,9 @@ const Duration kBookingsPollInterval = Duration(seconds: 30);
 class _BookingsList extends StatelessWidget {
   const _BookingsList({
     required this.controller,
+    required this.requests,
+    required this.onCancelRequest,
+    required this.onRespondToRaise,
     required this.showPast,
     required this.onSelectPast,
     required this.onCancel,
@@ -232,6 +313,12 @@ class _BookingsList extends StatelessWidget {
   final MyBookingsController controller;
   final bool showPast;
   final ValueChanged<bool> onSelectPast;
+  /// Pending seat requests (Phase 2). They sit ABOVE the bookings on the same
+  /// screen so that a claim reads as one thing becoming another.
+  final SeatRequestsController requests;
+  final Future<void> Function(SeatRequest) onCancelRequest;
+  final Future<void> Function(SeatRequest) onRespondToRaise;
+
   final Future<void> Function(MyBookingsController, Booking) onCancel;
   final Future<void> Function(MyBookingsController, Booking) onChangeSeats;
   final Future<void> Function(LocationPoint, String) onShowPoint;
@@ -252,9 +339,18 @@ class _BookingsList extends StatelessWidget {
     final past = controller.past;
     final shown = showPast ? past : upcoming;
 
+    // Live requests only, and only under «قادمة»: a request that is still
+    // going somewhere is not history, and a settled one is already told in the
+    // booking it became (or in nothing at all, if it expired).
+    final liveRequests = showPast ? const <SeatRequest>[] : requests.live;
+
     return RefreshIndicator(
       color: context.colors.primary,
-      onRefresh: controller.refreshSilently,
+      // Concurrent for the same reason as the poll, and silent for the usual
+      // one: the RefreshIndicator is already the spinner.
+      onRefresh: () => Future.wait(
+        [controller.refreshSilently(), requests.refreshSilently()],
+      ),
       child: ListView(
         padding: EdgeInsets.all(space.lg),
         children: [
@@ -287,8 +383,35 @@ class _BookingsList extends StatelessWidget {
             ],
           ),
           SizedBox(height: space.lg),
+
+          // ── Phase 2: pending seat requests, ABOVE the bookings ────────────
+          //
+          // Same list, same scroll position. When a driver claims the pool the
+          // request row disappears and a booking card takes its place further
+          // down — one screen showing one thing become another, which is the
+          // only way that transition reads as continuous rather than as a
+          // disappearance followed by an unrelated appearance.
+          if (liveRequests.isNotEmpty) ...[
+            for (final r in liveRequests) ...[
+              SeatRequestCard(
+                request: r,
+                busy: requests.isBusy(r.id),
+                onCancel: r.stage.canCancel ? () => onCancelRequest(r) : null,
+                onRespondToRaise: r.stage == SeatRequestStage.raisePending
+                    ? () => onRespondToRaise(r)
+                    : null,
+              ),
+              SizedBox(height: space.md),
+            ],
+            Divider(color: context.colors.border, height: space.xl),
+          ],
+
           if (shown.isEmpty)
-            _FilterEmpty(showPast: showPast)
+            // A rider whose only live thing is a request has no bookings yet —
+            // and «لا حجوزات قادمة» under a request card would read as a
+            // contradiction. The request card above already says what is
+            // happening, so this stays quiet.
+            (liveRequests.isEmpty ? _FilterEmpty(showPast: showPast) : const SizedBox.shrink())
           else
             for (final b in shown) ...[
               _BookingCard(
