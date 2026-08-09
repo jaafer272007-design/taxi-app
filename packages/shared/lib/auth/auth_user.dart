@@ -14,6 +14,30 @@ Gender? genderFromApi(String? raw) => switch (raw) {
       _ => null,
     };
 
+/// Someone the user chose to be able to call in a hurry.
+///
+/// Their own contact, not another user's — so there is no cross-user boundary
+/// here. What there IS: it must never leave its owner. The server returns it
+/// from `GET /auth/me` and nowhere else, which is asserted against the real
+/// driver-facing payloads in `emergency-contact.int-spec.ts`.
+class EmergencyContact {
+  const EmergencyContact({required this.name, required this.phone});
+
+  final String name;
+
+  /// E.164 (`+9647…`), normalised by the server whichever way it was typed —
+  /// so `tel:` always gets a number that dials from a roaming SIM too.
+  final String phone;
+
+  factory EmergencyContact.fromJson(Map<String, dynamic> json) =>
+      EmergencyContact(
+        name: json['name'] as String? ?? '',
+        phone: json['phone'] as String? ?? '',
+      );
+
+  Map<String, dynamic> toJson() => {'name': name, 'phone': phone};
+}
+
 /// The authenticated user (mirrors the backend `PublicUser`).
 class AuthUser {
   const AuthUser({
@@ -23,6 +47,7 @@ class AuthUser {
     required this.profileComplete,
     this.name,
     this.gender,
+    this.emergencyContact,
   });
 
   final String id;
@@ -30,6 +55,10 @@ class AuthUser {
   final String? name;
   final Gender? gender;
   final List<String> roles;
+
+  /// `null` for almost everyone — the feature is opt-in and nothing about it
+  /// renders until the user has saved one. Never prompted for.
+  final EmergencyContact? emergencyContact;
 
   /// Whether the profile is complete enough to enter the app. The backend
   /// computes this (name + gender both set); we mirror its flag so a valid JWT
@@ -55,6 +84,10 @@ class AuthUser {
       // API responses (pre-gender) still route correctly.
       profileComplete:
           json['profileComplete'] as bool? ?? (name != null && gender != null),
+      emergencyContact: json['emergencyContact'] == null
+          ? null
+          : EmergencyContact.fromJson(
+              json['emergencyContact'] as Map<String, dynamic>),
     );
   }
 }

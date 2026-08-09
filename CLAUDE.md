@@ -571,6 +571,80 @@ so the two states never overlap. Marking and recording happen in **one
 transaction**; a status without a row (or a row without a status) corrupts the
 count later with nothing left to point at it.
 
+## Optional safety features (locked decision)
+
+Rides are 1–2 hours between cities, **shared with strangers** — a different
+wager from a short city hop, and trust is this product's competitive wedge.
+
+**Everything here is opt-in and user-initiated.** Nothing is shared
+automatically, nothing is on by default, and there is no prompt, badge or
+nudge anywhere. A rider who never touches these features must see no friction
+at all — which is a NEGATIVE guarantee, so it is asserted rather than assumed
+(`apps/rider/test/safety_test.dart`).
+
+### «شارك رحلتي» goes out through WhatsApp, not in-app
+
+**Because the recipient does not have the app, and never will** — it is a
+mother, a brother, a friend. Any in-app channel reaches only existing users,
+which excludes almost everyone a rider actually wants to tell. WhatsApp is
+where Iraqi families already are, works on wifi with no balance, and the
+rider picks the recipient **in WhatsApp's own picker**: the link is
+`https://wa.me/?text=…` with **no number**, so no code path can send it to
+someone they did not choose.
+
+- **The message is previewed before it is sent.** This is a safety feature, so
+  the rider has to see exactly what leaves their phone. Composing a message
+  about where they are and who they are with and firing it on one tap is the
+  opposite of the trust it exists for. The preview IS the feature.
+- **The plate is the payload.** It is what distinguishes this car from another
+  white Corolla. It stays in **Western digits, exactly as registered** — an
+  identifier matched against a metal plate, same class as a phone number and a
+  coordinate. Iraqi plates are stamped in Western digits.
+- **Search does not carry the plate**; `POST /bookings` and `/bookings/mine`
+  do. Same reasoning as phone numbers: otherwise scrolling results hands
+  anyone every driver's plate.
+- **The ٠-dot hazard applies where no golden can see it.** WhatsApp renders
+  this text, on a device we do not control, in a font we did not choose. So
+  the message never puts a dot-like glyph next to an Arabic-Indic digit **and
+  never a `:` immediately before one** — fields are joined with strong Arabic
+  words («الساعة», «يوم», «من … إلى») and each sits on its own line. `٠٧:٣٠` is
+  safe: that colon is between two digit runs. Cities join with «إلى», never an
+  arrow.
+- **Nothing is stored.** No recipient, no share log. "Who a rider told about
+  their trip" is sensitive data with no Phase 1 use.
+
+### The emergency contact is the rider's own, and never leaves them
+
+Optional name + phone on `User`, set from Settings → الأمان. `null` for almost
+everyone, which is the designed default.
+
+- **«اتصال طارئ» requires BOTH a saved contact AND an `EN_ROUTE` trip.**
+  Otherwise nothing renders — not a disabled button, not an empty state, not
+  an invitation. And it is a STATUS question, never the clock: a «الآن» trip's
+  `departureTime` passes the instant it is posted.
+- **Solid `danger`** — the loudest control in the design system — is right
+  here and nowhere else, precisely because it is never ambient. Under stress,
+  one-tap findability beats visual restraint.
+- **No confirm dialog.** `tel:` opens the DIALER; it does not place the call.
+  The platform already owns that confirmation, and a dialog on top costs
+  seconds in the only situation the button exists for.
+- **Name AND phone, always together.** A bare number on a screen opened under
+  pressure is not something anyone can act on.
+- **It is returned by `GET /auth/me` and nothing else.** Every path uses an
+  explicit `select` today, but one future `include: { rider: true }` would
+  attach the whole row with no unit test failing — so
+  `emergency-contact.int-spec.ts` **serialises the real driver-facing payloads
+  and searches the text** for the number.
+
+### The public trip-status page: deliberately NOT built
+
+A forwarded WhatsApp link is a **permanent unauthenticated handle** to a trip —
+anyone in any group it reaches can watch it. Bounding that needs token
+issuance, rotation and expiry, which is not cheap. The only web surface we have
+is the admin panel, and making part of it public inverts its threat model.
+And the payoff is small: the rider is *in the car* and can send another
+message. The WhatsApp message alone is the value, and it ships.
+
 ## Splitting work into several PRs (locked rule)
 
 **Every PR targets `main` directly, and they are merged in order. Never stack a

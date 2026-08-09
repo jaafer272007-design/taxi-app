@@ -72,6 +72,12 @@ export 'contact/link_launcher.dart';
 export 'contact/url_link_launcher.dart';
 export 'contact/contact_row.dart';
 
+// «شارك رحلتي» — optional, rider-initiated, and it leaves through WhatsApp
+// because the recipient does not have the app. The message builder is pure so
+// the thing that actually reaches another person can be unit-tested.
+export 'share/trip_share.dart';
+export 'share/share_trip_sheet.dart';
+
 // Refresh & polling. A poll recovers from a dropped connection by succeeding
 // next time; a socket has to notice it died and reconnect. Locked decision —
 // see CLAUDE.md → Refresh & polling.

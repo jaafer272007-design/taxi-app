@@ -48,6 +48,12 @@ class _FakeAuthApi implements AuthApi {
     if (gender != null) lastGender = gender;
     return _user(name: name ?? lastName, gender: gender ?? lastGender);
   }
+
+  // Onboarding never touches the emergency contact — it is opt-in, set later
+  // from Settings, and deliberately absent from every sign-up step.
+  @override
+  Future<AuthUser> updateEmergencyContact(EmergencyContact? contact) async =>
+      throw UnimplementedError();
 }
 
 AuthUser _user({String? name, Gender? gender}) => AuthUser(

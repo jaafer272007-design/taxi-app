@@ -140,6 +140,24 @@ class AuthController extends ChangeNotifier {
     }
   }
 
+  /// Save or clear the user's own emergency contact. Returns null on success,
+  /// or a ready-to-show Arabic message.
+  ///
+  /// Pass null to remove it. The server owns the phone-format rule, so an
+  /// invalid number comes back as its Arabic 400 rather than being second-
+  /// guessed here — one definition of "an Iraqi number", not two.
+  Future<String?> saveEmergencyContact(EmergencyContact? contact) async {
+    try {
+      _user = await _api.updateEmergencyContact(contact);
+      notifyListeners();
+      return null;
+    } on ApiException catch (e) {
+      return e.message;
+    } catch (_) {
+      return 'تعذّر حفظ جهة الاتصال. حاول مرة أخرى.';
+    }
+  }
+
   /// Sign out: clear the stored JWT and return to onboarding (phone step). Each
   /// app's root router reacts to the status change and shows its own login flow;
   /// a relaunch finds no token and starts onboarding fresh.

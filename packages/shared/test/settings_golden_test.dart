@@ -10,7 +10,11 @@ import 'package:shared/shared.dart';
 /// BOTH light and dark, RTL, Arabic, real Cairo + Lucide fonts, at a 390×844
 /// phone frame. CI generates the PNGs and mirrors them to docs/ui-screenshots/.
 class _GoldenAuthApi implements AuthApi {
-  const _GoldenAuthApi();
+  const _GoldenAuthApi({this.contact});
+
+  /// Null renders the DEFAULT state — which is the one that matters most: a
+  /// rider who never opts in must see an unobtrusive row and nothing else.
+  final EmergencyContact? contact;
 
   static const _user = AuthUser(
     id: 'u1',
@@ -27,11 +31,21 @@ class _GoldenAuthApi implements AuthApi {
   Future<AuthSession> verifyOtp(String phone, String code) async =>
       throw UnimplementedError();
   @override
-  Future<AuthUser> me() async => _user;
+  Future<AuthUser> me() async => AuthUser(
+        id: _user.id,
+        phone: _user.phone,
+        name: _user.name,
+        gender: _user.gender,
+        roles: _user.roles,
+        profileComplete: _user.profileComplete,
+        emergencyContact: contact,
+      );
   @override
   Future<AuthUser> updateName(String name) async => _user;
   @override
   Future<AuthUser> updateProfile({String? name, Gender? gender}) async => _user;
+  @override
+  Future<AuthUser> updateEmergencyContact(EmergencyContact? c) async => _user;
 }
 
 void main() {
@@ -61,6 +75,25 @@ void main() {
     });
   });
 
+  // The saved state, shot separately from the default one above. Both matter:
+  // the empty card is what every rider sees and must stay quiet, and the filled
+  // card is where a wrong number would be spotted — so the number has to be
+  // legible, Western and LTR, in both themes.
+  group('settings_emergency_contact', () {
+    testWidgets('light', (t) async {
+      await _golden(t,
+          name: 'settings_emergency_light',
+          brightness: Brightness.light,
+          child: await _settings(ThemeMode.light, contact: _savedContact));
+    });
+    testWidgets('dark', (t) async {
+      await _golden(t,
+          name: 'settings_emergency_dark',
+          brightness: Brightness.dark,
+          child: await _settings(ThemeMode.dark, contact: _savedContact));
+    });
+  });
+
   group('logout_confirm', () {
     testWidgets('light', (t) async {
       await _golden(t,
@@ -79,10 +112,10 @@ void main() {
 
 /// Settings screen with a signed-in user and [mode] pre-selected in the theme
 /// segmented control.
-Future<Widget> _settings(ThemeMode mode) async {
+Future<Widget> _settings(ThemeMode mode, {EmergencyContact? contact}) async {
   final theme = ThemeController(store: InMemoryThemeModeStore(), initialMode: mode);
   final auth = AuthController(
-    api: const _GoldenAuthApi(),
+    api: _GoldenAuthApi(contact: contact),
     tokenStore: InMemoryTokenStore('jwt'),
   );
   await auth.bootstrap();
@@ -91,9 +124,16 @@ Future<Widget> _settings(ThemeMode mode) async {
       ChangeNotifierProvider<ThemeController>.value(value: theme),
       ChangeNotifierProvider<AuthController>.value(value: auth),
     ],
-    child: SettingsScreen(appVersion: '0.1.0', onLogout: () async {}),
+    child: SettingsScreen(
+      appVersion: '0.1.0',
+      onLogout: () async {},
+      showEmergencyContact: true,
+    ),
   );
 }
+
+const _savedContact =
+    EmergencyContact(name: 'أم علي', phone: '+9647701112233');
 
 Widget _logoutDialog() => const Center(
       child: AppConfirmDialog(

@@ -290,6 +290,12 @@ class FakeAuthApi implements AuthApi {
     if (gender != null) lastGender = gender;
     return fakeUser(name: name ?? lastName, gender: gender ?? lastGender);
   }
+
+  // The driver app never sets an emergency contact — it is a rider-side
+  // safety feature, offered in the rider's Settings only.
+  @override
+  Future<AuthUser> updateEmergencyContact(EmergencyContact? contact) async =>
+      throw UnimplementedError();
 }
 
 AuthUser fakeUser({String? name, Gender? gender}) => AuthUser(

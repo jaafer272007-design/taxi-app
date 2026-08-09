@@ -24,6 +24,21 @@ abstract final class ContactLink {
   static Uri whatsApp(String phone) =>
       Uri.parse('https://wa.me/${_digits(_e164(phone))}');
 
+  /// Share text through WhatsApp with **no recipient**: `https://wa.me/?text=…`.
+  ///
+  /// The missing number is the whole design. WhatsApp opens its own contact
+  /// picker, so the rider chooses who sees their trip — the app never stores,
+  /// suggests, or addresses anyone. There is no code path here that could send
+  /// this to somebody the rider did not pick, which is what makes the feature
+  /// safe to offer at all.
+  ///
+  /// `Uri(queryParameters:)` is deliberately NOT used: it encodes a space as
+  /// `+`, which WhatsApp renders literally, so a shared message would arrive
+  /// full of plus signs. `encodeComponent` gives `%20` and leaves the newlines
+  /// (`%0A`) that separate the fields intact.
+  static Uri whatsAppShare(String text) =>
+      Uri.parse('https://wa.me/?text=${Uri.encodeComponent(text)}');
+
   /// The Android geo intent for a point: `geo:32.61,44.02?q=32.61,44.02(label)`.
   ///
   /// The `q=` repeat is not redundant: `geo:lat,lng` alone only centres the map,

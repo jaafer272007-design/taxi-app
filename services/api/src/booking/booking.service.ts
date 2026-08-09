@@ -153,7 +153,7 @@ export class BookingService {
   }
 
   /** Book seats on a trip. Seat reservation is atomic and overbooking-safe. */
-  async book(userId: string, dto: CreateBookingDto): Promise<SeatBooking> {
+  async book(userId: string, dto: CreateBookingDto) {
     const trip = await this.prisma.trip.findUnique({ where: { id: dto.tripId } });
     if (!trip) {
       throw new NotFoundException('الرحلة غير موجودة.');
@@ -296,7 +296,34 @@ export class BookingService {
       tripId: trip.id,
       bookingId: booking.id,
     });
-    return booking;
+    // The car, so «شارك رحلتي» works on the confirmation screen without a
+    // second round trip the rider would sit and wait for.
+    //
+    // The PLATE is the entitlement question, and the answer is the same rule
+    // /bookings/mine uses: a rider who holds a booking may see the car they
+    // are getting into. Search deliberately does NOT carry it — otherwise
+    // scrolling results would hand anyone every driver's plate, the same
+    // reasoning that keeps phone numbers behind a booking.
+    //
+    // Non-fatal, for the same reason the notifications above it are: the seat
+    // is already COMMITTED. Failing the response here would tell a rider their
+    // booking failed when it did not — and their retry would then hit «لديك
+    // حجز على هذه الرحلة بالفعل». A missing car costs them a share button.
+    let vehicle: {
+      make: string;
+      model: string;
+      plate: string;
+      color: string;
+    } | null = null;
+    try {
+      vehicle = await this.prisma.vehicle.findUnique({
+        where: { driverId: trip.driverId },
+        select: { make: true, model: true, plate: true, color: true },
+      });
+    } catch {
+      vehicle = null;
+    }
+    return { ...booking, vehicle };
   }
 
   /**
@@ -322,7 +349,22 @@ export class BookingService {
 
     const profiles = await this.prisma.driverProfile.findMany({
       where: { id: { in: [...new Set(bookings.map((b) => b.trip.driverId))] } },
-      select: { id: true, userId: true, user: { select: { name: true } } },
+      select: {
+        id: true,
+        userId: true,
+        user: { select: { name: true } },
+        // The car, for «شارك رحلتي». The PLATE is the point: it is the one
+        // item that lets someone at the other end of a WhatsApp message pick
+        // this vehicle out of a rank.
+        //
+        // No new exposure — /trips/search already shows the rider the car
+        // before they book, which is how they choose. Explicit `select`
+        // rather than `include` so the driver's own user row cannot ride
+        // along with it.
+        vehicle: {
+          select: { make: true, model: true, plate: true, color: true },
+        },
+      },
     });
     const driverByProfileId = new Map(profiles.map((p) => [p.id, p]));
 
@@ -358,6 +400,10 @@ export class BookingService {
         // place in the server a number ever leaves.
         driverUserId: driver?.userId ?? null,
         driverName: driver?.user?.name ?? null,
+        // Null when a driver somehow has no vehicle row. The share sheet drops
+        // the line rather than printing "null" into a message a rider is about
+        // to send their family.
+        vehicle: driver?.vehicle ?? null,
         ratable: isRatableByRider(b.status, b.trip.status),
         ratedDriver: driver ? ratedPairs.has(`${b.tripId}:${driver.userId}`) : false,
       };

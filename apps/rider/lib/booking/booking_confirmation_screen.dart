@@ -39,6 +39,7 @@ class BookingConfirmationScreen extends StatelessWidget {
     this.pickup,
     this.dropoff,
     this.driverContact,
+    this.shareDetails,
   });
 
   final int seatCount;
@@ -58,6 +59,10 @@ class BookingConfirmationScreen extends StatelessWidget {
   /// it. The screen never blocks on it: the confirmation is the booking, not
   /// the phone call.
   final TripContact? driverContact;
+
+  /// What «شارك رحلتي» would send. Null draws no share action — a share with
+  /// no route and no car is not worth offering.
+  final TripShareDetails? shareDetails;
 
   /// Hand-off badge diameter.
   static const double _badge = 88;
@@ -83,6 +88,15 @@ class BookingConfirmationScreen extends StatelessWidget {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _share(BuildContext context) {
+    return showShareTripSheet(
+      context,
+      details: shareDetails!,
+      launcher: context.read<LinkLauncher>(),
+      onUnavailable: (m) => _snack(context, m),
+    );
   }
 
   Future<void> _showPoint(
@@ -183,6 +197,7 @@ class BookingConfirmationScreen extends StatelessWidget {
                 ? null
                 : () => _showPoint(context, dropoff!, 'نقطة النزول'),
             onContactUnavailable: (m) => _snack(context, m),
+            onShare: shareDetails == null ? null : () => _share(context),
             onOpenBookings: () => _openMyBookings(context),
             onHome: () =>
                 Navigator.of(context).popUntil((route) => route.isFirst),
@@ -206,6 +221,7 @@ class _RecapSheet extends StatelessWidget {
     required this.onShowPickup,
     required this.onShowDropoff,
     required this.onContactUnavailable,
+    this.onShare,
     required this.onOpenBookings,
     required this.onHome,
   });
@@ -221,6 +237,9 @@ class _RecapSheet extends StatelessWidget {
   final VoidCallback? onShowPickup;
   final VoidCallback? onShowDropoff;
   final ValueChanged<String> onContactUnavailable;
+
+  /// «شارك رحلتي». Null when there is nothing to describe.
+  final VoidCallback? onShare;
   final VoidCallback onOpenBookings;
   final VoidCallback onHome;
 
@@ -314,6 +333,19 @@ class _RecapSheet extends StatelessWidget {
                   roleLabel: 'السائق',
                   launcher: context.read<LinkLauncher>(),
                   onUnavailable: onContactUnavailable,
+                ),
+              ],
+              // «شارك رحلتي» — offered where a rider is most likely to want
+              // it (the seat is theirs and they are about to set off), and
+              // still SECONDARY to the two navigation actions. Optional means
+              // it never competes with the primary CTA.
+              if (onShare != null) ...[
+                SizedBox(height: space.lg),
+                AppButton(
+                  label: 'شارك رحلتي',
+                  variant: AppButtonVariant.secondary,
+                  icon: AppIcons.share,
+                  onPressed: onShare,
                 ),
               ],
               SizedBox(height: space.xl),

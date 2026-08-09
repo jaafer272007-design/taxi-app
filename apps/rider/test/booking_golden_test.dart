@@ -12,6 +12,7 @@ import 'package:rider/booking/my_bookings_screen.dart';
 import 'package:shared/shared.dart';
 
 import 'support/booking_fakes.dart';
+import 'support/fakes.dart';
 import 'support/trip_fakes.dart';
 
 /// Golden (visual snapshot) tests for the booking flow — the reserve-a-seat
@@ -140,6 +141,65 @@ void main() {
           afterPump: _openSeatSheet);
     });
   });
+
+  // ── The safety features ───────────────────────────────────────────────
+  //
+  // A trip UNDER WAY, for a rider who chose to save an emergency contact.
+  // Solid danger is the loudest control in the design system and it is used
+  // exactly here — so it has to be looked at, in both themes, to confirm it
+  // reads as findable rather than alarming, and that «شارك رحلتي» stays
+  // subordinate to it.
+  group('my bookings — رحلة جارية مع جهة اتصال للطوارئ', () {
+    testWidgets('light', (t) async {
+      await _golden(t,
+          name: 'my_bookings_emergency_light',
+          brightness: Brightness.light,
+          child: await _myBookings(
+            tripStatus: 'EN_ROUTE',
+            emergencyContact: _emergency,
+          ));
+    });
+    testWidgets('dark', (t) async {
+      await _golden(t,
+          name: 'my_bookings_emergency_dark',
+          brightness: Brightness.dark,
+          child: await _myBookings(
+            tripStatus: 'EN_ROUTE',
+            emergencyContact: _emergency,
+          ));
+    });
+  });
+
+  // The share preview. What the rider reads before anything leaves their
+  // phone — so the message itself is the thing being reviewed here, including
+  // that the plate survives as Western digits inside an RTL sheet.
+  group('شارك رحلتي', () {
+    testWidgets('light', (t) async {
+      await _golden(t,
+          name: 'share_trip_sheet_light',
+          brightness: Brightness.light,
+          child: await _myBookings(seatCount: 3),
+          afterPump: _openShareSheet);
+    });
+    testWidgets('dark', (t) async {
+      await _golden(t,
+          name: 'share_trip_sheet_dark',
+          brightness: Brightness.dark,
+          child: await _myBookings(seatCount: 3),
+          afterPump: _openShareSheet);
+    });
+  });
+}
+
+const _emergency = EmergencyContact(name: 'أم علي', phone: '+9647701112233');
+
+/// Open the share sheet before the snapshot.
+Future<void> _openShareSheet(WidgetTester tester) async {
+  await tester.tap(find.text('شارك رحلتي'));
+  // Two long frames: AppCard/AppButton cross-fade over 120ms and a golden taken
+  // mid-lerp shows a colour nobody ever sees (CLAUDE.md).
+  await tester.pump(const Duration(milliseconds: 300));
+  await tester.pump(const Duration(milliseconds: 300));
 }
 
 /// Open the seat-count sheet and let it settle.
@@ -214,17 +274,26 @@ Widget _confirmation() => BookingConfirmationScreen(
       driverContact: contactFixture(name: 'أبو علي', phone: '+9647701234567'),
     );
 
-Future<Widget> _myBookings() async {
+Future<Widget> _myBookings({
+  EmergencyContact? emergencyContact,
+  String tripStatus = 'OPEN',
+  /// Defaults to 2 so the pre-existing goldens are unchanged. Any shot where
+  /// the count is READ — the share message — must pass 3: `formatSeats(2)` is
+  /// the Arabic dual «مقعدان», which carries no digit at all, so a fixture of
+  /// 2 renders clean straight past a broken numeral path (CLAUDE.md).
+  int seatCount = 2,
+}) async {
   final api = FakeBookingApi()
     ..listMineResult = [
       mineFixture(
         id: 'b1',
-        seatCount: 2,
-        fare: 12000,
+        seatCount: seatCount,
+        fare: 6000 * seatCount,
         status: BookingStatus.confirmed,
         upcoming: true,
         hourUtc: 4,
         minute: 30,
+        tripStatus: tripStatus,
       ),
       mineFixture(
         id: 'b2',
@@ -247,8 +316,12 @@ Future<Widget> _myBookings() async {
         contactFixture(name: 'أبو علي', phone: '+9647701234567');
   final c = MyBookingsController(api: api);
   await c.load(); // hasLoaded → the screen won't re-fetch
-  return ChangeNotifierProvider<MyBookingsController>.value(
-    value: c,
+  final auth = await signedInAuth(emergencyContact: emergencyContact);
+  return MultiProvider(
+    providers: [
+      ChangeNotifierProvider<MyBookingsController>.value(value: c),
+      ChangeNotifierProvider<AuthController>.value(value: auth),
+    ],
     child: const MyBookingsScreen(),
   );
 }

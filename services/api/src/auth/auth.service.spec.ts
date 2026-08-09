@@ -46,6 +46,10 @@ describe('AuthService.updateMe', () => {
       roles: ['RIDER'],
       createdAt,
       profileComplete: false, // gender not set yet
+      // Opt-in and untouched by a name edit. Asserted rather than omitted:
+      // `toEqual` ignores undefined extras, so leaving it out would let the
+      // field silently change shape.
+      emergencyContact: null,
     });
   });
 

@@ -78,6 +78,21 @@ class _BookingScreenState extends State<BookingScreen> {
           pickup: c.pickup.asLocationPoint,
           dropoff: c.dropoff.asLocationPoint,
           driverContact: c.driverContact,
+          // Assembled from BOTH sources on purpose: the trip the rider chose
+          // knows the route and the time, and only the booking response
+          // carries the PLATE — search deliberately withholds it until a
+          // booking exists.
+          shareDetails: TripShareDetails(
+            originCity: c.originCity,
+            destCity: c.destCity,
+            departureTime: c.trip.departureTime,
+            seatCount: result.seatCount,
+            driverName: c.trip.driverName,
+            vehicleMake: result.vehicle?.make ?? c.trip.vehicle?.make,
+            vehicleModel: result.vehicle?.model ?? c.trip.vehicle?.model,
+            vehicleColor: result.vehicle?.color ?? c.trip.vehicle?.color,
+            plate: result.vehicle?.plate,
+          ),
         ),
       ),
     );
