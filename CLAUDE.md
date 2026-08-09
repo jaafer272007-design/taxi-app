@@ -2,16 +2,29 @@
 > ضعه في **جذر الريبو** باسم `CLAUDE.md`.
 
 ## المشروع
-منصة نقل **مشترك بالمقعد (pooled)** بين المحافظات، عراقية. **إحنا حالياً بالـ Phase 1.**
-النموذج الحالي: **السائق يعلن مسار + الراكب يحجز مقعد**، ممر النجف↔كربلاء، door-to-door، cash، Android.
+منصة نقل **مشترك بالمقعد (pooled)** بين المحافظات، عراقية.
+**Phase 1 مكتملة، وPhase 2 Stage 1 (الخلفية) مبنيّة.**
+
+اتجاهان الآن، ويتقاطعان عند نفس الصفوف:
+- **يبدأه السائق (Phase 1):** السائق يعلن رحلة والراكب يحجز مقعداً.
+- **يبدأه الراكب (Phase 2):** الراكب يطلب مقعداً بنافذة وقت، والنظام يجمّع
+  الطلبات المتوافقة، وسائق **يستلم** التجمّع من لوحة فيصير رحلة عادية.
+
+door-to-door، cash، Android.
 البريف الكامل: `docs/PHASE1_BUILD_BRIEF.md`. الخطة الكبرى: `docs/PROJECT_PLAN.md`.
 
-## 🚧 حواجز صارمة — لا تبنيها بالـ Phase 1
-- ❌ **تجميع النظام (system-pooling)** ولا الطلب الآني بالمطابقة الحية → Phase 2.
+## 🚧 حواجز صارمة
 - ❌ دفع رقمي/محفظة (cash فقط) → Phase 3.  ❌ iOS → Phase 3.
-- ❌ ممرات متعددة، surge، كوبونات → لاحقاً.
+- ❌ surge، كوبونات → لاحقاً.
 - ❌ **microservices** — النظام modular monolith. أضف modules، لا خدمات منفصلة.
-> `Trip.createdBy` يبقى `DRIVER` بالـ Phase 1؛ قيمة `SYSTEM` و `SeatRequest` محجوزة للـ Phase 2 — لا تنفّذها الآن.
+- ❌ **موقع لحظي للسائقين، إرسال موجَّه، تتبّع توفّر** — لا شيء منها موجود،
+  واكتساب السائق في Phase 2 **لوحة يتصفّحها ويستلم منها**. راجع «التجميع».
+- ❌ **تحسين المسار / تقليل الانحراف** — خارج نطاق Phase 2 Stage 1؛ السائق يرى
+  النقاط ويقرّر.
+
+> **Phase 2 Stage 1 مفتوحة الآن (الخلفية فقط).** `Trip.createdBy = SYSTEM`
+> و`SeatRequest` صارا مبنيَّين — وهي القيم التي وُضعت في المخطط منذ Phase 1
+> لهذه اللحظة بالذات. واجهات الراكب والسائق (Stage 2 و3) لم تُبنَ بعد.
 
 ## الـ Stack
 NestJS (monolith، modules نظيفة) · Prisma + PostgreSQL (PostGIS متاح، غير مستخدم بالـ Phase 1) · Redis · Flutter (Android) · React/Next.js (admin) · JWT + WhatsApp OTP · FCM.
@@ -756,6 +769,94 @@ what comes back.
   rule that notification copy is composed at emit time. It is safe only because
   `cities.spec.ts` asserts the map covers every canonical city, so a nineteenth
   one cannot ship half-translated as «Najaf إلى Karbala».
+
+## التجميع — Phase 2 Stage 1 (locked decisions, backend only)
+
+Phase 1 runs one direction: the driver posts, the rider books. Phase 2 adds the
+other — the rider asks, the system pools, a driver **claims**. Stage 1 is the
+backend; the rider UI (stage 2) and driver board + raise flow (stage 3) follow.
+
+- **Driver acquisition is a BOARD, not dispatch.** No live driver location, no
+  targeted assignment, no availability tracking — none of it exists in this
+  product and Phase 1 excluded it deliberately. Drivers browse claimable pools
+  and **first to claim takes it**. Do not add a matching engine.
+- **A claimed pool becomes an ORDINARY trip.** `Trip.createdBy = SYSTEM` plus a
+  `SeatBooking` per request — rows nothing distinguishes from a driver-posted
+  trip. Everything downstream (start, complete, cancel, no-show, rating,
+  earnings, notifications) works with no new line of code. **There is no
+  parallel booking system**, and that is the constraint the whole design serves.
+- **The matching rule must stay explainable to a rider**: same corridor, and
+  **windows overlap**. Nothing else. The pool's window is the *intersection* of
+  its members', so it only ever narrows and any instant inside it suits
+  everyone by construction. No route optimisation, no detour minimisation —
+  the driver sees the points and decides.
+- **Joining a pool is compare-and-swap, not read-then-write.** The `updateMany`
+  guard re-asserts the window we read, so a concurrent join that narrowed it
+  fails us out instead of slipping us into a pool we no longer overlap; and it
+  caps `totalSeats` so two simultaneous joins cannot exceed the vehicle. A
+  failed guard opens a new pool — two pools instead of one under rare
+  contention is a correct outcome, not a corrupt one.
+- **The claim race is one `updateMany` on `status = FORMING`.** Exactly one
+  driver wins. Verified by mutation — and note the first version of that test
+  passed *without* the guard, because a later viability check caught the loser
+  by accident. It now asserts **why** the loser lost: «استلم سائق آخر» and
+  «انخفض العدد» are opposite instructions to a driver.
+- **`releaseSeat` (`booking/seat-return.ts`) is the ONE seat-return.** Flip
+  guarded, refund, reopen-if-catchable. The rider's own cancel and the Phase 2
+  release-on-decline mean entirely different things and send different
+  notifications — and share the arithmetic exactly, which is what must never be
+  copied.
+
+### The price raise — the only place a price changes after a rider commits
+
+Everything else in this app guarantees the price you see is the price you pay,
+so this exception is bounded on every side, all server-side:
+
+- **Exactly one per pool**, and the rule is `@unique` on `PoolRaise.poolId` —
+  not an application check. Removing the app-level pre-check leaves every test
+  green *because the index catches it*, which is the design working.
+- **Capped at the corridor's `maxPricePerSeat`** (the admin's number).
+- **Refused inside `POOL_RAISE_BLACKOUT_MINUTES` of the window's START** — a
+  rider who declines must have time to make other plans.
+- **Only the claiming driver**, and only while the trip is `OPEN` with seats
+  left: a pool that filled the car has nothing to justify a raise.
+- **Silence is a DECLINE.** A rider who does not answer within
+  `POOL_RAISE_RESPONSE_MINUTES` is released, never charged a price they did not
+  accept — so the worst network conditions fail in the rider's favour.
+- **A decliner is released with NO penalty and NO `NoShowRecord`.** They did not
+  miss a booking; they refused a new contract offered after they had committed
+  to a different one. Asserted directly, not assumed.
+- **Under `POOL_MIN_SEATS` accepted, the whole pool expires** — trip cancelled,
+  everyone released, everyone told. Accepters get `TRIP_CANCELLED` (the
+  blocking event: they were expecting to travel); released riders get
+  `POOL_EXPIRED`.
+- The response deadline is always **before departure**, by arithmetic:
+  `response < blackout` makes it so, and `raiseRespondBy` clamps to the window
+  start anyway in case the env says otherwise.
+
+### Thresholds are environment, not constants
+
+`POOL_MAX_SEATS` (4), `POOL_MIN_SEATS` (2), `POOL_RAISE_BLACKOUT_MINUTES` (30),
+`POOL_RAISE_RESPONSE_MINUTES` (10), `POOL_MAX_WINDOW_HOURS` (6). Policy numbers
+the first real month will change; malformed falls back rather than failing boot.
+The rule itself is pure — `services/api/src/pool/pool-policy.ts`, no Prisma, no
+Nest — and, like `trip-window.ts`, ships the predicate **and** the equivalent
+Prisma filter with a spec asserting they agree on the same fixtures.
+
+`POOL_MIN_SEATS = 2` means **a lone rider's pool never reaches the board.** That
+is deliberate — an hour between governorates for one shared-seat fare loses the
+driver money — and it is not abandonment: Phase 1's posted trips and «أبلغنا
+أنك تريد هذا المسار» both still serve them.
+
+### Known boundaries, deliberately not built in stage 1
+
+- **Pools are `GENERAL` only.** A `WOMEN_FAMILY` pool would need the gender
+  eligibility rule applied at *join* time across a group that assembles over
+  time; riders wanting that use Phase 1's posted trips, where the rule already
+  holds. Revisit in stage 2 or 3.
+- **Pickup/dropoff ordering is the driver's problem.** No sequencing, no ETA.
+- **A rider may hold one live request per corridor per overlapping window** —
+  same reasoning as one booking per rider per trip.
 
 ## Splitting work into several PRs (locked rule)
 

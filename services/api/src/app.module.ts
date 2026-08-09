@@ -13,6 +13,7 @@ import { DocumentsModule } from './documents/documents.module';
 import { CorridorModule } from './corridor/corridor.module';
 import { TripModule } from './trip/trip.module';
 import { BookingModule } from './booking/booking.module';
+import { PoolModule } from './pool/pool.module';
 import { EarningsModule } from './earnings/earnings.module';
 import { RatingModule } from './rating/rating.module';
 import { HealthModule } from './health/health.module';
@@ -36,6 +37,7 @@ import { HealthModule } from './health/health.module';
     CorridorModule,
     TripModule,
     BookingModule,
+    PoolModule,
     EarningsModule,
     RatingModule,
     HealthModule,
