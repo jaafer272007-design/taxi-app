@@ -8,6 +8,7 @@ import { NotificationService } from '../notification/notification.service';
 import { TripService } from '../trip/trip.service';
 import { RatingService } from '../rating/rating.service';
 import { BookingService } from './booking.service';
+import { NoShowService } from './no-show.service';
 
 /**
  * Two bugs from live end-to-end testing, both on the rider side after a trip
@@ -160,8 +161,9 @@ beforeAll(async () => {
   const notifications = new NotificationService(prisma, config);
   const drivers = new DriverService(prisma, {} as StorageService);
   const corridors = new CorridorService(prisma);
-  trips = new TripService(prisma, drivers, corridors, notifications);
-  bookings = new BookingService(prisma, drivers, notifications);
+  const noShows = new NoShowService(prisma, config);
+  trips = new TripService(prisma, drivers, corridors, notifications, noShows);
+  bookings = new BookingService(prisma, drivers, notifications, noShows);
   ratings = new RatingService(prisma);
 });
 

@@ -77,6 +77,16 @@ class FakeBookingApi implements BookingApi {
         bookingFixture(id: bookingId, status: BookingStatus.cancelled);
   }
 
+  /// Not blocked by default — the block is exercised by setting this.
+  BookingEligibility eligibilityResult = BookingEligibility.ok;
+  int eligibilityCalls = 0;
+
+  @override
+  Future<BookingEligibility> eligibility() async {
+    eligibilityCalls++;
+    return eligibilityResult;
+  }
+
   @override
   Future<Booking> changeSeats({
     required String bookingId,

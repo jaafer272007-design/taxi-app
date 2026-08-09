@@ -13,6 +13,7 @@ import {
   TripStatus,
   TripType,
 } from '@prisma/client';
+import { NoShowService } from '../booking/no-show.service';
 import { TripService } from './trip.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DriverService } from '../driver/driver.service';
@@ -49,6 +50,9 @@ describe('TripService.createTrip', () => {
       drivers as unknown as DriverService,
       corridors as unknown as CorridorService,
       { send: jest.fn() } as any,
+      // No no-shows in these fixtures; the count itself is covered against a
+      // real database in no-show.int-spec.ts.
+      { countsFor: jest.fn().mockResolvedValue(new Map()) } as unknown as NoShowService,
     );
   });
 
@@ -260,6 +264,9 @@ describe('TripService.updateTrip (booking-aware seat guard)', () => {
       drivers as DriverService,
       {} as CorridorService,
       { send: jest.fn() } as any,
+      // No no-shows in these fixtures; the count itself is covered against a
+      // real database in no-show.int-spec.ts.
+      { countsFor: jest.fn().mockResolvedValue(new Map()) } as unknown as NoShowService,
     );
   });
 
@@ -314,6 +321,7 @@ describe('TripService lifecycle (start / complete)', () => {
       drivers as DriverService,
       {} as CorridorService,
       notifications,
+      { countsFor: jest.fn().mockResolvedValue(new Map()) } as unknown as NoShowService,
     );
   });
 
@@ -441,6 +449,9 @@ describe('TripService.listBookings (driver view of its bookings)', () => {
       drivers as DriverService,
       {} as CorridorService,
       { send: jest.fn() } as any,
+      // No no-shows in these fixtures; the count itself is covered against a
+      // real database in no-show.int-spec.ts.
+      { countsFor: jest.fn().mockResolvedValue(new Map()) } as unknown as NoShowService,
     );
   });
 
@@ -499,6 +510,7 @@ describe('TripService.listBookings (driver view of its bookings)', () => {
         id: 'b1',
         riderId: 'r1',
         riderName: 'علي',
+        riderNoShowCount: 0,
         seatCount: 2,
         pickupLabel: 'كراج النجف',
         dropoffLabel: 'باب القبلة',
@@ -510,6 +522,7 @@ describe('TripService.listBookings (driver view of its bookings)', () => {
         id: 'b2',
         riderId: 'r2',
         riderName: 'حسن',
+        riderNoShowCount: 0,
         seatCount: 1,
         pickupLabel: 'دوار الثورة',
         dropoffLabel: 'الحرم',

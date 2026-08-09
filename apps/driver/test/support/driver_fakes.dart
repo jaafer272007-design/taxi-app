@@ -406,6 +406,9 @@ TripBooking bookingFixture({
   String id = 'b1',
   String riderId = 'r1',
   String? riderName = 'علي حسن',
+  /// Recent no-shows by this rider. Default 0 = the marker is absent, which is
+  /// the state of almost every real row.
+  int riderNoShowCount = 0,
   int seatCount = 1,
   String pickupLabel = 'كراج النجف',
   String dropoffLabel = 'باب القبلة',
@@ -423,6 +426,7 @@ TripBooking bookingFixture({
       id: id,
       riderId: riderId,
       riderName: riderName,
+      riderNoShowCount: riderNoShowCount,
       seatCount: seatCount,
       pickup: LocationPoint(
           lat: pickupLat, lng: pickupLng, label: pickupLabel),

@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { BookingStatus, Gender, NotificationType, TripStatus, TripType } from '@prisma/client';
 import { BookingService } from './booking.service';
+import { NoShowService } from './no-show.service';
+import { DEFAULT_NO_SHOW_POLICY } from './no-show-policy';
 import { PrismaService } from '../prisma/prisma.service';
 import { DriverService } from '../driver/driver.service';
 
@@ -49,6 +51,7 @@ describe('BookingService.book', () => {
   let prisma: any;
   let drivers: any;
   let notifications: any;
+  let noShows: any;
   let tx: ReturnType<typeof makeTx>;
   let service: BookingService;
 
@@ -63,7 +66,24 @@ describe('BookingService.book', () => {
     };
     drivers = { findProfileByUserId: jest.fn().mockResolvedValue(null) };
     notifications = { send: jest.fn() };
-    service = new BookingService(prisma as PrismaService, drivers as DriverService, notifications);
+    // Not blocked by default — the block is its own subject, covered against a
+    // real database in `no-show.int-spec.ts` where the rolling window is real.
+    noShows = {
+      blockStateFor: jest.fn().mockResolvedValue({
+        blocked: false,
+        countInWindow: 0,
+        blockedUntil: null,
+      }),
+      message: jest.fn().mockReturnValue('blocked'),
+      record: jest.fn(),
+      policy: DEFAULT_NO_SHOW_POLICY,
+    };
+    service = new BookingService(
+      prisma as PrismaService,
+      drivers as DriverService,
+      notifications,
+      noShows as unknown as NoShowService,
+    );
   });
 
   it('404 when the trip is missing', async () => {
@@ -197,7 +217,12 @@ describe('BookingService.cancel', () => {
       $transaction: jest.fn((cb: any) => cb(tx)),
     };
     notifications = { send: jest.fn() };
-    service = new BookingService(prisma as PrismaService, {} as DriverService, notifications);
+    service = new BookingService(prisma as PrismaService, {} as DriverService, notifications, {
+        blockStateFor: jest.fn().mockResolvedValue({ blocked: false, countInWindow: 0, blockedUntil: null }),
+        message: jest.fn(),
+        record: jest.fn(),
+        policy: DEFAULT_NO_SHOW_POLICY,
+      } as unknown as NoShowService);
   });
 
   it('404 when the booking is missing', async () => {
@@ -210,9 +235,33 @@ describe('BookingService.cancel', () => {
     await expect(service.cancel('u1', 'bk1')).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('409 when past the 15-minute cutoff', async () => {
+  // This used to assert a 409 five minutes before departure — the old
+  // 15-minute cutoff. It now asserts the opposite, deliberately: with a
+  // no-show penalty on the other side, a rider who cannot get out of a booking
+  // is trapped into the penalty, and a released seat is strictly better for the
+  // driver than an empty one plus a no-show. See CANCELLABLE_BEFORE.
+  it('a rider may cancel five minutes before departure — the trip has not started', async () => {
     prisma.seatBooking.findUnique.mockResolvedValue(
       booking({ trip: soonTrip({ departureTime: new Date(Date.now() + 5 * 60_000) }) }),
+    );
+    tx.seatBooking.updateMany.mockResolvedValue({ count: 1 });
+    tx.trip.findUniqueOrThrow.mockResolvedValue(soonTrip());
+    tx.seatBooking.findUniqueOrThrow.mockResolvedValue(
+      booking({ status: BookingStatus.CANCELLED }),
+    );
+
+    const cancelled = await service.cancel('u1', 'bk1');
+
+    expect(cancelled.status).toBe(BookingStatus.CANCELLED);
+    // The seat goes back — that is the whole point of allowing it this late.
+    expect(tx.trip.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { seatsAvailable: { increment: 2 } } }),
+    );
+  });
+
+  it('409 once the trip is EN_ROUTE — the seat has actually been consumed', async () => {
+    prisma.seatBooking.findUnique.mockResolvedValue(
+      booking({ trip: soonTrip({ status: TripStatus.EN_ROUTE }) }),
     );
     await expect(service.cancel('u1', 'bk1')).rejects.toBeInstanceOf(ConflictException);
   });
@@ -249,9 +298,13 @@ describe('BookingService driver transitions (onboard / no-show)', () => {
   let prisma: any;
   let drivers: any;
   let service: BookingService;
+  let tx: ReturnType<typeof makeTx>;
+  let noShows: any;
 
   const enRouteBooking = (over: any = {}) => ({
     id: 'bk1',
+    riderId: 'rider1',
+    tripId: 't1',
     status: BookingStatus.CONFIRMED,
     seatCount: 1,
     trip: { id: 't1', status: TripStatus.EN_ROUTE, driverId: 'drv1' },
@@ -259,29 +312,60 @@ describe('BookingService driver transitions (onboard / no-show)', () => {
   });
 
   beforeEach(() => {
+    tx = makeTx();
     prisma = {
       seatBooking: {
         findUnique: jest.fn(),
         update: jest.fn((a: any) => Promise.resolve({ id: 'bk1', ...a.data })),
       },
+      // The transition now writes the status AND (for a no-show) the history
+      // row in one transaction — a status with no row under-counts the rolling
+      // window, and a row with no status is a penalty with no trip behind it.
+      $transaction: jest.fn((cb: any) => cb(tx)),
     };
+    tx.seatBooking.updateMany.mockResolvedValue({ count: 1 });
+    tx.seatBooking.findUniqueOrThrow.mockImplementation(() =>
+      Promise.resolve({ id: 'bk1' }),
+    );
     drivers = { findProfileByUserId: jest.fn().mockResolvedValue({ id: 'drv1' }) };
-    service = new BookingService(prisma as PrismaService, drivers as DriverService, { send: jest.fn() } as any);
+    noShows = {
+      blockStateFor: jest.fn().mockResolvedValue({ blocked: false, countInWindow: 0, blockedUntil: null }),
+      message: jest.fn(),
+      record: jest.fn(),
+      policy: DEFAULT_NO_SHOW_POLICY,
+    };
+    service = new BookingService(
+      prisma as PrismaService,
+      drivers as DriverService,
+      { send: jest.fn() } as any,
+      noShows as unknown as NoShowService,
+    );
   });
 
   it('onboard: CONFIRMED → ONBOARD while EN_ROUTE', async () => {
     prisma.seatBooking.findUnique.mockResolvedValue(enRouteBooking());
     await service.onboard('u1', 'bk1');
-    expect(prisma.seatBooking.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'bk1' }, data: { status: BookingStatus.ONBOARD } }),
+    expect(tx.seatBooking.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'bk1', status: BookingStatus.CONFIRMED },
+        data: { status: BookingStatus.ONBOARD },
+      }),
     );
+    // Onboarding is not a penalty — no history row.
+    expect(noShows.record).not.toHaveBeenCalled();
   });
 
   it('no-show: CONFIRMED → NO_SHOW while EN_ROUTE (seat not returned)', async () => {
     prisma.seatBooking.findUnique.mockResolvedValue(enRouteBooking());
     await service.noShow('u1', 'bk1');
-    expect(prisma.seatBooking.update).toHaveBeenCalledWith(
+    expect(tx.seatBooking.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: { status: BookingStatus.NO_SHOW } }),
+    );
+    // …and the history row goes in the SAME transaction, or the rolling window
+    // silently under-counts with nothing to show it ever happened.
+    expect(noShows.record).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ riderId: 'rider1', tripId: 't1', bookingId: 'bk1' }),
     );
   });
 
@@ -313,7 +397,12 @@ describe('BookingService driver transitions (onboard / no-show)', () => {
 describe('BookingService.search', () => {
   const notifications: any = { send: jest.fn() };
   function makeService(prisma: any): BookingService {
-    return new BookingService(prisma as PrismaService, {} as DriverService, notifications);
+    return new BookingService(prisma as PrismaService, {} as DriverService, notifications, {
+        blockStateFor: jest.fn().mockResolvedValue({ blocked: false, countInWindow: 0, blockedUntil: null }),
+        message: jest.fn(),
+        record: jest.fn(),
+        policy: DEFAULT_NO_SHOW_POLICY,
+      } as unknown as NoShowService);
   }
 
   it('enriches OPEN future trips with driverName, gender, tripType, rating, vehicle', async () => {

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:shared/shared.dart';
 
 import '../booking/booking_api.dart';
+import '../booking/booking_models.dart';
 import '../booking/booking_controller.dart';
 import '../booking/booking_screen.dart';
 import 'trip_models.dart';
@@ -280,7 +281,19 @@ class _FactsCard extends StatelessWidget {
 
 /// The price and the CTA, together. The rider never has to scroll back up to
 /// check what they are about to agree to.
-class _BookBar extends StatelessWidget {
+///
+/// ## Why the block is checked HERE
+///
+/// A rider blocked for repeated no-shows will be refused by the server on
+/// submit no matter what this screen believes — the server is the gate. But
+/// finding that out *after* choosing seats and dropping two pins on a map is a
+/// wasted trip through a form, so the answer is fetched once when this bar
+/// mounts and the CTA is replaced rather than left to fail.
+///
+/// It fails OPEN: if the check itself errors, the button stays live and the
+/// server decides. Guessing "blocked" would lock a rider out of the product
+/// over a dropped request.
+class _BookBar extends StatefulWidget {
   const _BookBar({
     required this.pricePerSeat,
     required this.eligible,
@@ -290,6 +303,32 @@ class _BookBar extends StatelessWidget {
   final int pricePerSeat;
   final bool eligible;
   final VoidCallback onBook;
+
+  @override
+  State<_BookBar> createState() => _BookBarState();
+}
+
+class _BookBarState extends State<_BookBar> {
+  BookingEligibility _eligibility = BookingEligibility.ok;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final BookingApi api;
+      try {
+        api = context.read<BookingApi>();
+      } catch (_) {
+        // No API in scope (an isolated preview or golden) — same tolerance the
+        // corridor lookup above already has. The bar simply stays as it is.
+        return;
+      }
+      final result = await api.eligibility();
+      if (!mounted) return;
+      setState(() => _eligibility = result);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -308,18 +347,94 @@ class _BookBar extends StatelessWidget {
                 style: context.text.body.copyWith(color: colors.textSecondary)),
             const Spacer(),
             Text(
-              formatPrice(pricePerSeat),
+              formatPrice(widget.pricePerSeat),
               style: context.text.h1.tabular.copyWith(color: colors.primary),
             ),
           ],
         ),
         SizedBox(height: space.md),
-        AppButton(
-          label: eligible ? 'احجز مقعد' : 'رحلة نسائية-عائلية',
-          icon: AppIcons.seat,
-          onPressed: eligible ? onBook : null,
-        ),
+        if (_eligibility.blocked)
+          _BlockedNotice(eligibility: _eligibility)
+        else
+          AppButton(
+            label: widget.eligible ? 'احجز مقعد' : 'رحلة نسائية-عائلية',
+            icon: AppIcons.seat,
+            onPressed: widget.eligible ? widget.onBook : null,
+          ),
       ],
+    );
+  }
+}
+
+/// «تم إيقاف الحجز مؤقتاً» — shown instead of the CTA, not beside it.
+///
+/// Three things, because an error that states only the cause leaves the reader
+/// with nothing to do (§8 error-clarity / error-recovery):
+///
+///  1. **What happened** — repeated no-shows, with the count.
+///  2. **When it ends** — a date, in Arabic-Indic numerals. «موقوف» with no
+///     date is exactly the message that generates a support call.
+///  3. **What is not affected** — existing bookings still stand, and there is
+///     an appeal. A rider who thinks they have lost their booked seat as well
+///     will act on that belief.
+///
+/// Replaces the button rather than disabling it: a greyed-out CTA invites a tap
+/// and explains nothing.
+class _BlockedNotice extends StatelessWidget {
+  const _BlockedNotice({required this.eligibility});
+
+  final BookingEligibility eligibility;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final space = context.space;
+    final until = eligibility.blockedUntil;
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(space.lg),
+      decoration: BoxDecoration(
+        // Opaque tonal token — never `danger.withValues(alpha:)`, which would
+        // composite over whatever sits behind this bar (CLAUDE.md).
+        color: colors.dangerTonal,
+        borderRadius: context.radii.cardAll,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              // Icon + heading + body: never colour alone.
+              Icon(AppIcons.warning, color: colors.danger, size: space.lg),
+              SizedBox(width: space.sm),
+              Expanded(
+                child: Text(
+                  'تم إيقاف الحجز مؤقتاً',
+                  style: context.text.bodyStrong.copyWith(color: colors.danger),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: space.sm),
+          Text(
+            'بسبب تكرار عدم الحضور (${formatTimes(eligibility.noShowCount)}).',
+            style: context.text.body.copyWith(color: colors.textSecondary),
+          ),
+          if (until != null) ...[
+            SizedBox(height: space.xs),
+            Text(
+              'يمكنك الحجز مجدداً في ${formatDayShort(until)}.',
+              style: context.text.bodyStrong.copyWith(color: colors.textPrimary),
+            ),
+          ],
+          SizedBox(height: space.sm),
+          Text(
+            'حجوزاتك الحالية لم تتأثر. إذا كان هناك ظرف طارئ راجع الدعم.',
+            style: context.text.caption.copyWith(color: colors.textMuted),
+          ),
+        ],
+      ),
     );
   }
 }

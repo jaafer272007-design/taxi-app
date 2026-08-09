@@ -140,6 +140,27 @@ const DRIVERS = [
   },
 ] as const;
 
+/**
+ * A rider blocked for repeated no-shows.
+ *
+ * Without this the panel's /no-shows page is an empty state in every run, and
+ * "the appeal path works" would be asserted only by unit tests — while the
+ * thing that actually has to work is an admin clicking «ألغِ الواقعة» and a
+ * rider becoming able to book again.
+ *
+ * **The dates are relative on purpose.** The rolling window and the cooling-off
+ * period are both computed from `now`, so fixed timestamps would quietly stop
+ * producing a blocked rider as the calendar moved and the page would go green
+ * on an empty table. Three occurrences inside the last week put the count at
+ * the default threshold with the block ending ~6 days out, whenever it runs.
+ */
+const NO_SHOW_RIDER = {
+  phone: '+9647999000010',
+  name: 'راكب متغيّب',
+  /** Days before now. Length must equal the default NO_SHOW_BLOCK_THRESHOLD. */
+  daysAgo: [1, 3, 5],
+} as const;
+
 async function seedAdminAccounts(): Promise<void> {
   // The role-separation spec creates throwaway accounts to prove the SUPER_ADMIN
   // can (it cannot assert success against a fixture account without changing a
@@ -262,6 +283,47 @@ async function seedDrivers(): Promise<void> {
   console.log(`✔ Drivers: ${DRIVERS.length} rebuilt (${DRIVERS.map((d) => d.status).join(', ')})`);
 }
 
+async function seedNoShowRider(): Promise<void> {
+  // Rebuilt from scratch: a previous run's spec may have voided a record or
+  // lifted the block entirely, and a voided row updated in place would still
+  // carry the old admin's reason.
+  const existing = await prisma.user.findUnique({
+    where: { phone: NO_SHOW_RIDER.phone },
+  });
+  if (existing) {
+    await prisma.noShowRecord.deleteMany({ where: { riderId: existing.id } });
+    await prisma.user.delete({ where: { id: existing.id } });
+  }
+
+  const rider = await prisma.user.create({
+    data: {
+      phone: NO_SHOW_RIDER.phone,
+      name: NO_SHOW_RIDER.name,
+      gender: Gender.FEMALE,
+      roles: [UserRole.RIDER],
+    },
+  });
+
+  const now = Date.now();
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  await prisma.noShowRecord.createMany({
+    data: NO_SHOW_RIDER.daysAgo.map((days, i) => ({
+      riderId: rider.id,
+      // No relation on these columns (they are context, like Notification's),
+      // so synthetic ids are correct here — the panel never joins through them.
+      tripId: `e2e-noshow-trip-${i + 1}`,
+      bookingId: `e2e-noshow-booking-${i + 1}`,
+      seatCount: i + 1,
+      createdAt: new Date(now - days * DAY_MS),
+    })),
+  });
+
+  console.log(
+    `✔ No-show rider: ${NO_SHOW_RIDER.name} rebuilt with ` +
+      `${NO_SHOW_RIDER.daysAgo.length} occurrence(s) — blocked`,
+  );
+}
+
 /**
  * Clear the admin-login failure counters.
  *
@@ -295,6 +357,7 @@ async function main(): Promise<void> {
   await seedAdminAccounts();
   await seedCorridors();
   await seedDrivers();
+  await seedNoShowRider();
   await resetLoginThrottle();
 }
 

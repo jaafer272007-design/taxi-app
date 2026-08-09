@@ -27,20 +27,33 @@ import {
   isRatableByRider,
   TERMINAL_BOOKING_STATUSES,
 } from './booking-lifecycle';
+import { NoShowService } from './no-show.service';
 
 /**
- * How long before a trip stops being catchable the rider loses free cancellation.
+ * ─── لماذا اختفى قطع الإلغاء (١٥ دقيقة) ────────────────────────────────────
  *
- * Measured from `catchableUntil`, **not** from `departureTime**. For a scheduled
- * trip the two are the same and this is exactly the old rule (15 minutes before
- * departure). For a **departNow** trip `departureTime` IS the moment it was
- * posted, so a cutoff measured from it had already expired before the booking
- * row existed: every rider who booked a «الآن» trip got
- * «فات وقت الإلغاء المجاني» on their first tap, and their seats stayed held for
- * a trip they could not get out of. Measured from the window's end instead,
- * they get the first 15 minutes of the 30-minute window.
+ * كانت القاعدة: لا إلغاء بعد `catchableUntil − 15 دقيقة`. صارت: **يجوز
+ * الإلغاء ما دامت الرحلة لم تبدأ (`EN_ROUTE`)**، مهما كان الوقت.
+ *
+ * غيّرها إدخال عقوبة عدم الحضور. مع وجود عقوبة، أي لحظة يكون فيها الراكب
+ * محبوساً داخل حجز لا يستطيع الخروج منه تصير فخّاً: يُؤشَّر «لم يحضر» على
+ * رحلة ما كان يقدر يتركها. والحالة الأسوأ حقيقية — رحلة «الآن» تُقفل نافذتها
+ * بعد ٣٠ دقيقة والسائق لم يبدأ بعد، فيبقى الراكب مرتبطاً بلا مخرج.
+ *
+ * والأهم أن هذا **في صالح السائق لا ضده**، وهو ما يجعله قراراً سهلاً:
+ *
+ * | ماذا يحصل قبل الانطلاق | السائق يحصل على |
+ * |---|---|
+ * | الراكب يلغي (السلوك الجديد) | مقعد شاغر **قابل لإعادة البيع** فوراً، بلا خسارة |
+ * | الراكب يُمنَع فيتخلّف (السلوك القديم) | مقعد فارغ **وواقعة عدم حضور**، والرحلة انطلقت ناقصة |
+ *
+ * القطع كان يحمي السائق من إلغاء اللحظة الأخيرة، لكنه عملياً كان يحوّل
+ * الإلغاء إلى تخلّف — وهو أسوأ نتيجة للطرفين. حماية السائق الحقيقية هي
+ * سجل عدم الحضور نفسه (`no-show-policy.ts`)، لا حبس الراكب.
+ *
+ * بعد `EN_ROUTE` لا إلغاء إطلاقاً — الرحلة انطلقت والمقعد استُهلك فعلاً.
  */
-const CANCEL_CUTOFF_MINUTES = 15;
+const CANCELLABLE_BEFORE = [TripStatus.OPEN, TripStatus.LOCKED] as const;
 
 @Injectable()
 export class BookingService {
@@ -48,6 +61,7 @@ export class BookingService {
     private readonly prisma: PrismaService,
     private readonly drivers: DriverService,
     private readonly notifications: NotificationService,
+    private readonly noShows: NoShowService,
   ) {}
 
   /** Rider-facing search: only OPEN, still-catchable, seats-available trips. */
@@ -175,6 +189,29 @@ export class BookingService {
     }
     if (trip.tripType === TripType.WOMEN_FAMILY && rider.gender !== Gender.FEMALE) {
       throw new ForbiddenException('هذه الرحلة مخصّصة للنساء والعائلات فقط.');
+    }
+
+    // ─── الإيقاف المؤقت بسبب تكرار عدم الحضور ────────────────────────────
+    // مثل فحص الجنس: **قبل** معاملة المقعد، فلا يضعف ضمانها.
+    //
+    // الخادم هو البوّابة. التطبيق يعرض الحالة قبل نموذج الحجز حتى لا يملأه
+    // الراكب بلا فائدة، لكن ذلك تحسين تجربة لا حراسة: مَن ينادي الـ API
+    // مباشرة يُرفض هنا.
+    //
+    // الرد يحمل حقولاً مبنيّة (`blockedUntil` بصيغة ISO) بجانب الرسالة، حتى
+    // يعرض التطبيق التاريخ بالأرقام العربية وبتنسيقه هو، بدل تفكيك نصّ.
+    const block = await this.noShows.blockStateFor(userId);
+    if (block.blocked) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        error: 'Forbidden',
+        code: 'RIDER_BLOCKED_NO_SHOW',
+        message: this.noShows.message(block),
+        blockedUntil: block.blockedUntil?.toISOString() ?? null,
+        noShowCount: block.countInWindow,
+        threshold: this.noShows.policy.threshold,
+        windowDays: this.noShows.policy.windowDays,
+      });
     }
 
     const booking = await this.prisma.$transaction(async (tx) => {
@@ -356,16 +393,12 @@ export class BookingService {
     if (booking.status !== BookingStatus.CONFIRMED) {
       throw new ConflictException('لا يمكن تعديل هذا الحجز.');
     }
+    // Same window as cancelling, for the same reason: shrinking a booking is a
+    // partial cancel, and a rider must not be blocked from it at a moment they
+    // would be allowed to drop the whole thing. See [CANCELLABLE_BEFORE].
     const trip = booking.trip;
-    if (trip.status === TripStatus.EN_ROUTE || trip.status === TripStatus.COMPLETED) {
+    if (!CANCELLABLE_BEFORE.includes(trip.status as (typeof CANCELLABLE_BEFORE)[number])) {
       throw new ConflictException('لا يمكن التعديل بعد بدء الرحلة.');
-    }
-    // The same deadline as cancelling, for the same reason and from the same
-    // source of truth — a rider must not be able to shrink a booking at a
-    // moment they would not be allowed to drop it.
-    const cutoffMs = catchableUntil(trip).getTime() - CANCEL_CUTOFF_MINUTES * 60 * 1000;
-    if (Date.now() >= cutoffMs) {
-      throw new ConflictException('فات وقت تعديل الحجز (قبل 15 دقيقة من المغادرة).');
     }
     // Idempotent: asking for the count it already has is success, not a 409.
     if (seatCount === booking.seatCount) return booking;
@@ -425,13 +458,14 @@ export class BookingService {
     if (booking.status !== BookingStatus.CONFIRMED) {
       throw new ConflictException('لا يمكن إلغاء هذا الحجز.');
     }
+    // The ONLY gate is "has the trip started". No clock cutoff — see
+    // [CANCELLABLE_BEFORE] for why the 15-minute rule was removed rather than
+    // relaxed: with a no-show penalty on the other side, any moment a rider
+    // cannot get out of a booking is a trap, and a released seat is strictly
+    // better for the driver than an empty one plus a no-show.
     const trip = booking.trip;
-    if (trip.status === TripStatus.EN_ROUTE || trip.status === TripStatus.COMPLETED) {
+    if (!CANCELLABLE_BEFORE.includes(trip.status as (typeof CANCELLABLE_BEFORE)[number])) {
       throw new ConflictException('لا يمكن الإلغاء بعد بدء الرحلة.');
-    }
-    const cutoffMs = catchableUntil(trip).getTime() - CANCEL_CUTOFF_MINUTES * 60 * 1000;
-    if (Date.now() >= cutoffMs) {
-      throw new ConflictException('فات وقت الإلغاء المجاني (قبل 15 دقيقة من المغادرة).');
     }
 
     const cancelledBooking = await this.prisma.$transaction(async (tx) => {
@@ -533,6 +567,31 @@ export class BookingService {
     if (booking.status !== BookingStatus.CONFIRMED) {
       throw new ConflictException('لا يمكن تغيير حالة هذا الحجز.');
     }
-    return this.prisma.seatBooking.update({ where: { id: bookingId }, data: { status: target } });
+
+    return this.prisma.$transaction(async (tx) => {
+      // Re-assert CONFIRMED in the write: two drivers' devices (or a double
+      // tap) must not produce two no-show records for one seat.
+      const changed = await tx.seatBooking.updateMany({
+        where: { id: bookingId, status: BookingStatus.CONFIRMED },
+        data: { status: target },
+      });
+      if (changed.count !== 1) {
+        throw new ConflictException('لا يمكن تغيير حالة هذا الحجز.');
+      }
+
+      // The history row and the status are written together or not at all.
+      // A status with no row silently under-counts the rolling window; a row
+      // with no status is a penalty nobody can trace back to a trip.
+      if (target === BookingStatus.NO_SHOW) {
+        await this.noShows.record(tx, {
+          riderId: booking.riderId,
+          tripId: booking.tripId,
+          bookingId: booking.id,
+          seatCount: booking.seatCount,
+        });
+      }
+
+      return tx.seatBooking.findUniqueOrThrow({ where: { id: bookingId } });
+    });
   }
 }
