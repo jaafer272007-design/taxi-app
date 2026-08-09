@@ -341,3 +341,50 @@ model NoShowRecord {
 }
 
 // SeatRequest = Phase 2 (لا يُبنى الآن)
+
+/// Phase 1 amendment (أدوات الدعم): سجل تدخّلات الأدمن.
+///
+/// ## ليش موجود
+///
+/// اللوحة صارت تقدر **تتصرّف** لا أن تقرأ فقط: تلغي حجزاً نيابةً عن راكب،
+/// تلغي رحلة نيابةً عن سائق، توقف سائقاً. هذه أفعال تغيّر مال الناس ورحلاتهم،
+/// وقبل هذا كانت تُنفَّذ بكتابة SQL يدوياً — ثلاث مرات أثناء الاختبار — بلا
+/// أي أثر يقول مَن فعلها ولا لماذا.
+///
+/// **السبب مطلوب لا اختياري.** قرار بلا سبب مكتوب لا يمكن مراجعته لاحقاً،
+/// ولا يُتعلَّم منه شيء عن أي الحالات كانت أخطاء.
+enum AdminActionType {
+  BOOKING_CANCELLED   // إلغاء حجز نيابةً عن راكب
+  TRIP_CANCELLED      // إلغاء رحلة نيابةً عن سائق
+  DRIVER_SUSPENDED
+  DRIVER_UNSUSPENDED
+  NO_SHOW_VOIDED      // يُسجَّل هنا **وأيضاً** على NoShowRecord نفسه
+  NO_SHOW_BLOCK_LIFTED
+}
+
+model AdminAction {
+  id      String          @id @default(cuid())
+  adminId String          // AdminUser.id
+
+  /// اسم المستخدم **منسوخ** وقت الفعل، لا relation.
+  ///
+  /// مقصود: سجل التدقيق يعيش أطول من الحسابات. صفّ يقول «adm_x9f2 ألغى حجزاً»
+  /// بعد حذف الحساب لا ينفع أحداً، والـ join كان سيرجع null بالضبط باللحظة
+  /// التي تُراجَع فيها الحادثة.
+  adminUsername String
+
+  type AdminActionType
+
+  /// نوع الكيان ومعرّفه — بلا FK عمداً، بنفس منطق `Notification.tripId`:
+  /// السجل لازم يبقى مقروءاً حتى لو اختفى صفّه الأصلي.
+  entityType String        // 'BOOKING' | 'TRIP' | 'DRIVER' | 'RIDER'
+  entityId   String
+
+  reason    String
+  createdAt DateTime @default(now())
+
+  /// الفلترتان الوحيدتان اللتان تحتاجهما اللوحة: «شنو سوّى هذا الأدمن» و
+  /// «شنو صار لهذا الكيان».
+  @@index([adminId, createdAt])
+  @@index([entityType, entityId, createdAt])
+}

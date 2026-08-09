@@ -491,6 +491,37 @@ export class BookingService {
 
   /** Cancel a booking (owning rider), returning the seat atomically. */
   async cancel(userId: string, bookingId: string): Promise<SeatBooking> {
+    return this.cancelBooking(bookingId, { requireRiderId: userId });
+  }
+
+  /**
+   * Cancel a booking on the rider's behalf, from the admin panel.
+   *
+   * ## Why this is three lines and not a copy
+   *
+   * It calls the SAME method the rider's own cancel does — same seat
+   * transaction, same state machine, same notification fan-out. The ONLY
+   * difference is that there is no ownership check to make, because the caller
+   * is not the owner.
+   *
+   * Writing the state directly from an admin endpoint would have bypassed the
+   * row-locked seat return, the LOCKED→OPEN reopen, and both notifications —
+   * i.e. the zero-overbooking guarantee, silently, on the one code path used
+   * when something has already gone wrong.
+   *
+   * It is deliberately NOT more permissive than the rider's path: an admin
+   * cannot cancel on an `EN_ROUTE` trip either. If a rider is refused, so is
+   * an admin — the state machine is the product's rule, not a rider-facing
+   * courtesy.
+   */
+  async cancelAsAdmin(bookingId: string): Promise<SeatBooking> {
+    return this.cancelBooking(bookingId, {});
+  }
+
+  private async cancelBooking(
+    bookingId: string,
+    opts: { requireRiderId?: string },
+  ): Promise<SeatBooking> {
     const booking = await this.prisma.seatBooking.findUnique({
       where: { id: bookingId },
       include: { trip: true },
@@ -498,7 +529,7 @@ export class BookingService {
     if (!booking) {
       throw new NotFoundException('الحجز غير موجود.');
     }
-    if (booking.riderId !== userId) {
+    if (opts.requireRiderId !== undefined && booking.riderId !== opts.requireRiderId) {
       throw new ForbiddenException('هذا ليس حجزك.');
     }
     if (booking.status !== BookingStatus.CONFIRMED) {
@@ -556,7 +587,10 @@ export class BookingService {
     // …and leave the rider a record of their own cancellation. Not redundant
     // with the tap they just made: this is what they scroll back to when they
     // are no longer sure whether the seat actually went.
-    await this.notifications.send(userId, {
+    // …and leave the RIDER a record — resolved from the booking, not from the
+    // caller, so an admin-initiated cancel still reaches the person whose seat
+    // it was rather than nobody.
+    await this.notifications.send(booking.riderId, {
       type: NotificationType.BOOKING_CANCELLED,
       title: 'أُلغي حجزك',
       body: 'تم إلغاء حجزك ولن تُحاسب عليه.',

@@ -93,8 +93,14 @@ export const DRIVERS = {
   stable: { phone: "+9647999000005", name: "سائق ثابت للفلترة", status: "PENDING" },
 } as const;
 
-/** Drivers the seed creates. Used to assert totals that must not drift. */
-export const SEEDED_DRIVER_COUNT = 5;
+/**
+ * Drivers the seed creates. Used to assert totals that must not drift.
+ *
+ * Five in {@link DRIVERS} plus the support case's own driver, which needs a
+ * real approved profile to own a real trip — a support tool that can only be
+ * tested against a fabricated row is not being tested.
+ */
+export const SEEDED_DRIVER_COUNT = 6;
 
 /**
  * The rider the seed blocks for repeated no-shows.
@@ -111,6 +117,26 @@ export const NO_SHOW_RIDER = {
 
 /** The policy the panel states in its header, and the API reports. */
 export const NO_SHOW_POLICY = { threshold: 3, windowDays: 30, blockDays: 7 } as const;
+
+/**
+ * The live support case: an approved driver, an OPEN trip, and a rider holding
+ * one confirmed booking on it.
+ *
+ * The support spec cancels that booking, so the seed rebuilds it every run —
+ * and `seatsFreeBefore` is what the assertion turns on.
+ */
+export const SUPPORT_CASE = {
+  driverPhone: "+9647730000001",
+  driverName: "سائق الدعم",
+  riderPhone: "+9647730000002",
+  riderName: "راكب الدعم",
+  plate: "E2E-SUP-1",
+  seatsTotal: 4,
+  /** Before the cancel: 4 total − 1 booked. */
+  seatsFreeBefore: 3,
+  /** After it: the seat comes back, which is the whole point. */
+  seatsFreeAfter: 4,
+} as const;
 
 /** Status labels the panel renders. A raw English status on screen is a bug. */
 export const DRIVER_STATUS_AR: Record<string, string> = {
