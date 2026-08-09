@@ -92,6 +92,9 @@ class _HomeShellState extends State<HomeShell> {
                   child: SettingsScreen(
                     appVersion: AppConfig.appVersion,
                     onLogout: () => context.read<AuthController>().logout(),
+                    // Rider-only: the «اتصال طارئ» action it enables lives on
+                    // the rider's booking card.
+                    showEmergencyContact: true,
                   ),
                 ),
               ],

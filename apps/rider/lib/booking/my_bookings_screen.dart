@@ -107,6 +107,35 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
     await _onRate(c, booking);
   }
 
+  /// «شارك رحلتي» — open the preview sheet.
+  ///
+  /// Nothing is sent from here. The sheet shows the message, and the rider
+  /// chooses both the channel and the recipient.
+  Future<void> _onShare(Booking booking) async {
+    final details = booking.shareDetails;
+    if (details == null) return;
+    await showShareTripSheet(
+      context,
+      details: details,
+      launcher: context.read<LinkLauncher>(),
+      onUnavailable: _snack,
+    );
+  }
+
+  /// «اتصال طارئ» — hand the rider's own saved number to the dialer.
+  ///
+  /// `tel:` opens the DIALER with the number filled in; it does not place the
+  /// call. That is the confirmation step, and it is the platform's — which is
+  /// why there is no confirm dialog here. Adding one would cost seconds in the
+  /// only situation this button exists for.
+  Future<void> _onEmergencyCall(EmergencyContact contact) async {
+    final ok = await context.read<LinkLauncher>().open(
+          ContactLink.tel(contact.phone),
+        );
+    if (!mounted || ok) return;
+    _snack('تعذّر فتح تطبيق الاتصال.');
+  }
+
   Future<void> _onShowPoint(LocationPoint point, String title) async {
     await showMapView(
       context,
@@ -163,6 +192,12 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
                 onContactUnavailable: _snack,
                 onRate: _onRate,
                 onRatePrompt: _onRatePrompt,
+                onShare: _onShare,
+                // Read from the signed-in user, not from the booking: it is the
+                // RIDER's contact, and it must never travel with trip data.
+                emergencyContact:
+                    context.watch<AuthController>().user?.emergencyContact,
+                onEmergencyCall: _onEmergencyCall,
               ),
       },
     );
@@ -189,6 +224,9 @@ class _BookingsList extends StatelessWidget {
     required this.onContactUnavailable,
     required this.onRate,
     required this.onRatePrompt,
+    required this.onShare,
+    required this.onEmergencyCall,
+    this.emergencyContact,
   });
 
   final MyBookingsController controller;
@@ -200,6 +238,12 @@ class _BookingsList extends StatelessWidget {
   final ValueChanged<String> onContactUnavailable;
   final Future<void> Function(MyBookingsController, Booking) onRate;
   final Future<void> Function(MyBookingsController) onRatePrompt;
+  final Future<void> Function(Booking) onShare;
+
+  /// The rider's own saved contact, or null. Null draws NO emergency UI at
+  /// all — not a disabled button, not an empty state, not an invitation.
+  final EmergencyContact? emergencyContact;
+  final Future<void> Function(EmergencyContact) onEmergencyCall;
 
   @override
   Widget build(BuildContext context) {
@@ -261,6 +305,18 @@ class _BookingsList extends StatelessWidget {
                 onShowPoint: onShowPoint,
                 onContactUnavailable: onContactUnavailable,
                 onRate: b.canRate ? () => onRate(controller, b) : null,
+                // A share needs a trip to describe; a cancelled or finished one
+                // has nothing anyone would want.
+                onShare: (!showPast && b.shareDetails != null)
+                    ? () => onShare(b)
+                    : null,
+                // BOTH conditions, and both are load-bearing: a saved contact,
+                // AND a trip that has actually started.
+                onEmergencyCall:
+                    (emergencyContact != null && (b.trip?.isEnRoute ?? false))
+                        ? () => onEmergencyCall(emergencyContact!)
+                        : null,
+                emergencyContactName: emergencyContact?.name,
               ),
               SizedBox(height: space.md),
             ],
@@ -429,6 +485,9 @@ class _BookingCard extends StatelessWidget {
     this.onCancel,
     this.onChangeSeats,
     this.onRate,
+    this.onShare,
+    this.onEmergencyCall,
+    this.emergencyContactName,
   });
 
   final Booking booking;
@@ -451,6 +510,20 @@ class _BookingCard extends StatelessWidget {
   /// never happened — the server would refuse either, and an action that
   /// answers with an error is worse than no action.
   final VoidCallback? onRate;
+
+  /// «شارك رحلتي». Null on a past booking, where there is nothing left to tell
+  /// anyone.
+  final VoidCallback? onShare;
+
+  /// «اتصال طارئ». Null unless the rider has SAVED a contact AND this trip is
+  /// actually under way — and null means nothing renders, not a disabled
+  /// button. A greyed-out emergency button on every card would be both noise
+  /// and a small cruelty.
+  final VoidCallback? onEmergencyCall;
+
+  /// Who the emergency button will dial, named on the button itself so the
+  /// rider is never guessing under pressure.
+  final String? emergencyContactName;
 
   /// Hand-off stripe thickness.
   static const double _stripe = 4;
@@ -548,6 +621,44 @@ class _BookingCard extends StatelessWidget {
                       roleLabel: 'السائق',
                       launcher: context.read<LinkLauncher>(),
                       onUnavailable: onContactUnavailable,
+                    ),
+                  ],
+                  // The emergency action leads, and is separated by a rule.
+                  //
+                  // Solid `danger` — the loudest thing in the design system —
+                  // is right here and nowhere else on this card: it appears
+                  // ONLY while a trip is under way and ONLY for a rider who
+                  // asked for it, so it is never ambient. Under stress,
+                  // one-tap findability beats visual restraint. (Cancel is
+                  // unavailable from EN_ROUTE, so the two never compete.)
+                  if (onEmergencyCall != null) ...[
+                    SizedBox(height: space.md),
+                    Divider(height: 1, color: colors.border),
+                    SizedBox(height: space.md),
+                    AppButton(
+                      label: emergencyContactName == null
+                          ? 'اتصال طارئ'
+                          : 'اتصال طارئ — $emergencyContactName',
+                      variant: AppButtonVariant.danger,
+                      icon: AppIcons.phone,
+                      onPressed: onEmergencyCall,
+                    ),
+                  ],
+                  // «شارك رحلتي» — quiet on purpose. A safety feature that
+                  // nags is a safety feature people learn to dismiss, so this
+                  // is a ghost button, no badge and no prompt anywhere else.
+                  if (onShare != null) ...[
+                    SizedBox(height: space.sm),
+                    Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: AppButton(
+                        label: 'شارك رحلتي',
+                        variant: AppButtonVariant.ghost,
+                        size: AppButtonSize.small,
+                        icon: AppIcons.share,
+                        expand: false,
+                        onPressed: onShare,
+                      ),
                     ),
                   ],
                   // «تعديل المقاعد» — the action whose absence made riders

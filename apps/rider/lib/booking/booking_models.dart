@@ -60,21 +60,64 @@ class BookingCorridor {
       );
 }
 
+/// The car the rider will be looking for, as GET /bookings/mine returns it.
+///
+/// Not new information: the rider already saw all of this in search, which is
+/// how they chose. It travels with the booking so «شارك رحلتي» can name the
+/// vehicle without a second request the rider would have to wait for.
+class BookingVehicle {
+  const BookingVehicle({this.make, this.model, this.plate, this.color});
+
+  final String? make;
+  final String? model;
+
+  /// The plate, exactly as registered — an identifier to be matched against a
+  /// metal plate, so it is never converted to Arabic-Indic digits.
+  final String? plate;
+  final String? color;
+
+  factory BookingVehicle.fromJson(Map<String, dynamic> json) => BookingVehicle(
+        make: json['make'] as String?,
+        model: json['model'] as String?,
+        plate: json['plate'] as String?,
+        color: json['color'] as String?,
+      );
+}
+
 /// Trip info attached to a booking in GET /bookings/mine.
 class BookingTrip {
   const BookingTrip({
     required this.id,
     required this.departureTime,
     this.corridor,
+    this.status,
   });
 
   final String id;
   final DateTime departureTime;
   final BookingCorridor? corridor;
 
+  /// The TRIP's state (`OPEN` / `LOCKED` / `EN_ROUTE` / …), which is a
+  /// different question from the booking's own status.
+  ///
+  /// Kept as the raw server string rather than an enum because the rider app
+  /// asks exactly one thing of it — [isEnRoute] — and an enum here would be a
+  /// third place that has to learn about every new trip state.
+  final String? status;
+
+  /// The ride is actually happening right now.
+  ///
+  /// This is a STATUS question, never a clock question. `departureTime` has
+  /// passed for every «الآن» trip the instant it is posted, so any hand-rolled
+  /// `departureTime < now` here would light the emergency action up on trips
+  /// that have not moved — the same trap that made departNow bookings vanish
+  /// (CLAUDE.md).
+  bool get isEnRoute => status == 'EN_ROUTE';
+
   factory BookingTrip.fromJson(Map<String, dynamic> json) => BookingTrip(
         id: json['id'] as String,
         departureTime: DateTime.parse(json['departureTime'] as String),
+        status: json['status'] as String?,
         corridor: json['corridor'] == null
             ? null
             : BookingCorridor.fromJson(json['corridor'] as Map<String, dynamic>),
@@ -130,6 +173,7 @@ class Booking {
     this.driverName,
     this.ratable = false,
     this.ratedDriver = false,
+    this.vehicle,
   });
 
   final String id;
@@ -164,6 +208,30 @@ class Booking {
   /// This rider has already rated this driver for this trip.
   final bool ratedDriver;
 
+  /// The car, for «شارك رحلتي». Null on responses that carry no trip.
+  final BookingVehicle? vehicle;
+
+  /// Everything «شارك رحلتي» needs, assembled in one place.
+  ///
+  /// Null when the booking arrived without its trip (the POST /bookings and
+  /// cancel responses), because a share with no route and no time is not worth
+  /// offering — the caller draws no action rather than a broken one.
+  TripShareDetails? get shareDetails {
+    final t = trip;
+    if (t == null) return null;
+    return TripShareDetails(
+      originCity: t.corridor?.originCity,
+      destCity: t.corridor?.destCity,
+      departureTime: t.departureTime,
+      seatCount: seatCount,
+      driverName: driverName,
+      vehicleMake: vehicle?.make,
+      vehicleModel: vehicle?.model,
+      vehicleColor: vehicle?.color,
+      plate: vehicle?.plate,
+    );
+  }
+
   /// Show a rate action for this booking.
   bool get canRate => ratable && !ratedDriver && driverUserId != null;
 
@@ -185,6 +253,9 @@ class Booking {
         driverName: json['driverName'] as String?,
         ratable: json['ratable'] as bool? ?? false,
         ratedDriver: json['ratedDriver'] as bool? ?? false,
+        vehicle: json['vehicle'] == null
+            ? null
+            : BookingVehicle.fromJson(json['vehicle'] as Map<String, dynamic>),
       );
 
   Booking copyWith({bool? ratedDriver}) => Booking(
@@ -200,6 +271,7 @@ class Booking {
         driverName: driverName,
         ratable: ratable,
         ratedDriver: ratedDriver ?? this.ratedDriver,
+        vehicle: vehicle,
       );
 }
 

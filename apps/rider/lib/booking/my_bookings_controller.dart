@@ -62,8 +62,27 @@ class MyBookingsController extends ChangeNotifier {
 
   /// A booking can be cancelled by the rider only while upcoming and CONFIRMED
   /// (the backend still enforces the 15-min cutoff).
-  bool canCancel(Booking b) =>
-      (b.upcoming ?? false) && b.status == BookingStatus.confirmed;
+  /// Mirrors the server's `CANCELLABLE_BEFORE`: `OPEN` or `LOCKED`, never
+  /// `EN_ROUTE`.
+  ///
+  /// The trip's status was NOT available to this app until the emergency
+  /// action needed it, and its absence was a real mismatch: «قادمة» includes
+  /// an `EN_ROUTE` trip (correctly — it is still actionable), so a rider
+  /// sitting in a moving car was shown «إلغاء الحجز», and tapping it produced
+  /// a 409. An action the UI offers and the server refuses is worse than no
+  /// action.
+  ///
+  /// A null status means an older server that does not send one; fall back to
+  /// the previous rule rather than hiding a control the rider may legitimately
+  /// need.
+  bool canCancel(Booking b) {
+    if (!(b.upcoming ?? false) || b.status != BookingStatus.confirmed) {
+      return false;
+    }
+    final tripStatus = b.trip?.status;
+    if (tripStatus == null) return true;
+    return tripStatus == 'OPEN' || tripStatus == 'LOCKED';
+  }
 
   /// The seat count can be changed under exactly the same conditions as
   /// cancelling — the server derives both from the same deadline, and an action

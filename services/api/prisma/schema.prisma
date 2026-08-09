@@ -91,6 +91,19 @@ model User {
   roles     UserRole[]
   driver    DriverProfile?
   createdAt DateTime       @default(now())
+
+  // Phase 1 amendment (السلامة): جهة اتصال للطوارئ — **اختيارية بالكامل**.
+  //
+  // هذي بيانات **المستخدم عن نفسه**، لا عن مستخدم آخر: رقم قريبه الذي يريد
+  // الاتصال به بضغطة واحدة أثناء رحلة جارية. فما في حدّ كشف بين مستخدمَين
+  // هنا — لكن **ما يجوز أن تغادر صاحبها أبداً**: لا تُرجَع إلا من
+  // `GET /auth/me` للمستخدم نفسه، ولا تظهر بأي حمولة يراها السائق.
+  //
+  // ليست حقلاً واحداً: بلا اسم يبقى رقم مجرّد على شاشة تُفتح تحت ضغط.
+  // كلاهما يُضبط ويُمسح معاً (`AuthService.updateMe`) فما توجد حالة
+  // «اسم بلا رقم» التي لا يمكن الاتصال بها.
+  emergencyContactName  String?
+  emergencyContactPhone String? // +964…، مطبَّع بنفس normalizeIraqiPhone
 }
 
 model DriverProfile {

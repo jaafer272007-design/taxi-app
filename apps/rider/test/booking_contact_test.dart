@@ -50,6 +50,14 @@ void main() {
       MultiProvider(
         providers: [
           Provider<LinkLauncher>.value(value: launcher),
+          // Always present: the screen reads the rider's own emergency
+          // contact from it, and the real tree provides one at the app shell.
+          ChangeNotifierProvider<AuthController>(
+            create: (_) => AuthController(
+              api: FakeAuthApi(),
+              tokenStore: InMemoryTokenStore(),
+            ),
+          ),
           ...extra,
         ],
         child: MaterialApp(

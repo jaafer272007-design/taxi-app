@@ -13,6 +13,11 @@ module.exports = {
   testRegex: '.*\\.int-spec\\.ts$',
   transform: { '^.+\\.(t|j)s$': 'ts-jest' },
   testEnvironment: 'node',
+  // `@Type` / `@ValidateNested` read design-time metadata, which only exists
+  // once reflect-metadata is loaded. Nest pulls it in at boot via
+  // @nestjs/core, so production always has it — a spec that imports a DTO on
+  // its own does not, and fails with "Reflect.getMetadata is not a function".
+  setupFiles: ['reflect-metadata'],
   // Real database round-trips; the default 5s is tight for the first connection.
   testTimeout: 30000,
   // One worker: these share a database, and the expiry sweep is global by

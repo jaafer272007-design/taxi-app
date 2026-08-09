@@ -7,6 +7,7 @@ import 'package:rider/booking/my_bookings_screen.dart';
 import 'package:shared/shared.dart';
 
 import 'support/booking_fakes.dart';
+import 'support/fakes.dart';
 
 /// The two bugs from live end-to-end testing, at the level they were seen:
 /// **on screen**, after a trip completed.
@@ -15,10 +16,24 @@ import 'support/booking_fakes.dart';
 /// One is which list a card is filed under; the other is whether an action
 /// exists at all. So these drive the real widget and read what it rendered.
 void main() {
-  Widget host(MyBookingsController c) => MultiProvider(
+  Widget host(MyBookingsController c, {AuthController? auth}) => MultiProvider(
         providers: [
           Provider<LinkLauncher>.value(value: _NullLauncher()),
           ChangeNotifierProvider<MyBookingsController>.value(value: c),
+          // The screen reads the rider's own emergency contact from the
+          // AuthController, which the real tree always provides at the app
+          // shell. Tests that care about the contact pass a bootstrapped one;
+          // the rest get an anonymous controller (user == null → no contact),
+          // owned and disposed by the provider.
+          if (auth != null)
+            ChangeNotifierProvider<AuthController>.value(value: auth)
+          else
+            ChangeNotifierProvider<AuthController>(
+              create: (_) => AuthController(
+                api: FakeAuthApi(),
+                tokenStore: InMemoryTokenStore(),
+              ),
+            ),
         ],
         child: MaterialApp(
           debugShowCheckedModeBanner: false,

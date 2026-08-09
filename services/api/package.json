@@ -31,7 +31,10 @@
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "setupFiles": [
+      "reflect-metadata"
+    ]
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

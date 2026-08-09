@@ -7,6 +7,17 @@ import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { normalizeIraqiPhone } from '../common/phone.util';
 import { UpdateMeDto } from './dto/update-me.dto';
 
+/**
+ * The rider's own emergency contact.
+ *
+ * Name AND phone, never one without the other — a bare number on a screen
+ * opened under stress is not something anyone can act on with confidence.
+ */
+export interface EmergencyContact {
+  name: string;
+  phone: string;
+}
+
 export interface PublicUser {
   id: string;
   phone: string;
@@ -17,6 +28,19 @@ export interface PublicUser {
   // A profile is complete only when BOTH name and gender are set. Existing users
   // (gender = null) read as incomplete until they set it; the apps prompt them.
   profileComplete: boolean;
+
+  /**
+   * `null` for almost everyone, and that is the designed default — the feature
+   * is opt-in and the app must show nothing at all until it is set.
+   *
+   * **This field is the reason `PublicUser` is not safe to hand to anyone but
+   * its owner.** It appears in exactly one response, `GET /auth/me`, which is
+   * self-only by construction (the id comes from the JWT, never from a param).
+   * Nothing else in the server may serialise it — see
+   * `emergency-contact.int-spec.ts`, which asserts that against the real
+   * driver-facing payloads rather than trusting this comment.
+   */
+  emergencyContact: EmergencyContact | null;
 }
 
 @Injectable()
@@ -45,6 +69,13 @@ export class AuthService {
       roles: user.roles,
       createdAt: user.createdAt,
       profileComplete: user.name !== null && user.gender !== null,
+      // Both columns or neither. `updateMe` writes them as a pair, but a row
+      // half-written by a migration or by hand must not produce a contact the
+      // app would render and then fail to dial.
+      emergencyContact:
+        user.emergencyContactName && user.emergencyContactPhone
+          ? { name: user.emergencyContactName, phone: user.emergencyContactPhone }
+          : null,
     };
   }
 
@@ -105,7 +136,43 @@ export class AuthService {
     if (dto.gender !== undefined) {
       data.gender = dto.gender;
     }
+    // Three distinct cases: absent = leave alone, null = clear, object = set.
+    // Written as a PAIR in every branch, so the "name but no number" row that
+    // toPublicUser has to defend against can never originate here.
+    if (dto.emergencyContact !== undefined) {
+      if (dto.emergencyContact === null) {
+        data.emergencyContactName = null;
+        data.emergencyContactPhone = null;
+      } else {
+        const phone = normalizeIraqiPhone(dto.emergencyContact.phone);
+        if (!phone) {
+          throw new BadRequestException(
+            'رقم جهة الاتصال غير صالح. استخدم رقم موبايل عراقي (+964).',
+          );
+        }
+        const name = dto.emergencyContact.name.trim();
+        if (!name) {
+          throw new BadRequestException('اسم جهة الاتصال مطلوب.');
+        }
+        // A rider's own number as their emergency contact is a silent
+        // no-op in the moment it is needed — the phone would dial itself.
+        if (phone === (await this.phoneOf(userId))) {
+          throw new BadRequestException('اختر رقماً غير رقمك.');
+        }
+        data.emergencyContactName = name;
+        data.emergencyContactPhone = phone;
+      }
+    }
     const user = await this.prisma.user.update({ where: { id: userId }, data });
     return this.toPublicUser(user);
+  }
+
+  /** The caller's own number, for the "don't save your own number" guard. */
+  private async phoneOf(userId: string): Promise<string | null> {
+    const row = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { phone: true },
+    });
+    return row?.phone ?? null;
   }
 }

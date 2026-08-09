@@ -42,6 +42,15 @@ abstract final class AppIcons {
   /// brand's usage guidelines and looks counterfeit. The action always carries
   /// the word «واتساب» beside this icon, which is what actually identifies it.
   static const IconData chat = LucideIcons.messageCircle;
+
+  /// «شارك رحلتي» — the hand-off arrow, not a platform's share glyph, because
+  /// this action is the same on every platform we ship.
+  static const IconData share = LucideIcons.share2;
+  static const IconData copy = LucideIcons.copy;
+
+  /// The emergency contact. A shield rather than a siren: this is protection
+  /// the rider set up for themselves, not an alarm the app is raising.
+  static const IconData shield = LucideIcons.shieldCheck;
   static const IconData user = LucideIcons.user;
   static const IconData users = LucideIcons.users;
   static const IconData wallet = LucideIcons.wallet;

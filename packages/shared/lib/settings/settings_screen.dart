@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../auth/auth_controller.dart';
 import '../auth/auth_user.dart';
+import '../contact/contact_link.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
 import '../widgets/app_avatar.dart';
@@ -23,6 +25,7 @@ class SettingsScreen extends StatelessWidget {
     super.key,
     required this.appVersion,
     required this.onLogout,
+    this.showEmergencyContact = false,
   });
 
   /// Shown in the About section (e.g. "0.1.0").
@@ -31,11 +34,30 @@ class SettingsScreen extends StatelessWidget {
   /// App-provided logout action; clears the session so the router shows login.
   final Future<void> Function() onLogout;
 
+  /// Show the optional emergency-contact section. **Rider app only.**
+  ///
+  /// Off by default because the action it enables — «اتصال طارئ» during an
+  /// active trip — exists only on the rider's booking card. Offering a driver
+  /// a setting that changes nothing they will ever see is worse than not
+  /// offering it: they would save a number believing it does something.
+  /// (A driver-side equivalent is a real gap, but building half of it here
+  /// would hide that rather than fix it.)
+  final bool showEmergencyContact;
+
   void _editName(BuildContext context) {
     final name = context.read<AuthController>().user?.name ?? '';
     showDialog<void>(
       context: context,
       builder: (_) => _EditNameDialog(initialName: name),
+    );
+  }
+
+  void _editEmergencyContact(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => _EmergencyContactDialog(
+        initial: context.read<AuthController>().user?.emergencyContact,
+      ),
     );
   }
 
@@ -65,6 +87,15 @@ class SettingsScreen extends StatelessWidget {
           const _SectionHeader(label: 'الحساب'),
           SizedBox(height: space.sm),
           _AccountCard(user: user, onEditName: () => _editName(context)),
+          if (showEmergencyContact) ...[
+            SizedBox(height: space.xl),
+            const _SectionHeader(label: 'الأمان'),
+            SizedBox(height: space.sm),
+            _EmergencyContactCard(
+              contact: user?.emergencyContact,
+              onEdit: () => _editEmergencyContact(context),
+            ),
+          ],
           SizedBox(height: space.xl),
           const _SectionHeader(label: 'المظهر'),
           SizedBox(height: space.sm),
@@ -273,6 +304,224 @@ class _EditNameDialogState extends State<_EditNameDialog> {
         onSubmitted: (_) => _save(),
       ),
       actions: [
+        AppButton(
+          label: 'إلغاء',
+          variant: AppButtonVariant.ghost,
+          expand: false,
+          onPressed: _saving ? null : () => Navigator.of(context).pop(),
+        ),
+        AppButton(
+          label: 'حفظ',
+          loading: _saving,
+          expand: false,
+          onPressed: _save,
+        ),
+      ],
+    );
+  }
+}
+
+/// The optional emergency contact.
+///
+/// ## Optional means optional
+///
+/// Empty is the default and stays the default: the card states what the feature
+/// is in one line and offers a way in. There is no prompt anywhere else in the
+/// app, no badge, no red dot, and nothing about it appears on any trip screen
+/// until a contact is actually saved. A rider who never touches this feature
+/// should never notice it exists beyond this one row.
+///
+/// ## Why the number is shown back
+///
+/// A saved-but-wrong number is worse than none: it is only ever dialled in the
+/// moment it matters, so a typo stays invisible until exactly then. The card
+/// shows the number in the same Western-digits-LTR form the rest of the app
+/// uses for phone numbers (CLAUDE.md — a number to dial is an identifier, not a
+/// quantity), so the rider can check it against their own contact list.
+class _EmergencyContactCard extends StatelessWidget {
+  const _EmergencyContactCard({required this.contact, required this.onEdit});
+
+  final EmergencyContact? contact;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final space = context.space;
+    final saved = contact;
+
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(AppIcons.shield, size: space.lg, color: colors.textSecondary),
+              SizedBox(width: space.sm),
+              Expanded(
+                child: Text('جهة اتصال للطوارئ',
+                    style: context.text.bodyStrong
+                        .copyWith(color: colors.textPrimary)),
+              ),
+            ],
+          ),
+          SizedBox(height: space.xs),
+          Text(
+            saved == null
+                ? 'اختياري. إذا أضفتها، يظهر زر اتصال سريع أثناء الرحلة فقط.'
+                : 'يظهر زر «اتصال طارئ» أثناء الرحلة فقط.',
+            style: context.text.caption.copyWith(color: colors.textMuted),
+          ),
+          if (saved != null) ...[
+            SizedBox(height: space.md),
+            Text(saved.name,
+                style: context.text.body.copyWith(color: colors.textPrimary),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
+            SizedBox(height: space.xs),
+            Text(
+              ContactLink.display(saved.phone),
+              // A number to dial, matched against the phone's own contacts —
+              // Western and forced LTR, the documented exception.
+              textDirection: TextDirection.ltr,
+              style: context.text.body.tabular
+                  .copyWith(color: colors.textSecondary),
+            ),
+          ],
+          SizedBox(height: space.md),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: AppButton(
+              label: saved == null ? 'إضافة جهة اتصال' : 'تعديل',
+              icon: saved == null ? AppIcons.plus : AppIcons.user,
+              variant: AppButtonVariant.ghost,
+              size: AppButtonSize.small,
+              expand: false,
+              onPressed: onEdit,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Add / edit / remove the emergency contact.
+///
+/// The remove action lives here rather than on the card because it only exists
+/// once there is something to remove, and putting it in the dialog keeps the
+/// settings row to a single affordance.
+class _EmergencyContactDialog extends StatefulWidget {
+  const _EmergencyContactDialog({required this.initial});
+
+  final EmergencyContact? initial;
+
+  @override
+  State<_EmergencyContactDialog> createState() => _EmergencyContactDialogState();
+}
+
+class _EmergencyContactDialogState extends State<_EmergencyContactDialog> {
+  late final TextEditingController _name =
+      TextEditingController(text: widget.initial?.name ?? '');
+  late final TextEditingController _phone =
+      TextEditingController(text: widget.initial?.phone ?? '');
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _phone.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit(EmergencyContact? contact) async {
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    final err = await context.read<AuthController>().saveEmergencyContact(contact);
+    if (!mounted) return;
+    if (err == null) {
+      Navigator.of(context).pop();
+      return;
+    }
+    setState(() {
+      _saving = false;
+      _error = err;
+    });
+  }
+
+  Future<void> _save() async {
+    final name = _name.text.trim();
+    final phone = _phone.text.trim();
+    if (name.isEmpty) {
+      setState(() => _error = 'اسم جهة الاتصال مطلوب.');
+      return;
+    }
+    if (phone.isEmpty) {
+      setState(() => _error = 'رقم جهة الاتصال مطلوب.');
+      return;
+    }
+    // The exact +964 rule is the server's — checking only for "empty" here
+    // keeps one definition of a valid Iraqi number instead of two that drift.
+    await _submit(EmergencyContact(name: name, phone: phone));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final space = context.space;
+
+    return AlertDialog(
+      backgroundColor: colors.surface,
+      shape: RoundedRectangleBorder(borderRadius: context.radii.cardAll),
+      title: Text('جهة اتصال للطوارئ',
+          style: context.text.title.copyWith(color: colors.textPrimary)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'لن يظهر هذا الرقم لأي شخص آخر — لا للسائق ولا لغيره.',
+            style: context.text.caption.copyWith(color: colors.textMuted),
+          ),
+          SizedBox(height: space.md),
+          AppTextField(
+            label: 'الاسم',
+            hint: 'مثال: أم علي',
+            controller: _name,
+            autofocus: widget.initial == null,
+            enabled: !_saving,
+            textInputAction: TextInputAction.next,
+          ),
+          SizedBox(height: space.md),
+          AppTextField(
+            label: 'رقم الهاتف',
+            hint: '07XX XXX XXXX',
+            controller: _phone,
+            prefixIcon: AppIcons.phone,
+            keyboardType: TextInputType.phone,
+            enabled: !_saving,
+            error: _error,
+            textInputAction: TextInputAction.done,
+            // Input stays WESTERN (CLAUDE.md): the keyboard emits Western
+            // digits and converting mid-typing is real friction.
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[0-9+ ]')),
+            ],
+            onSubmitted: (_) => _save(),
+          ),
+        ],
+      ),
+      actions: [
+        if (widget.initial != null)
+          AppButton(
+            label: 'إزالة',
+            variant: AppButtonVariant.dangerTonal,
+            expand: false,
+            onPressed: _saving ? null : () => _submit(null),
+          ),
         AppButton(
           label: 'إلغاء',
           variant: AppButtonVariant.ghost,

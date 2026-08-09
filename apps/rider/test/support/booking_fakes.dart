@@ -137,6 +137,7 @@ Booking bookingFixture({
   String? driverName,
   bool ratable = false,
   bool ratedDriver = false,
+  BookingVehicle? vehicle,
   /// Real Najaf / Karbala coordinates by default. Pass 0 for the "API sent no
   /// coordinates" case, which must render as plain text with no map tap.
   double pickupLat = 31.9990,
@@ -159,6 +160,7 @@ Booking bookingFixture({
     driverName: driverName,
     ratable: ratable,
     ratedDriver: ratedDriver,
+    vehicle: vehicle,
   );
 }
 
@@ -190,6 +192,15 @@ Booking mineFixture({
   String? driverName = 'علي حسن',
   bool ratable = false,
   bool ratedDriver = false,
+  /// The TRIP's status. `EN_ROUTE` is what unlocks the emergency action, and
+  /// it is a STATUS question — never the clock (CLAUDE.md → departNow).
+  String tripStatus = 'OPEN',
+  BookingVehicle? vehicle = const BookingVehicle(
+    make: 'Toyota',
+    model: 'Corolla',
+    plate: 'E2E-1001',
+    color: 'أبيض',
+  ),
   /// Defaults to a trip of this booking's own. Pass it explicitly to put two
   /// bookings on the SAME trip — which is what a rider booking two seats in
   /// separate transactions looks like.
@@ -205,9 +216,11 @@ Booking mineFixture({
     driverName: driverName,
     ratable: ratable,
     ratedDriver: ratedDriver,
+    vehicle: vehicle,
     trip: BookingTrip(
       id: tripId ?? 't-$id',
       departureTime: DateTime.utc(2026, 7, 20, hourUtc, minute),
+      status: tripStatus,
       corridor: BookingCorridor(originCity: originCity, destCity: destCity),
     ),
   );

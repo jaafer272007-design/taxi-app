@@ -62,6 +62,16 @@ describe('BookingService.book', () => {
       driverProfile: { findUnique: jest.fn().mockResolvedValue({ userId: 'driverU' }) },
       // The booking rider — has a gender set so eligibility passes by default.
       user: { findUnique: jest.fn().mockResolvedValue({ gender: Gender.FEMALE }) },
+      // The car, read after commit so «شارك رحلتي» works on the confirmation
+      // screen without a second round trip.
+      vehicle: {
+        findUnique: jest.fn().mockResolvedValue({
+          make: 'Toyota',
+          model: 'Corolla',
+          plate: 'A 12345',
+          color: 'أبيض',
+        }),
+      },
       $transaction: jest.fn((cb: any) => cb(tx)),
     };
     drivers = { findProfileByUserId: jest.fn().mockResolvedValue(null) };
@@ -136,6 +146,37 @@ describe('BookingService.book', () => {
       expect.objectContaining({ type: NotificationType.BOOKING_CREATED }),
     );
     expect(tx.trip.update).not.toHaveBeenCalled(); // still seats left → not locked
+  });
+
+  it('returns the car with the booking, so «شارك رحلتي» needs no second call', async () => {
+    tx.trip.updateMany.mockResolvedValue({ count: 1 });
+    tx.trip.findUniqueOrThrow.mockResolvedValue({ ...futureTrip, seatsAvailable: 1 });
+
+    const bk = await service.book('u1', dto);
+
+    // The PLATE is the point: it is what identifies this car in a rank. It is
+    // deliberately absent from /trips/search — a rider gets it once they hold a
+    // booking, the same rule that keeps phone numbers behind one.
+    expect(bk.vehicle).toEqual({
+      make: 'Toyota',
+      model: 'Corolla',
+      plate: 'A 12345',
+      color: 'أبيض',
+    });
+  });
+
+  it('still returns the booking when the car lookup fails', async () => {
+    tx.trip.updateMany.mockResolvedValue({ count: 1 });
+    tx.trip.findUniqueOrThrow.mockResolvedValue({ ...futureTrip, seatsAvailable: 1 });
+    prisma.vehicle.findUnique.mockRejectedValue(new Error('db blip'));
+
+    // The seat is already COMMITTED at this point. Failing here would tell the
+    // rider their booking failed when it did not — and their retry would then
+    // hit «لديك حجز على هذه الرحلة بالفعل». Same reasoning as the notifications.
+    const bk = await service.book('u1', dto);
+
+    expect(bk.status).toBe(BookingStatus.CONFIRMED);
+    expect(bk.vehicle).toBeNull();
   });
 
   it('locks the trip when the last seats are taken (seatsAvailable → 0)', async () => {
