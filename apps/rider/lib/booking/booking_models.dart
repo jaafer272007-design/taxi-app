@@ -212,3 +212,46 @@ LocationPoint _pointFrom(Map<String, dynamic> json, String prefix) =>
       lng: (json['${prefix}Lng'] as num?)?.toDouble() ?? 0,
       label: json['${prefix}Label'] as String? ?? '',
     );
+
+/// Whether this rider may create a new booking at all right now.
+///
+/// A rider who repeatedly books and does not turn up is blocked from making
+/// NEW bookings for a cooling-off period; the bookings they already hold are
+/// untouched. The server is the gate (`POST /bookings` refuses regardless);
+/// this exists so the app can say so BEFORE the rider picks seats and points
+/// and only then meets a 403.
+class BookingEligibility {
+  const BookingEligibility({
+    required this.blocked,
+    this.blockedUntil,
+    this.noShowCount = 0,
+    this.message,
+  });
+
+  /// Not blocked — the state for very nearly every rider, and the default the
+  /// app assumes when the check itself fails (see [BookingApi.eligibility]).
+  static const ok = BookingEligibility(blocked: false);
+
+  final bool blocked;
+
+  /// When the block lifts. The app formats it in Arabic-Indic numerals; the
+  /// server sends an instant, not a rendered string, precisely so it can.
+  final DateTime? blockedUntil;
+
+  /// Non-voided no-shows inside the policy window.
+  final int noShowCount;
+
+  /// The server's own Arabic explanation, shown verbatim when present so the
+  /// wording lives in one place.
+  final String? message;
+
+  factory BookingEligibility.fromJson(Map<String, dynamic> json) =>
+      BookingEligibility(
+        blocked: json['blocked'] as bool? ?? false,
+        blockedUntil: json['blockedUntil'] == null
+            ? null
+            : DateTime.parse(json['blockedUntil'] as String),
+        noShowCount: (json['noShowCount'] as num?)?.toInt() ?? 0,
+        message: json['message'] as String?,
+      );
+}

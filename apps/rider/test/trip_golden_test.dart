@@ -11,6 +11,10 @@ import 'package:rider/trip/trip_models.dart';
 import 'package:rider/trip/trip_search_controller.dart';
 import 'package:shared/shared.dart';
 
+import 'package:rider/booking/booking_api.dart';
+import 'package:rider/booking/booking_models.dart';
+import 'support/booking_fakes.dart';
+
 import 'support/fakes.dart';
 import 'support/trip_fakes.dart';
 
@@ -222,6 +226,28 @@ void main() {
     });
   });
 
+  // A rider blocked for repeated no-shows meets this BEFORE the booking form,
+  // in place of the CTA. Three no-shows, not two: `formatTimes(2)` is the dual
+  // «مرتين» and carries no digit, so a 2 fixture cannot show a numeral bug.
+  group('details_no_show_blocked', () {
+    testWidgets('light', (t) async {
+      await _golden(t,
+          name: 'details_no_show_blocked_light',
+          brightness: Brightness.light,
+          auth: await _riderAuth(Gender.male),
+          bookingApi: _blockedApi(),
+          child: TripDetailsScreen(trip: tripFixture()));
+    });
+    testWidgets('dark', (t) async {
+      await _golden(t,
+          name: 'details_no_show_blocked_dark',
+          brightness: Brightness.dark,
+          auth: await _riderAuth(Gender.male),
+          bookingApi: _blockedApi(),
+          child: TripDetailsScreen(trip: tripFixture()));
+    });
+  });
+
   group('details_women_blocked', () {
     testWidgets('light', (t) async {
       await _golden(t,
@@ -354,6 +380,15 @@ Future<TripSearchController> _emptyFilteredController() async {
   return c;
 }
 
+/// A booking API that reports this rider as blocked until a fixed date, so the
+/// shot is stable rather than relative to "today".
+FakeBookingApi _blockedApi() => FakeBookingApi()
+  ..eligibilityResult = BookingEligibility(
+    blocked: true,
+    blockedUntil: DateTime.utc(2026, 8, 15, 9),
+    noShowCount: 3,
+  );
+
 Future<void> _golden(
   WidgetTester tester, {
   required String name,
@@ -361,6 +396,9 @@ Future<void> _golden(
   required Widget child,
   TripSearchController? controller,
   AuthController? auth,
+  /// Provided when the screen under test asks the server whether this rider may
+  /// book at all (the trip-details CTA does).
+  BookingApi? bookingApi,
 }) async {
   // Render at a real phone size (logical 390×844) so screens render at true
   // proportions with the bottom button pinned at its natural size/position.
@@ -387,6 +425,9 @@ Future<void> _golden(
       value: controller,
       child: body,
     );
+  }
+  if (bookingApi != null) {
+    body = Provider<BookingApi>.value(value: bookingApi, child: body);
   }
 
   await tester.pumpWidget(

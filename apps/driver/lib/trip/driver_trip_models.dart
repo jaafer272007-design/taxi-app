@@ -171,6 +171,7 @@ class TripBooking {
     required this.id,
     required this.riderId,
     required this.riderName,
+    this.riderNoShowCount = 0,
     required this.seatCount,
     required this.pickup,
     required this.dropoff,
@@ -181,6 +182,13 @@ class TripBooking {
   final String id;
   final String riderId;
   final String? riderName;
+
+  /// How many times this rider has been marked «لم يحضر» recently (non-voided,
+  /// inside the policy window). Server-computed; 0 for almost everyone.
+  ///
+  /// A COUNT, deliberately — not a rating and not a label. See
+  /// `services/api/src/booking/no-show-policy.ts`.
+  final int riderNoShowCount;
   final int seatCount;
   final LocationPoint pickup;
   final LocationPoint dropoff;
@@ -194,6 +202,7 @@ class TripBooking {
         id: id,
         riderId: riderId,
         riderName: riderName,
+        riderNoShowCount: riderNoShowCount,
         seatCount: seatCount,
         pickup: pickup,
         dropoff: dropoff,
@@ -205,6 +214,7 @@ class TripBooking {
         id: json['id'] as String,
         riderId: json['riderId'] as String,
         riderName: json['riderName'] as String?,
+        riderNoShowCount: (json['riderNoShowCount'] as num?)?.toInt() ?? 0,
         seatCount: (json['seatCount'] as num?)?.toInt() ?? 1,
         pickup: _pointFrom(json, 'pickup'),
         dropoff: _pointFrom(json, 'dropoff'),

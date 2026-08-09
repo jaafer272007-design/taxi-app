@@ -112,6 +112,18 @@ String formatSeats(int count) => switch (count) {
       _ => '${formatCount(count)} مقاعد',
     };
 
+/// An occurrence count as an Arabic noun phrase — `مرة واحدة` / `مرتين` /
+/// `٣ مرات`.
+///
+/// Same dual rule as [formatSeats], and the same trap: at 2 the phrase carries
+/// NO digit at all, so a fixture of 2 will never show a numeral bug. Fixture 3.
+String formatTimes(int count) => switch (count) {
+      <= 0 => 'لا مرات',
+      1 => 'مرة واحدة',
+      2 => 'مرتين',
+      _ => '${formatCount(count)} مرات',
+    };
+
 /// A trip count as an Arabic noun phrase — `رحلة واحدة` / `رحلتان` / `٣ رحلات`.
 ///
 /// Same dual rule as [formatSeats]: two trips is "رحلتان", never "٢ رحلات".

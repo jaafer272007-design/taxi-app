@@ -92,3 +92,51 @@ export interface DashboardCounts {
   bookings?: number;
   earningsTotal?: number;
 }
+
+// ── No-shows ─────────────────────────────────────────────────────────────
+
+/** The policy numbers in force, sent with every no-show payload. */
+export interface NoShowPolicy {
+  threshold: number;
+  windowDays: number;
+  blockDays: number;
+}
+
+/** A rider currently blocked from making new bookings. */
+export interface BlockedRider {
+  riderId: string | null;
+  name: string | null;
+  phone: string | null;
+  noShowCount: number;
+  blockedUntil: string | null;
+}
+
+export interface BlockedRidersPayload {
+  policy: NoShowPolicy;
+  riders: BlockedRider[];
+}
+
+/**
+ * One recorded no-show. A voided record KEEPS its row — the reason and the
+ * admin who decided are the audit trail, so the panel shows them rather than
+ * hiding the record.
+ */
+export interface NoShowRecord {
+  id: string;
+  riderId: string;
+  tripId: string;
+  bookingId: string;
+  seatCount: number;
+  createdAt: string;
+  voidedAt: string | null;
+  voidedBy: string | null;
+  voidReason: string | null;
+}
+
+export interface RiderNoShowHistory {
+  policy: NoShowPolicy;
+  blocked: boolean;
+  noShowCount: number;
+  blockedUntil: string | null;
+  records: NoShowRecord[];
+}

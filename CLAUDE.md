@@ -502,6 +502,75 @@ same confusion that made departNow trips invisible: *when it was scheduled* vs
 - One rate sheet for both directions — `packages/shared/lib/rating/rate_sheet.dart`.
   Only the words differ, so only the words are parameters.
 
+## No-show consequences (locked decision)
+
+**Reputation + an escalating temporary block. Never a fee.** Phase 1 is
+cash-only, so there is no stored payment method to charge against — a "no-show
+fee" would be a number with no collection behind it. The only lever we actually
+hold is access to the platform. The cost being answered is real: a rider who
+does not turn up takes a whole seat with no fare, **25% of a four-seat trip**,
+and drivers are the hard constraint in this market.
+
+- **The numbers are environment, not code**: `NO_SHOW_BLOCK_THRESHOLD` (3),
+  `NO_SHOW_WINDOW_DAYS` (30), `NO_SHOW_BLOCK_DAYS` (7). They are *policy*
+  values that the first real month of operation will change; a malformed value
+  falls back to the default rather than failing boot. The rule itself is pure —
+  `services/api/src/booking/no-show-policy.ts`, no Prisma, no Nest.
+- **The block starts from the LAST occurrence, not from the moment of
+  counting** — otherwise it renews itself on every check and never ends.
+- **`BookingStatus.NO_SHOW` alone cannot carry this** and a `NoShowRecord` row
+  is not duplication. The status answers *how this booking ended*; the policy
+  needs *when it happened* (a rolling window over `SeatBooking.createdAt` would
+  count the booking time, not the absence), *whether it was voided* (an appeal
+  needs a row that stays visible and stops counting — neither `COMPLETED` nor
+  `CANCELLED` can express that without lying), and *who voided it and why*.
+- **The block prevents NEW bookings only.** An existing CONFIRMED booking is
+  never cancelled by a block, and stays cancellable and editable. Cancelling it
+  as punishment hurts the driver too.
+- **Server-side is the gate; the client is a courtesy.**
+  `BookingService.book()` refuses with a structured 403 (`code:
+  'RIDER_BLOCKED_NO_SHOW'`, `blockedUntil`) **before** the seat transaction —
+  same position as the gender check, so it never weakens the inventory
+  guarantee. `GET /bookings/eligibility` exists so the rider is told *before*
+  filling in a booking form, and it **fails open**: a failed eligibility read
+  must never block a rider the server would have allowed.
+- **A block always names its end date.** "You are blocked" with no date leaves
+  the user nothing to do, which is exactly the state that generates a support
+  call.
+
+### It is a SEPARATE signal from `ratingAvg` — never folded in
+
+A rating is a **subjective judgement** by one counterparty about a journey that
+**happened**; a no-show is an **objective, countable event** about a journey
+that **did not**. Folding it into the average would make two-star mean both
+"bad driver" and "missed two trips"; a handful of occurrences would drag the
+mean down permanently, turning a 30-day window into a life sentence. And the
+mechanisms fight: no-shows have a rolling window and an appeal that *voids* an
+occurrence, neither of which ratings have — supporting both would mean
+recomputing an average retroactively on every appeal. The audiences differ too:
+ratings are public to both sides, the count is shown to the **driver only**.
+
+**Tone: a count, not a label.** The driver sees «لم يحضر ٣ مرات مؤخراً» —
+`warning`, never `danger`, and no word like "bad". The driver is not being asked
+to refuse the rider, only given the context. Voided records stop counting, so a
+successful appeal disappears from the driver's view too.
+
+### The cancel trap this fixed (same problem family as departNow)
+
+The cutoff used to be `catchableUntil(trip) − 15min`. Once a «الآن» window shut,
+the trip went `LOCKED` with the driver not yet started — and the rider **could
+not cancel a trip that had not left**, then got marked `NO_SHOW` for it. A
+penalty for something we prevented them from avoiding.
+
+**A rider may cancel (or change seat count) while the trip is `OPEN`/`LOCKED`,
+and not from `EN_ROUTE`** (`CANCELLABLE_BEFORE` in `booking.service.ts`). The
+arithmetic is the driver's, not the rider's: cancelling before departure gives
+back a **resellable seat**; a trapped rider gives an **empty seat AND** a
+no-show. **And the converse: a no-show cannot be recorded before `EN_ROUTE`** —
+so the two states never overlap. Marking and recording happen in **one
+transaction**; a status without a row (or a row without a status) corrupts the
+count later with nothing left to point at it.
+
 ## Splitting work into several PRs (locked rule)
 
 **Every PR targets `main` directly, and they are merged in order. Never stack a

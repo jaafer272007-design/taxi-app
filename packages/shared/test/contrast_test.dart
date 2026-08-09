@@ -244,6 +244,26 @@ void _auditScreens(AppColors c, String label) {
   pair('booking cash note (warning on warningTonal)', c.warning, c.warningTonal);
   pair('booking error banner (danger on dangerTonal)', c.danger, c.dangerTonal);
 
+  // ── The no-show block notice (rider trip details) ─────────────────────────
+  // Four inks on ONE tonal fill, which is the unusual part: the notice is a
+  // paragraph, not a badge, so it needs a heading colour AND ordinary body text
+  // on a danger tint. Body text on a tonal fill is the pair that quietly fails
+  // a re-skin — `danger/dangerTonal` above says nothing about textMuted, and
+  // the last line ("your existing bookings are unaffected") is the one a rider
+  // most needs to be able to read.
+  pair('no-show notice heading (danger on dangerTonal)', c.danger, c.dangerTonal);
+  pair('no-show notice cause (textSecondary on dangerTonal)',
+      c.textSecondary, c.dangerTonal);
+  pair('no-show notice lift date (textPrimary on dangerTonal)',
+      c.textPrimary, c.dangerTonal);
+  pair('no-show notice footnote (textMuted on dangerTonal)',
+      c.textMuted, c.dangerTonal);
+
+  // ── The no-show marker (driver trip details) ──────────────────────────────
+  // Same fill as the cash note, but caption-sized text rather than a label, so
+  // it is asserted where it is used rather than assumed from the badge pair.
+  pair('no-show marker (warning on warningTonal)', c.warning, c.warningTonal);
+
   // ── Confirmation screen — the full-bleed pine field ───────────────────────
   pair('confirmation hero copy (onPrimary on primary)', c.onPrimary, c.primary);
   test('$label: confirmation badge (onPrimary on the pre-blended fill)', () {

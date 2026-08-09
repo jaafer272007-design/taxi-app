@@ -7,6 +7,8 @@ import {
   EXISTING_CORRIDOR,
   FREE_CORRIDOR,
   NORMAL_ADMIN,
+  NO_SHOW_POLICY,
+  NO_SHOW_RIDER,
   SEEDED_CORRIDOR_COUNT,
   SEEDED_DRIVER_COUNT,
   SUPER_ADMIN,
@@ -126,5 +128,31 @@ test.describe("seed contract", () => {
         `${fixture.name} must stay ${fixture.status} — no test may act on it. ${hint}`,
       ).toBe(fixture.status);
     }
+  });
+
+  test("the no-show rider is actually blocked, under the policy the tests assume", async ({
+    request,
+  }) => {
+    const token = await apiLogin(request, NORMAL_ADMIN);
+    const res = await request.get(`${API_URL}/admin/no-shows/blocked`, {
+      headers: authHeader(token),
+    });
+    const payload = (await res.json()) as {
+      policy: { threshold: number; windowDays: number; blockDays: number };
+      riders: { phone: string | null; noShowCount: number; blockedUntil: string | null }[];
+    };
+
+    // If the deployment retunes the thresholds, the seed's three occurrences may
+    // no longer block anyone — and the appeal spec would then pass against an
+    // empty table, asserting nothing. Fail here instead, where it is legible.
+    expect(payload.policy, `the no-show policy differs from what the specs assume — ${hint}`).toEqual(
+      { ...NO_SHOW_POLICY },
+    );
+
+    const rider = payload.riders.find((r) => r.phone === NO_SHOW_RIDER.phone);
+    expect(rider, `${NO_SHOW_RIDER.name} should be blocked — ${hint}`).toBeDefined();
+    expect(rider!.noShowCount).toBe(NO_SHOW_RIDER.occurrences);
+    // The block must still be in the future, or nothing is left to appeal.
+    expect(new Date(rider!.blockedUntil!).getTime()).toBeGreaterThan(Date.now());
   });
 });

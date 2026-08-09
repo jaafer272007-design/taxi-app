@@ -575,6 +575,21 @@ class _BookingCard extends StatelessWidget {
                     Text('${formatSeats(booking.seatCount)} بـ${formatPrice(booking.fare)}',
                         style: context.text.caption
                             .copyWith(color: colors.textMuted)),
+                    // The rider's recent no-show record, when there is one.
+                    //
+                    // A COUNT, not a label. The driver eats the cost of a
+                    // no-show — a quarter of a four-seat trip — so they are
+                    // entitled to the record; what it means about the person is
+                    // their call, not the app's. So: «لم يحضر ٣ مرات مؤخراً»
+                    // and never «راكب غير موثوق».
+                    //
+                    // Absent entirely at 0, which is almost everyone: a badge
+                    // that renders «لا مرات» on every clean rider would turn the
+                    // whole list into a wall of warnings and mean nothing.
+                    if (booking.riderNoShowCount > 0) ...[
+                      SizedBox(height: space.xs),
+                      _NoShowMarker(count: booking.riderNoShowCount),
+                    ],
                   ],
                 ),
               ),
@@ -773,4 +788,69 @@ Widget bookingStatusPill(BookingStatus status) {
     BookingStatus.unknown => ('—', AppBadgeTone.neutral, null),
   };
   return AppPill(label: label, tone: tone, icon: icon);
+}
+
+/// The rider's recent no-show record, shown to the driver carrying them.
+///
+/// ## Why a marker at all
+///
+/// A rider who books and does not turn up costs the driver a whole seat with no
+/// fare — on a four-seat car, a quarter of the trip's income. The driver has no
+/// other way to know it has happened before, and they are the ones who decide
+/// whether to wait a few more minutes or pull away.
+///
+/// ## Why it is deliberately quiet
+///
+/// * **A count, never a judgement.** «لم يحضر ٣ مرات مؤخراً» states what the
+///   record says. «راكب غير موثوق» would be the app deciding something about a
+///   person on the strength of three rows, in front of the person's driver.
+/// * **`warning`, not `danger`.** Danger is for a thing that has gone wrong on
+///   this trip; this is context about a passenger who has, so far, done nothing
+///   at all.
+/// * **Nothing at 0**, which is nearly everyone — a marker on every row is not
+///   a marker.
+/// * The tonal background is the OPAQUE token, never `warning.withValues(alpha:)`:
+///   this sits inside an `AppCard` whose own colour changes with trip state, and
+///   a translucent tint composites over whatever is behind it (CLAUDE.md).
+class _NoShowMarker extends StatelessWidget {
+  const _NoShowMarker({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final space = context.space;
+    // «مؤخراً» rather than a day count: the exact window is a tunable policy
+    // number, and putting it on this row would date the UI to a config value.
+    final label = 'لم يحضر ${formatTimes(count)} مؤخراً';
+
+    return Semantics(
+      // Spelled out for a screen reader: the icon carries no meaning on its own.
+      label: 'سجل عدم الحضور: $label',
+      excludeSemantics: true,
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: space.sm,
+          vertical: space.xs / 2,
+        ),
+        decoration: BoxDecoration(
+          color: colors.warningTonal,
+          borderRadius: context.radii.pillAll,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Icon AND text AND a number: never colour alone (WCAG 1.4.1).
+            Icon(AppIcons.warning, size: space.md, color: colors.warning),
+            SizedBox(width: space.xs),
+            Text(
+              label,
+              style: context.text.caption.tabular.copyWith(color: colors.warning),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

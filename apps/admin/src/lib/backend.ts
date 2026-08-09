@@ -5,10 +5,12 @@ import type {
   AdminAccount,
   AdminMe,
   AdminSession,
+  BlockedRidersPayload,
   Corridor,
   DashboardCounts,
   Driver,
   DriverStatus,
+  RiderNoShowHistory,
 } from "./types";
 
 /**
@@ -190,3 +192,29 @@ export function resetAdminPassword(
 }
 
 export { ApiError };
+
+// ── No-shows (rider reputation + temporary block) ────────────────────────
+
+export function listBlockedRiders(token: string): Promise<BlockedRidersPayload> {
+  return request<BlockedRidersPayload>("/admin/no-shows/blocked", { token });
+}
+
+export function getRiderNoShows(token: string, riderId: string): Promise<RiderNoShowHistory> {
+  return request<RiderNoShowHistory>(`/admin/no-shows/rider/${riderId}`, { token });
+}
+
+export function voidNoShow(token: string, id: string, reason: string): Promise<unknown> {
+  return request(`/admin/no-shows/${id}/void`, {
+    method: "POST",
+    token,
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export function liftRiderBlock(token: string, riderId: string, reason: string): Promise<unknown> {
+  return request(`/admin/no-shows/rider/${riderId}/lift`, {
+    method: "POST",
+    token,
+    body: JSON.stringify({ reason }),
+  });
+}

@@ -96,6 +96,22 @@ export const DRIVERS = {
 /** Drivers the seed creates. Used to assert totals that must not drift. */
 export const SEEDED_DRIVER_COUNT = 5;
 
+/**
+ * The rider the seed blocks for repeated no-shows.
+ *
+ * `occurrences` must match the backend's `NO_SHOW_BLOCK_THRESHOLD` default —
+ * the seed creates exactly that many so the rider comes out blocked. If the
+ * threshold is ever retuned, this and the seed move together.
+ */
+export const NO_SHOW_RIDER = {
+  phone: "+9647999000010",
+  name: "راكب متغيّب",
+  occurrences: 3,
+} as const;
+
+/** The policy the panel states in its header, and the API reports. */
+export const NO_SHOW_POLICY = { threshold: 3, windowDays: 30, blockDays: 7 } as const;
+
 /** Status labels the panel renders. A raw English status on screen is a bug. */
 export const DRIVER_STATUS_AR: Record<string, string> = {
   PENDING: "بانتظار المراجعة",

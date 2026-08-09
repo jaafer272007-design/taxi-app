@@ -53,6 +53,13 @@ void main() {
   // Scrolled onto the booking cards: the points and the phone row live below
   // the hero, and that is the part of this change worth looking at.
   _screen('trip_detail_contact', _tripDetailOpen, scrollBy: 300);
+  // The no-show marker on a passenger row. Scrolled onto the cards, because
+  // that is the whole subject of the shot.
+  //
+  // THREE no-shows, not two: `formatTimes(2)` is the Arabic dual «مرتين»,
+  // which carries no digit at all — a fixture of 2 renders clean whatever the
+  // numeral handling does. (CLAUDE.md → numerals.)
+  _screen('trip_detail_no_show', _tripDetailNoShow, scrollBy: 300);
   _screen('trip_detail_enroute', _tripDetailEnRoute);
   _screen('trip_completed', _tripCompleted);
   _screen('earnings', _earnings);
@@ -284,6 +291,35 @@ Future<Widget> _tripDetailOpen() async {
           bookingId: 'b1', userId: 'r1', name: 'علي حسن', phone: '+9647701234567'),
       contactFixture(
           bookingId: 'b2', userId: 'r2', name: 'حسن كريم', phone: '+9647809876543'),
+    ],
+  );
+  return _hostDetail(c);
+}
+
+/// A passenger with a recent no-show record, beside one without.
+///
+/// The pair is the point: the marker only means something if most rows do not
+/// carry it.
+Future<Widget> _tripDetailNoShow() async {
+  final c = await _detail(
+    trip: tripFixture(
+        status: TripStatus.open, seatsTotal: 4, seatsAvailable: 1),
+    bookings: [
+      bookingFixture(
+          id: 'b1',
+          riderId: 'r1',
+          riderName: 'علي حسن',
+          riderNoShowCount: 3,
+          seatCount: 2,
+          fare: 12000,
+          pickupLabel: 'قرية الغدير السكنية',
+          dropoffLabel: 'طريق الحر، حي الزيتون'),
+      bookingFixture(
+          id: 'b2',
+          riderId: 'r2',
+          riderName: 'حسن كريم',
+          pickupLabel: 'كراج النجف',
+          dropoffLabel: 'الحرم'),
     ],
   );
   return _hostDetail(c);

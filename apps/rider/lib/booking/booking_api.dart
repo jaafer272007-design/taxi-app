@@ -19,6 +19,13 @@ abstract interface class BookingApi {
   /// and an `upcoming` flag.
   Future<List<Booking>> listMine();
 
+  /// GET /bookings/eligibility → may this rider start a new booking?
+  ///
+  /// Never throws: a rider must not be stopped from booking because a courtesy
+  /// check failed. The server refuses on submit if they really are blocked, so
+  /// the safe fallback is "allowed".
+  Future<BookingEligibility> eligibility();
+
   /// PATCH /bookings/:id → the booking with its new seat count.
   ///
   /// The answer to "I need one more seat". Booking the same trip twice is
@@ -87,6 +94,19 @@ class DioBookingApi implements BookingApi {
           .toList();
     } on DioException catch (e) {
       throw mapDioError(e);
+    }
+  }
+
+  @override
+  Future<BookingEligibility> eligibility() async {
+    try {
+      final res = await _dio.get<Map<String, dynamic>>('/bookings/eligibility');
+      return BookingEligibility.fromJson(res.data!);
+    } catch (_) {
+      // Offline, 404 on an older server, anything: assume allowed. The gate is
+      // the server on submit; guessing "blocked" here would lock a rider out
+      // of the product over a dropped request.
+      return BookingEligibility.ok;
     }
   }
 
