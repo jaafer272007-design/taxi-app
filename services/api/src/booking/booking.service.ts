@@ -22,6 +22,7 @@ import { NotificationService, NotificationPayload } from '../notification/notifi
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { SearchTripsDto } from './dto/search-trips.dto';
 import { catchableTripFilter, catchableUntil, isCatchable } from '../trip/trip-window';
+import { releaseSeat } from './seat-return';
 import {
   isBookingUpcoming,
   isRatableByRider,
@@ -546,33 +547,14 @@ export class BookingService {
     }
 
     const cancelledBooking = await this.prisma.$transaction(async (tx) => {
-      // Race guard: only one concurrent cancel flips CONFIRMED→CANCELLED, so the
-      // seat is returned exactly once (no double refund).
-      const cancelled = await tx.seatBooking.updateMany({
-        where: { id: bookingId, status: BookingStatus.CONFIRMED },
-        data: { status: BookingStatus.CANCELLED },
-      });
-      if (cancelled.count !== 1) {
+      // The seat return — flip, refund, reopen — lives in `releaseSeat`, which
+      // is now shared with the Phase 2 path that releases a rider for declining
+      // a price raise. Identical seat accounting, entirely different meaning and
+      // notifications; the arithmetic is exactly what must not be copied.
+      const { released } = await releaseSeat(tx, bookingId);
+      if (!released) {
         throw new ConflictException('تم إلغاء الحجز مسبقاً.');
       }
-
-      await tx.trip.update({
-        where: { id: trip.id },
-        data: { seatsAvailable: { increment: booking.seatCount } },
-      });
-
-      // Reopen a full-but-still-live trip so freed seats are bookable again.
-      //
-      // `isCatchable`, NOT `departureTime > now` — which is what this said, and
-      // was the same departNow bug in a fourth place: a rider cancelling a seat
-      // on a full «الآن» trip left it LOCKED for the rest of its window, so the
-      // freed seat was never offered to anyone and the driver drove with an
-      // empty place.
-      const afterTrip = await tx.trip.findUniqueOrThrow({ where: { id: trip.id } });
-      if (afterTrip.status === TripStatus.LOCKED && isCatchable(afterTrip)) {
-        await tx.trip.update({ where: { id: trip.id }, data: { status: TripStatus.OPEN } });
-      }
-
       return tx.seatBooking.findUniqueOrThrow({ where: { id: bookingId } });
     });
 

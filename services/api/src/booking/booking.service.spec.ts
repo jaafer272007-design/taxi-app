@@ -330,6 +330,9 @@ describe('BookingService.cancel', () => {
 
   it('409 on a double-cancel race (updateMany count 0)', async () => {
     prisma.seatBooking.findUnique.mockResolvedValue(booking());
+    // `releaseSeat` reads the booking inside the transaction before it tries
+    // the guarded flip — it needs the seatCount to know what to refund.
+    tx.seatBooking.findUniqueOrThrow.mockResolvedValue(booking());
     tx.seatBooking.updateMany.mockResolvedValue({ count: 0 });
     await expect(service.cancel('u1', 'bk1')).rejects.toBeInstanceOf(ConflictException);
   });

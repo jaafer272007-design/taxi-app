@@ -155,6 +155,8 @@ model Corridor {
   maxPricePerSeat       Int // أعلى سعر مسموح للسائق (IQD)
   trips                 Trip[]
   routeRequests         RouteRequest[] // Phase 1 amendment: إشارة الطلب على هذا الممر
+  seatRequests          SeatRequest[] // Phase 2: نيّات الركّاب على هذا الممر
+  pools                 Pool[] // Phase 2: التجمّعات المتكوّنة عليه
 
   // One corridor per directed city pair — the admin can't create a duplicate
   // (Najaf→Karbala twice). Reverse direction is a separate pair, so both remain.
@@ -253,6 +255,16 @@ enum NotificationType {
   DRIVER_REJECTED
   /// to the RIDER: a driver posted on a corridor they asked us for. راجع RouteRequest.
   ROUTE_AVAILABLE
+
+  // ── Phase 2 (التجميع) ──────────────────────────────────────────────
+  /// to the RIDER: سائق استلم تجمّعك وصار عندك حجز مؤكد.
+  POOL_CLAIMED
+  /// to the RIDER: انتهى التجمّع بلا سائق (أو رسب بعد رفع السعر) — أُطلق طلبك.
+  POOL_EXPIRED
+  /// to the RIDER: السائق يقترح سعراً أعلى؛ وافق أو ارفض قبل مهلة.
+  POOL_RAISE_PROPOSED
+  /// to the DRIVER: انتهت مهلة الرفع — كم قبل وكم أُطلق.
+  POOL_RAISE_RESOLVED
 }
 
 model Notification {
@@ -343,7 +355,197 @@ model NoShowRecord {
   @@index([riderId, voidedAt, createdAt])
 }
 
-// SeatRequest = Phase 2 (لا يُبنى الآن)
+// ═══════════════════════════════════════════════════════════════════════
+// Phase 2 — Stage 1: التجميع (رحلة يبدأها الراكب)
+// ═══════════════════════════════════════════════════════════════════════
+//
+// Phase 1 اتجاه واحد: السائق يعلن، والراكب يحجز. هذا هو الاتجاه الآخر:
+// الراكب يطلب مقعداً على ممرّ داخل نافذة وقت، والنظام يجمّع الطلبات
+// المتوافقة، والسائق **يستلم** تجمّعاً جاهزاً من لوحة.
+//
+// ## ما ليس هنا عمداً
+//
+// لا موقع لحظي للسائقين، ولا إرسال موجَّه، ولا تتبّع توفّر — لا شيء من ذلك
+// موجود في المنتج، وPhase 1 استبعده صراحةً. اكتساب السائق **لوحة يتصفّحها
+// ويستلم منها**؛ أول من يستلم يأخذ التجمّع.
+//
+// ## الضمانة التي لا تُمَسّ
+//
+// عند الاستلام يصير التجمّع **رحلة عادية** (`Trip.createdBy = SYSTEM`) مع
+// `SeatBooking` لكل طلب. من تلك اللحظة تنطبق كل قواعد Phase 1 بلا تعديل:
+// معاملة المقعد، آلة الحالة، فان-آوت الإشعارات، عدم الحضور، والإلغاء. لا
+// يوجد نظام حجز موازٍ، وهذا شرط لا تنازل عنه.
+
+enum SeatRequestStatus {
+  /// ينتظر في تجمّع قيد التكوين.
+  PENDING
+  /// استُلم التجمّع → صار للراكب حجز حقيقي.
+  MATCHED
+  /// الراكب ألغى طلبه قبل الاستلام.
+  CANCELLED
+  /// رفض رفع السعر → أُطلق **بلا أي عقوبة** ولا واقعة عدم حضور.
+  DECLINED
+  /// انتهت نافذة التجمّع بلا سائق، أو رسب الرفع تحت الحد الأدنى.
+  EXPIRED
+}
+
+enum PoolStatus {
+  /// يقبل طلبات جديدة، ويظهر على اللوحة متى بلغ الحد الأدنى.
+  FORMING
+  /// سائق استلمه؛ الرحلة موجودة.
+  CLAIMED
+  /// السائق اقترح رفع السعر؛ ننتظر ردود الركّاب.
+  RAISE_PENDING
+  /// انتهى بلا سائق، أو رسب الرفع.
+  EXPIRED
+}
+
+enum RaiseResponse {
+  ACCEPTED
+  DECLINED
+}
+
+enum PoolRaiseOutcome {
+  /// قَبِل ما يكفي من المقاعد → الرحلة تمضي بالسعر الجديد.
+  ACCEPTED
+  /// أقل من الحد الأدنى → التجمّع كله انتهى.
+  FAILED
+}
+
+/// نيّة الراكب: «أريد مقعداً على هذا الممر داخل هذه النافذة».
+///
+/// **التزام لا استفسار.** الراكب يرى السعر (`Corridor.suggestedPricePerSeat`)
+/// قبل أن يرسل، فهذا الصف يعني «سآخذ مقعداً بهذا السعر». لذلك تُفرض عليه نفس
+/// بوّابات الحجز — ملف مكتمل، وغير موقوف لعدم الحضور — **قبل** أي كتابة.
+model SeatRequest {
+  id         String   @id @default(cuid())
+  riderId    String
+  corridorId String
+  corridor   Corridor @relation(fields: [corridorId], references: [id])
+
+  /// التجمّع الذي انضم إليه. غير فارغ دائماً عملياً: الطلب إمّا ينضم لتجمّع
+  /// قائم أو يفتح واحداً جديداً في نفس المعاملة.
+  poolId String?
+  pool   Pool?   @relation(fields: [poolId], references: [id])
+
+  /// أبكر وأمتع وقت مغادرة يقبله الراكب.
+  windowStart DateTime
+  windowEnd   DateTime
+
+  seatCount Int @default(1)
+
+  /// door-to-door، بنفس شكل `SeatBooking`. تُنسخ إلى الحجز عند الاستلام.
+  pickupLat    Float
+  pickupLng    Float
+  pickupLabel  String
+  dropoffLat   Float
+  dropoffLng   Float
+  dropoffLabel String
+
+  status SeatRequestStatus @default(PENDING)
+
+  /// `SeatBooking.id` الذي أنشأه الاستلام. بلا FK، مثل `Notification.tripId`.
+  bookingId String?
+
+  /// ── ردّ الراكب على رفع السعر ──────────────────────────────────────
+  /// يعيش هنا لا في جدول رابع: التجمّع له رفع واحد على الأكثر، والطلب ينتمي
+  /// لتجمّع واحد، فالردّ خاصية للطلب. `null` = لم يردّ بعد؛ وعند حسم المهلة
+  /// **يُحتسب `null` رفضاً** — الصمت لا يورّط أحداً بسعر لم يوافق عليه.
+  raiseResponse    RaiseResponse?
+  raiseRespondedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  /// «طلباتي»، الأحدث أولاً.
+  @@index([riderId, status, createdAt])
+  /// أعضاء تجمّع معيّن — استعلام الاستلام والحسم.
+  @@index([poolId, status])
+}
+
+/// مجموعة طلبات متوافقة على ممرّ واحد، جاهزة ليستلمها سائق.
+///
+/// ## قاعدة التجميع، ويجب أن تبقى قابلة للشرح لراكب
+///
+/// طلبان يتجمّعان إذا اشتركا في **الممر** و**تقاطعت نافذتاهما**. لا شيء آخر.
+/// نافذة التجمّع هي **تقاطع** نوافذ أعضائه، فهي تضيق ولا تتّسع أبداً — أي وقت
+/// داخلها يناسب الجميع بالتعريف.
+///
+/// لا تحسين مسار ولا تقليل انحراف في هذه المرحلة: السائق يرى النقاط ويقرّر.
+model Pool {
+  id         String   @id @default(cuid())
+  corridorId String
+  corridor   Corridor @relation(fields: [corridorId], references: [id])
+
+  /// تقاطع نوافذ الأعضاء.
+  windowStart DateTime
+  windowEnd   DateTime
+
+  /// مجموع مقاعد الأعضاء. مسقوف بأكبر مركبة مدعومة.
+  totalSeats Int @default(0)
+
+  /// يبدأ من `Corridor.suggestedPricePerSeat` **منسوخاً** وقت التكوين — بنفس
+  /// منطق `Trip.pricePerSeat`: إعادة تسعير الممر لاحقاً لا تغيّر سعراً رآه
+  /// راكب والتزم به.
+  pricePerSeat Int
+
+  status PoolStatus @default(FORMING)
+
+  /// `DriverProfile.id` — أول من استلم. الحارس على الاستلام هو `updateMany`
+  /// مشروط بـ`status = FORMING`، فسائقان في نفس اللحظة ينجح أحدهما فقط.
+  claimedByDriverId String?
+  claimedAt         DateTime?
+
+  /// الرحلة التي أنشأها الاستلام. بلا FK، مثل بقية المعرّفات التشغيلية.
+  tripId String?
+
+  requests SeatRequest[]
+  raise    PoolRaise?
+
+  createdAt DateTime @default(now())
+
+  /// اللوحة: تجمّعات هذا الممر القابلة للاستلام.
+  @@index([corridorId, status, windowStart])
+  /// كنس المنتهية.
+  @@index([status, windowEnd])
+}
+
+/// اقتراح السائق برفع سعر تجمّع لم يمتلئ.
+///
+/// **هذا هو المسار الوحيد في التطبيق كله الذي يتغيّر فيه سعر بعد التزام
+/// الراكب.** كل شيء آخر يضمن «السعر الذي تراه هو الذي تدفعه»، فهذا الاستثناء
+/// مقيَّد من كل جهة:
+///
+///  - **مرة واحدة لكل تجمّع** — والقيد هو `@unique` على `poolId`، لا حارس
+///    بالتطبيق: محاولة ثانية تصطدم بقاعدة البيانات لا بفحص يمكن أن يسبقه سباق.
+///  - **مسقوف** بـ`Corridor.maxPricePerSeat`.
+///  - **ممنوع داخل مهلة قبل النافذة** — الراكب الذي يرفض يحتاج وقتاً ليدبّر
+///    نفسه.
+///  - **للراكب مهلة ردّ**، وعدم الردّ رفض.
+///  - الرافض يُطلق **بلا عقوبة ولا واقعة عدم حضور**.
+///  - وبعد الحسم، السعر لا يتغيّر أبداً مرة أخرى.
+model PoolRaise {
+  id     String @id @default(cuid())
+  /// **القيد هو القاعدة:** رفع واحد لكل تجمّع، مفروض من الفهرس لا من الكود.
+  poolId String @unique
+  pool   Pool   @relation(fields: [poolId], references: [id])
+
+  /// `DriverProfile.id` للسائق المستلِم — لا يقترح غيره.
+  proposedByDriverId String
+
+  oldPricePerSeat Int
+  newPricePerSeat Int
+
+  /// آخر لحظة يُقبل فيها ردّ. بعدها يُحسم بالصمت-رفضاً.
+  respondBy DateTime
+
+  resolvedAt DateTime?
+  outcome    PoolRaiseOutcome?
+
+  createdAt DateTime @default(now())
+
+  /// كنس المهل المستحقّة.
+  @@index([resolvedAt, respondBy])
+}
 
 /// Phase 1 amendment (طلبات المسارات): راكب يقول «أريد هذا المسار».
 ///
