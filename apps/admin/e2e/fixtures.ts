@@ -96,11 +96,11 @@ export const DRIVERS = {
 /**
  * Drivers the seed creates. Used to assert totals that must not drift.
  *
- * Five in {@link DRIVERS} plus the support case's own driver, which needs a
- * real approved profile to own a real trip — a support tool that can only be
- * tested against a fabricated row is not being tested.
+ * Five in {@link DRIVERS}, plus the support case's own driver, plus the route
+ * demand fixture's — each needs a real approved profile to own a real trip, and
+ * a tool that can only be tested against a fabricated row is not being tested.
  */
-export const SEEDED_DRIVER_COUNT = 6;
+export const SEEDED_DRIVER_COUNT = 7;
 
 /**
  * The rider the seed blocks for repeated no-shows.
@@ -136,6 +136,19 @@ export const SUPPORT_CASE = {
   seatsFreeBefore: 3,
   /** After it: the seat comes back, which is the whole point. */
   seatsFreeAfter: 4,
+} as const;
+
+/**
+ * Demand for corridors, as seeded for the route-requests screen.
+ *
+ * Two corridors with deliberately different shapes: one with demand and no
+ * supply (the actionable row), one with demand AND a live trip (the row the
+ * «طلب بلا عرض» filter must remove). Without the second, a filter that did
+ * nothing at all would still pass.
+ */
+export const ROUTE_DEMAND = {
+  unserved: { originAr: "أربيل", destAr: "البصرة", requests: 3, riders: 2 },
+  served: { originAr: "البصرة", destAr: "أربيل", requests: 1, activeTrips: 1 },
 } as const;
 
 /** Status labels the panel renders. A raw English status on screen is a bug. */

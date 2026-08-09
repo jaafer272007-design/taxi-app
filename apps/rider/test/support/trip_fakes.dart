@@ -16,6 +16,12 @@ class FakeTripApi implements TripApi {
   TripType? lastTripType;
   Gender? lastDriverGender;
 
+  // Route requests («أبلغنا أنك تريد هذا المسار»).
+  int requestRouteCalls = 0;
+  String? lastRequestedCorridorId;
+  DateTime? lastRequestedFor;
+  Object? requestRouteError;
+
   @override
   Future<List<Corridor>> getCorridors() async {
     getCorridorsCalls++;
@@ -38,6 +44,17 @@ class FakeTripApi implements TripApi {
     lastDriverGender = driverGender;
     if (searchError != null) throw searchError!;
     return searchResults;
+  }
+
+  @override
+  Future<void> requestRoute({
+    required String corridorId,
+    DateTime? requestedFor,
+  }) async {
+    requestRouteCalls++;
+    lastRequestedCorridorId = corridorId;
+    lastRequestedFor = requestedFor;
+    if (requestRouteError != null) throw requestRouteError!;
   }
 }
 

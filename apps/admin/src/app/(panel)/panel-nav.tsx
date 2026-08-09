@@ -7,6 +7,7 @@ import {
   IdCard,
   LayoutDashboard,
   LifeBuoy,
+  MapPinned,
   Route,
   ShieldCheck,
   UserX,
@@ -28,6 +29,7 @@ interface NavItem {
 const ITEMS: NavItem[] = [
   { href: "/dashboard", label: "لوحة المعلومات", icon: LayoutDashboard },
   { href: "/corridors", label: "الممرات والتسعير", icon: Route },
+  { href: "/route-requests", label: "طلبات المسارات", icon: MapPinned },
   { href: "/drivers", label: "السائقون", icon: IdCard, badge: "pendingDrivers" },
   { href: "/no-shows", label: "عدم الحضور", icon: UserX },
   { href: "/support", label: "الدعم", icon: LifeBuoy },

@@ -14,6 +14,9 @@ enum AppNotificationType {
   tripCancelled,
   driverApproved,
   driverRejected,
+
+  /// A driver posted on a corridor this rider asked us for.
+  routeAvailable,
   unknown,
 }
 
@@ -27,6 +30,7 @@ AppNotificationType notificationTypeFrom(String? raw) => switch (raw) {
       'TRIP_CANCELLED' => AppNotificationType.tripCancelled,
       'DRIVER_APPROVED' => AppNotificationType.driverApproved,
       'DRIVER_REJECTED' => AppNotificationType.driverRejected,
+      'ROUTE_AVAILABLE' => AppNotificationType.routeAvailable,
       _ => AppNotificationType.unknown,
     };
 

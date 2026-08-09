@@ -6,6 +6,13 @@ import 'package:shared/shared.dart';
 
 enum TripSearchStatus { initial, loading, results, empty, error }
 
+/// Where the «أبلغنا أنك تريد هذا المسار» action stands for the CURRENT route.
+///
+/// [sent] is reached both by recording a new request and by the server telling
+/// us one already existed today — the rider meant the same thing either way,
+/// and a second tap that reported an error would read as a broken app.
+enum RouteRequestStatus { idle, sending, sent, failed }
+
 /// How the results list is ordered.
 ///
 /// Now that each driver sets their own price, two trips on the same route can
@@ -51,6 +58,10 @@ class TripSearchController extends ChangeNotifier {
   TripSearchStatus _status = TripSearchStatus.initial;
   String? _error;
   TripSort _sort = TripSort.departure;
+
+  // ── route request (the empty state's optional action) ──
+  RouteRequestStatus _routeRequest = RouteRequestStatus.idle;
+  String? _routeRequestError;
 
   List<Corridor> get corridors => _corridors;
   bool get corridorsLoading => _corridorsLoading;
@@ -158,11 +169,13 @@ class TripSearchController extends ChangeNotifier {
 
   void setOrigin(String city) {
     _origin = city;
+    _resetRouteRequest();
     notifyListeners();
   }
 
   void setDest(String city) {
     _dest = city;
+    _resetRouteRequest();
     notifyListeners();
   }
 
@@ -171,6 +184,7 @@ class TripSearchController extends ChangeNotifier {
     final o = _origin;
     _origin = _dest;
     _dest = o;
+    _resetRouteRequest();
     notifyListeners();
   }
 
@@ -285,6 +299,75 @@ class TripSearchController extends ChangeNotifier {
     } finally {
       notifyListeners();
     }
+  }
+
+  // ── «أبلغنا أنك تريد هذا المسار» ────────────────────────────────────────
+
+  /// State of the request action for the route currently in the form.
+  RouteRequestStatus get routeRequestStatus => _routeRequest;
+
+  /// Set only in [RouteRequestStatus.failed].
+  String? get routeRequestError => _routeRequestError;
+
+  /// Whether to offer the action at all.
+  ///
+  /// **Only on an UNFILTERED empty result.** A rider who filtered to
+  /// women-family trips and found none has a cheaper remedy to try first
+  /// («إزالة الفلاتر»), and one screen gets one primary action. It would also
+  /// record demand for a corridor whose actual supply the filtered search never
+  /// asked about — the count is the whole value of this feature, and a number
+  /// that cannot be read plainly is worse than no number.
+  bool get canRequestRoute =>
+      _status == TripSearchStatus.empty &&
+      !hasActiveFilters &&
+      matchedCorridor != null;
+
+  /// Tell us this rider wants this corridor. One tap, no form.
+  ///
+  /// A repeat tap is not an error anywhere in this path: the server treats the
+  /// second one as idempotent success, and the UI is already showing the
+  /// confirmation, so this returns early rather than sending again.
+  Future<void> requestRoute() async {
+    final corridor = matchedCorridor;
+    if (corridor == null) return;
+    if (_routeRequest == RouteRequestStatus.sending ||
+        _routeRequest == RouteRequestStatus.sent) {
+      return;
+    }
+
+    _routeRequest = RouteRequestStatus.sending;
+    _routeRequestError = null;
+    notifyListeners();
+
+    try {
+      await _api.requestRoute(
+        corridorId: corridor.id,
+        // The date they were looking at, if they picked one. Context for the
+        // panel, not a promise: the notification is about the corridor.
+        requestedFor: _date,
+      );
+      _routeRequest = RouteRequestStatus.sent;
+    } on ApiException catch (e) {
+      // The rider ASKED for this, so unlike a background refresh it may — and
+      // must — report failure. Silence here would look like it worked.
+      _routeRequestError = e.message;
+      _routeRequest = RouteRequestStatus.failed;
+    } catch (_) {
+      _routeRequestError = 'تعذّر إرسال طلبك. حاول مرة أخرى.';
+      _routeRequest = RouteRequestStatus.failed;
+    } finally {
+      notifyListeners();
+    }
+  }
+
+  /// A new route is a new question, so the old answer must not carry over.
+  ///
+  /// Without this, changing the destination after a successful request would
+  /// leave «سنخبرك عندما تتوفر رحلات على هذا المسار» sitting under a route we
+  /// never recorded — a promise we are not keeping.
+  void _resetRouteRequest() {
+    _routeRequest = RouteRequestStatus.idle;
+    _routeRequestError = null;
   }
 
   DateTime _today() {

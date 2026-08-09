@@ -154,6 +154,7 @@ model Corridor {
   minPricePerSeat       Int // أدنى سعر مسموح للسائق (IQD)
   maxPricePerSeat       Int // أعلى سعر مسموح للسائق (IQD)
   trips                 Trip[]
+  routeRequests         RouteRequest[] // Phase 1 amendment: إشارة الطلب على هذا الممر
 
   // One corridor per directed city pair — the admin can't create a duplicate
   // (Najaf→Karbala twice). Reverse direction is a separate pair, so both remain.
@@ -250,6 +251,8 @@ enum NotificationType {
   TRIP_CANCELLED /// to the RIDER: the driver cancelled the trip
   DRIVER_APPROVED
   DRIVER_REJECTED
+  /// to the RIDER: a driver posted on a corridor they asked us for. راجع RouteRequest.
+  ROUTE_AVAILABLE
 }
 
 model Notification {
@@ -341,6 +344,62 @@ model NoShowRecord {
 }
 
 // SeatRequest = Phase 2 (لا يُبنى الآن)
+
+/// Phase 1 amendment (طلبات المسارات): راكب يقول «أريد هذا المسار».
+///
+/// ## ليش موجود
+///
+/// عندنا ٣٠٦ ممرات والسائقون يعلنون على حفنة منها. الراكب الذي يبحث في مسار
+/// بلا عرض يرى حالة فارغة **صحيحة** ثم يغادر — ونحن ما نتعلّم شيئاً. كنا
+/// نخمّن أي المسارات تستحق استقطاب سائقين بدل أن يُقال لنا.
+///
+/// هذا الصف هو الإشارة: طلب واحد = راكب واحد أراد هذا الممر في يوم معيّن.
+///
+/// ## ليش `SeatRequest` بالـ Phase 2 شيء آخر تماماً
+///
+/// `SeatRequest` (محجوز للـ Phase 2) هو **طلب مقعد آنيّ** يدخل في مطابقة حية
+/// مع سائق. هذا هنا **إشارة طلب سوقيّة**: لا تحجز مقعداً، ولا تلتزم بشيء،
+/// ولا تدخل أي مطابقة. لا تبنِ أحدهما على الآخر.
+///
+/// ## المفتاح الفريد هو قاعدة الـdedupe نفسها
+///
+/// «طلب واحد لكل راكب لكل ممر في اليوم» **قيدٌ في قاعدة البيانات**، لا
+/// قراءة-ثم-كتابة: نقرتان متتاليتان على شبكة عراقية بطيئة تصلان معاً، وأي
+/// حارس بالتطبيق يمرّرهما ويضخّم العدّ — والعدّ هو كامل قيمة هذه الميزة.
+model RouteRequest {
+  id         String   @id @default(cuid())
+  /// User.id للراكب — بلا relation، مثل `SeatBooking.riderId`.
+  riderId    String
+  /// relation حقيقية: التجميع كله على مستوى الممر، وممرّ معلّق يجعل صفّ
+  /// اللوحة فارغاً بلا ما يدلّ على السبب.
+  corridorId String
+  corridor   Corridor @relation(fields: [corridorId], references: [id])
+
+  /// التاريخ/الوقت الذي كان الراكب يبحث عنه، إن حدّده. اختياري لأن البحث
+  /// الافتراضي هو «اليوم» بلا نافذة وقت.
+  requestedFor DateTime?
+
+  /// يوم التقويم بتوقيت بغداد الذي سُجّل فيه الطلب، كـ DATE.
+  /// موجود **حصراً** ليحمل الفهرس الفريد أعلاه — التجميع والانتهاء
+  /// يستعملان `createdAt`.
+  requestedDay DateTime @db.Date
+
+  createdAt DateTime @default(now())
+
+  /// ── التحقّق (سائق أعلن على هذا الممر) ─────────────────────────────
+  /// غير فارغ = أُشعِر الراكب، فلا يُشعَر ثانية بهذا الطلب.
+  fulfilledAt       DateTime?
+  /// Trip.id الذي حقّق الطلب — بلا FK، مثل `Notification.tripId`.
+  ///
+  /// ليس للعرض فقط: الفان-آوت **يختم** الصفوف بهذا المعرّف ثم يقرأها به،
+  /// وهو ما يجعل «مرة واحدة» صحيحاً حتى لو أعلن سائقان في نفس اللحظة.
+  fulfilledByTripId String?
+
+  /// نقرتان في نفس اليوم = صفّ واحد. القيد هو القاعدة.
+  @@unique([riderId, corridorId, requestedDay])
+  /// سؤال الفان-آوت: طلبات هذا الممر، غير محقّقة، داخل النافذة.
+  @@index([corridorId, fulfilledAt, createdAt])
+}
 
 /// Phase 1 amendment (أدوات الدعم): سجل تدخّلات الأدمن.
 ///

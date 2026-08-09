@@ -445,6 +445,163 @@ async function seedNoShowRider(): Promise<void> {
 }
 
 /**
+ * Demand for corridors nobody serves — the route-requests screen's fixture.
+ *
+ * Self-contained on purpose: its own driver, its own riders and its own two
+ * corridors, so nothing here depends on the order the specs run in. The support
+ * spec cancels bookings on Najaf↔Karbala, and hanging "this corridor has
+ * supply" off that trip would make this screen's assertions depend on whether
+ * that spec had run yet.
+ *
+ * The shape is chosen so every column on the page has something to prove:
+ *
+ *  * **Erbil → Basra** — THREE requests from TWO riders, and no trips at all.
+ *    Two riders rather than three because "requests" and "riders" being
+ *    different numbers is the whole reason both columns exist.
+ *  * **Basra → Erbil** — one request, and one OPEN trip. It is the row the
+ *    «طلب بلا عرض» filter must REMOVE, which is the only way to tell the filter
+ *    does anything.
+ *
+ * The rows are written directly rather than through the API: the seed is
+ * constructing a state, not exercising the fan-out (which is covered against a
+ * real database in `route-request.int-spec.ts`). Posting the trip through
+ * `TripService` would in fact fulfil the request and empty this screen.
+ */
+const ROUTE_DEMAND = {
+  driverPhone: '+9647740000001',
+  driverName: 'سائق الطلب',
+  riderAPhone: '+9647740000002',
+  riderAName: 'راكب الطلب الأول',
+  riderBPhone: '+9647740000003',
+  riderBName: 'راكب الطلب الثاني',
+  plate: 'E2E-DEM-1',
+  /** No trips on it. Ranked first. */
+  unserved: { originCity: 'Erbil', destCity: 'Basra' },
+  /** Has an OPEN trip, so «طلب بلا عرض» must hide it. */
+  served: { originCity: 'Basra', destCity: 'Erbil' },
+  unservedRequests: 3,
+  unservedRiders: 2,
+  servedRequests: 1,
+  servedActiveTrips: 1,
+} as const;
+
+/** Baghdad is UTC+3 year-round; mirrors `baghdadDayKey` in the API. */
+function baghdadDay(at: Date): Date {
+  const DAY = 24 * 60 * 60 * 1000;
+  return new Date(Math.floor((at.getTime() + 3 * 60 * 60 * 1000) / DAY) * DAY);
+}
+
+async function seedRouteDemand(): Promise<void> {
+  const phones = [
+    ROUTE_DEMAND.driverPhone,
+    ROUTE_DEMAND.riderAPhone,
+    ROUTE_DEMAND.riderBPhone,
+  ];
+  for (const phone of phones) {
+    const user = await prisma.user.findUnique({
+      where: { phone },
+      include: { driver: true },
+    });
+    if (!user) continue;
+    if (user.driver) {
+      await prisma.seatBooking.deleteMany({
+        where: { trip: { driverId: user.driver.id } },
+      });
+      await prisma.trip.deleteMany({ where: { driverId: user.driver.id } });
+      await prisma.vehicle.deleteMany({ where: { driverId: user.driver.id } });
+      await prisma.document.deleteMany({ where: { driverId: user.driver.id } });
+      await prisma.driverProfile.delete({ where: { id: user.driver.id } });
+    }
+    await prisma.routeRequest.deleteMany({ where: { riderId: user.id } });
+    await prisma.notification.deleteMany({ where: { userId: user.id } });
+    await prisma.user.delete({ where: { id: user.id } });
+  }
+
+  const [unserved, served] = await Promise.all([
+    prisma.corridor.findFirstOrThrow({ where: ROUTE_DEMAND.unserved }),
+    prisma.corridor.findFirstOrThrow({ where: ROUTE_DEMAND.served }),
+  ]);
+
+  const driver = await prisma.user.create({
+    data: {
+      phone: ROUTE_DEMAND.driverPhone,
+      name: ROUTE_DEMAND.driverName,
+      gender: Gender.MALE,
+      roles: [UserRole.RIDER, UserRole.DRIVER],
+      driver: {
+        create: {
+          status: DriverStatus.APPROVED,
+          vehicle: {
+            create: {
+              make: 'Kia',
+              model: 'Rio',
+              plate: ROUTE_DEMAND.plate,
+              color: 'فضي',
+              seats: 4,
+            },
+          },
+        },
+      },
+    },
+    include: { driver: { include: { vehicle: true } } },
+  });
+
+  const [riderA, riderB] = await Promise.all([
+    prisma.user.create({
+      data: {
+        phone: ROUTE_DEMAND.riderAPhone,
+        name: ROUTE_DEMAND.riderAName,
+        gender: Gender.FEMALE,
+        roles: [UserRole.RIDER],
+      },
+    }),
+    prisma.user.create({
+      data: {
+        phone: ROUTE_DEMAND.riderBPhone,
+        name: ROUTE_DEMAND.riderBName,
+        gender: Gender.MALE,
+        roles: [UserRole.RIDER],
+      },
+    }),
+  ]);
+
+  // Supply on the served corridor only. Scheduled well ahead so it stays OPEN
+  // however long the suite takes.
+  await prisma.trip.create({
+    data: {
+      corridorId: served.id,
+      driverId: driver.driver!.id,
+      vehicleId: driver.driver!.vehicle!.id,
+      departureTime: new Date(Date.now() + 6 * 60 * 60 * 1000),
+      seatsTotal: 4,
+      seatsAvailable: 4,
+      pricePerSeat: 15000,
+    },
+  });
+
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  const at = (daysAgo: number) => new Date(now - daysAgo * DAY_MS);
+
+  await prisma.routeRequest.createMany({
+    data: [
+      // Rider A asked twice, on two different days — legitimate, and exactly
+      // what makes requests (3) and riders (2) differ.
+      { riderId: riderA.id, corridorId: unserved.id, createdAt: at(2), requestedDay: baghdadDay(at(2)) },
+      { riderId: riderA.id, corridorId: unserved.id, createdAt: at(1), requestedDay: baghdadDay(at(1)) },
+      { riderId: riderB.id, corridorId: unserved.id, createdAt: at(0), requestedDay: baghdadDay(at(0)) },
+      { riderId: riderB.id, corridorId: served.id, createdAt: at(0), requestedDay: baghdadDay(at(0)) },
+    ],
+  });
+
+  console.log(
+    `✔ Route demand: ${ROUTE_DEMAND.unserved.originCity}→${ROUTE_DEMAND.unserved.destCity} ` +
+      `${ROUTE_DEMAND.unservedRequests} request(s) from ${ROUTE_DEMAND.unservedRiders} rider(s), no supply; ` +
+      `${ROUTE_DEMAND.served.originCity}→${ROUTE_DEMAND.served.destCity} 1 request WITH supply`,
+  );
+}
+
+/**
  * Clear the admin-login failure counters.
  *
  * The rate-limit test deliberately spends its account's budget, and the counter
@@ -479,6 +636,7 @@ async function main(): Promise<void> {
   await seedDrivers();
   await seedNoShowRider();
   await seedSupportCase();
+  await seedRouteDemand();
   await resetLoginThrottle();
 }
 
