@@ -7,6 +7,7 @@ import 'package:rider/booking/my_bookings_screen.dart';
 import 'package:shared/shared.dart';
 
 import 'support/booking_fakes.dart';
+import 'support/pool_fakes.dart';
 import 'support/fakes.dart';
 
 /// The two optional safety features, at the layer where they break.
@@ -48,6 +49,7 @@ void main() {
       providers: [
         Provider<LinkLauncher>.value(value: launcher),
         ChangeNotifierProvider<MyBookingsController>.value(value: c),
+        seatRequestsProvider(),
         ChangeNotifierProvider<AuthController>.value(value: auth),
       ],
       child: MaterialApp(

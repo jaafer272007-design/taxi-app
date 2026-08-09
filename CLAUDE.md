@@ -22,9 +22,11 @@ door-to-door، cash، Android.
 - ❌ **تحسين المسار / تقليل الانحراف** — خارج نطاق Phase 2 Stage 1؛ السائق يرى
   النقاط ويقرّر.
 
-> **Phase 2 Stage 1 مفتوحة الآن (الخلفية فقط).** `Trip.createdBy = SYSTEM`
-> و`SeatRequest` صارا مبنيَّين — وهي القيم التي وُضعت في المخطط منذ Phase 1
-> لهذه اللحظة بالذات. واجهات الراكب والسائق (Stage 2 و3) لم تُبنَ بعد.
+> **Phase 2 Stage 1 (الخلفية) وStage 2 (واجهة الراكب) مبنيّتان.**
+> `Trip.createdBy = SYSTEM` و`SeatRequest` — القيم التي وُضعت في المخطط منذ
+> Phase 1 لهذه اللحظة — تعملان، والراكب يطلب مقعداً ويتابع طلبه ويردّ على رفع
+> السعر. **واجهة السائق (Stage 3: اللوحة والاستلام واقتراح الرفع) لم تُبنَ
+> بعد**؛ مساراتها موجودة في الـAPI بلا شاشة تستدعيها.
 
 ## الـ Stack
 NestJS (monolith، modules نظيفة) · Prisma + PostgreSQL (PostGIS متاح، غير مستخدم بالـ Phase 1) · Redis · Flutter (Android) · React/Next.js (admin) · JWT + WhatsApp OTP · FCM.
@@ -857,6 +859,64 @@ driver money — and it is not abandonment: Phase 1's posted trips and «أبل�
 - **Pickup/dropoff ordering is the driver's problem.** No sequencing, no ETA.
 - **A rider may hold one live request per corridor per overlapping window** —
   same reasoning as one booking per rider per trip.
+
+### The rider UI (stage 2) — where the two systems meet
+
+The whole design constraint of stage 1 was "no parallel booking system". Stage 2
+is where that either shows or doesn't, because it is the only place a human sees
+both halves.
+
+- **A seat request lives ABOVE the bookings on حجوزاتي, not in a «طلباتي» tab.**
+  When a driver claims the pool the request row disappears and **a booking card
+  takes its place in the same list** — same card, same driver contact, same
+  cancel rules. A separate tab would make one event look like something
+  vanishing here and appearing over there, which is exactly the parallel
+  universe the backend was built to avoid. Live requests only, under «قادمة»
+  only: a settled request is told in the booking it became.
+- **`stage` is computed SERVER-side and the app never re-derives it.** Telling
+  «ننتظر ركّاباً» from «ننتظر سائقاً» needs `POOL_MIN_SEATS`, a policy number —
+  a `2` written in Dart would give the policy two homes and the app would start
+  lying the first time the threshold moved. Same locked rule as «قادمة»/«سابقة».
+- **`POST /seat-requests` returns the same shape as `GET /mine`.** It used to
+  return the raw Prisma row (no `stage`, no `corridor`, flat `pickupLat`…),
+  i.e. a second shape for one thing — which means two parsers, and a new field
+  added to one and forgotten in the other with nothing to catch it.
+- **The two lists refresh CONCURRENTLY, not in sequence.** They are read at two
+  instants; if a driver claims between them, one has the news and the other does
+  not. Sequentially that window is a whole round trip — long enough for a rider
+  to watch their journey disappear from *both* lists. Issued together it is the
+  difference in server response times, so any inconsistency lasts a frame.
+- The poll runs while there is a live booking **or** a live request: a rider
+  with a pending request and no booking would otherwise see nothing tick, and a
+  claim and a raise deadline both land here.
+- **«اطلب مقعد» leads on the empty search result** and «أبلغنا أنك تريد هذا
+  المسار» is demoted to a ghost button. Asking for a seat can produce a trip on
+  this corridor; recording demand only tells us to go find drivers later. It
+  also rides at the foot of a NON-empty result — three trips at times that don't
+  suit is the same dead end, and the more common one.
+- The form asks for a **window, not a time**, and says on screen that a wider
+  one pools sooner. The price and the total are stated **above the CTA**, with
+  the one exception written next to them rather than buried.
+
+### The price-raise sheet: no dark patterns, and each one is asserted
+
+The only screen in the app where a price moves after the rider commits, so every
+choice serves making it read as an **offer**, not a trap. `seat_request_test.dart`
+asserts each of these rather than trusting the copy to stay honest:
+
+- **Old and new side by side**, with the difference per seat and the new total
+  computed — no arithmetic under time pressure.
+- **The current price is NOT struck through.** A line through it says "this no
+  longer applies", but the rider has not decided yet, and it is the number they
+  must *read* to judge the offer. It was tried; the golden showed it as the
+  harder of the two to read, which is exactly backwards.
+- **Neither answer is pre-selected**, and decline is the same width and height
+  directly under accept — never a text link, never below the fold.
+- **The deadline is a plain clock time, not a countdown.** A countdown
+  manufactures urgency the situation does not have. And silence is spelled out
+  as a decline, so a rider who puts the phone down knows that is safe.
+- **«الرفض مجاني تماماً: لا رسوم، ولا يُحتسب غياباً»** in words, because that is
+  the fear the sheet exists to answer.
 
 ## Splitting work into several PRs (locked rule)
 

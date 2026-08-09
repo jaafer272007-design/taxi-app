@@ -4,6 +4,8 @@ import 'package:shared/shared.dart';
 
 import 'auth/onboarding_copy.dart';
 import 'booking/booking_api.dart';
+import 'pool/seat_request_api.dart';
+import 'pool/seat_requests_controller.dart';
 import 'config/app_config.dart';
 import 'home/home_shell.dart';
 import 'trip/trip_api.dart';
@@ -25,6 +27,11 @@ Future<void> main() async {
   final tripSearchController =
       TripSearchController(api: DioTripApi(apiClient.dio));
   final bookingApi = DioBookingApi(apiClient.dio);
+  final seatRequestApi = DioSeatRequestApi(apiClient.dio);
+  // Phase 2. App-shell scoped, not route scoped: حجوزاتي reads it, the search
+  // flow writes to it, and a pending request is exactly the thing a rider
+  // reopens the app to check.
+  final seatRequestsController = SeatRequestsController(api: seatRequestApi);
   final notificationsController = NotificationsController(
     api: DioNotificationApi(apiClient.dio),
   );
@@ -37,6 +44,8 @@ Future<void> main() async {
     authController: authController,
     tripSearchController: tripSearchController,
     bookingApi: bookingApi,
+    seatRequestApi: seatRequestApi,
+    seatRequestsController: seatRequestsController,
     notificationsController: notificationsController,
   ));
 }
@@ -50,6 +59,8 @@ class RiderApp extends StatelessWidget {
     required this.authController,
     required this.tripSearchController,
     required this.bookingApi,
+    required this.seatRequestApi,
+    required this.seatRequestsController,
     required this.notificationsController,
   });
 
@@ -57,6 +68,8 @@ class RiderApp extends StatelessWidget {
   final AuthController authController;
   final TripSearchController tripSearchController;
   final BookingApi bookingApi;
+  final SeatRequestApi seatRequestApi;
+  final SeatRequestsController seatRequestsController;
   final NotificationsController notificationsController;
 
   @override
@@ -68,6 +81,10 @@ class RiderApp extends StatelessWidget {
           value: tripSearchController,
         ),
         Provider<BookingApi>.value(value: bookingApi),
+        Provider<SeatRequestApi>.value(value: seatRequestApi),
+        ChangeNotifierProvider<SeatRequestsController>.value(
+          value: seatRequestsController,
+        ),
         // Map picker services (concrete impls live here; the booking screen
         // depends only on the LocationService / ReverseGeocoder interfaces).
         Provider<LocationService>(

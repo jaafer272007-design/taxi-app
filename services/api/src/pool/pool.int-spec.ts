@@ -162,7 +162,7 @@ async function dropFixture(f: Fixture): Promise<void> {
  * فنافذتان يُفترض أن تتلامسا عند نفس اللحظة تفوّت إحداهما الأخرى بفارق لا
  * علاقة له بالقاعدة المُختبَرة.
  */
-function request(
+async function request(
   f: Fixture,
   riderId: string,
   fromHours: number,
@@ -171,7 +171,7 @@ function request(
   corridorId = f.corridorId,
   base = Date.now(),
 ) {
-  return seatRequests.create(riderId, {
+  const created = await seatRequests.create(riderId, {
     corridorId,
     windowStart: new Date(base + fromHours * HOUR).toISOString(),
     windowEnd: new Date(base + toHours * HOUR).toISOString(),
@@ -179,6 +179,10 @@ function request(
     dropoff: { lat: 32.6, lng: 44.0, label: 'نقطة الوصول' },
     seatCount,
   });
+  // الصفّ الخام لا الحمولة المُسلسلة: هذه الاختبارات عن التجميع نفسه — عن
+  // `poolId` والنوافذ كتواريخ — لا عن الشكل الذي يراه التطبيق. شكل الإنشاء
+  // يُختبر مرة واحدة، في اختباره الخاص أدناه.
+  return prisma.seatRequest.findUniqueOrThrow({ where: { id: created.id } });
 }
 
 function notificationsOf(userId: string, type: NotificationType) {
@@ -312,6 +316,98 @@ describe('pooling (real database)', () => {
     expect((await prisma.pool.findUniqueOrThrow({ where: { id: a.poolId! } })).status).toBe(
       PoolStatus.EXPIRED,
     );
+  });
+
+  // ── ما يراه الراكب ───────────────────────────────────────────────────
+
+  it('the STAGE distinguishes waiting-for-riders from waiting-for-a-driver', async () => {
+    // الفرق يحتاج POOL_MIN_SEATS، وهو رقم سياسة: يُحسب هنا فلا يعيد التطبيق
+    // اشتقاقه بعتبة مكتوبة في Dart تتباعد عند أول تغيير.
+    const base = Date.now();
+    await request(f, f.riderAId, 3, 6, 1, f.corridorId, base);
+    let mine = await seatRequests.listMine(f.riderAId);
+    expect(mine[0].stage).toBe('WAITING_FOR_RIDERS');
+
+    await request(f, f.riderBId, 3, 6, 1, f.corridorId, base);
+    mine = await seatRequests.listMine(f.riderAId);
+    expect(mine[0].stage).toBe('WAITING_FOR_DRIVER');
+    expect(mine[0].poolSeats).toBe(2);
+    // والسعر الذي التزم به، من التجمّع لا من الممر.
+    expect(mine[0].pricePerSeat).toBe(SUGGESTED);
+  });
+
+  it('the stage becomes CLAIMED and carries the bookingId the app opens', async () => {
+    const base = Date.now();
+    const a = await request(f, f.riderAId, 3, 6, 1, f.corridorId, base);
+    await request(f, f.riderBId, 3, 6, 1, f.corridorId, base);
+    await pools.claim(f.driverUserId, a.poolId!);
+
+    const [mine] = await seatRequests.listMine(f.riderAId);
+    expect(mine.stage).toBe('CLAIMED');
+    // هذا هو الجسر إلى واجهة الحجوزات القائمة — بدونه لا يعرف التطبيق أي
+    // حجز يفتح، فيصير الطلب عالماً موازياً بدل أن يتحوّل إلى حجز.
+    expect(mine.bookingId).toBeTruthy();
+    expect(mine.tripId).toBeTruthy();
+  });
+
+  it('an open raise the rider has not answered outranks CLAIMED', async () => {
+    const base = Date.now();
+    const a = await request(f, f.riderAId, 3, 6, 2, f.corridorId, base);
+    const b = await request(f, f.riderBId, 3, 6, 1, f.corridorId, base);
+    await pools.claim(f.driverUserId, a.poolId!);
+    await pools.proposeRaise(f.driverUserId, a.poolId!, 12_000);
+
+    const [mine] = await seatRequests.listMine(f.riderAId);
+    // الرفع هو الشيء الوحيد الذي يطلب من الراكب فعلاً الآن.
+    expect(mine.stage).toBe('RAISE_PENDING');
+    expect(mine.raise).toEqual({
+      oldPricePerSeat: SUGGESTED,
+      newPricePerSeat: 12_000,
+      respondBy: expect.any(String),
+      myResponse: null,
+    });
+
+    // ...وبعد الردّ يعود إلى «تأكّدت»، فلا يبقى يطلب شيئاً أجاب عنه.
+    await pools.respondToRaise(f.riderAId, a.id, true);
+    const [after] = await seatRequests.listMine(f.riderAId);
+    expect(after.stage).toBe('CLAIMED');
+    void b;
+  });
+
+  it('terminal stages read back honestly', async () => {
+    const a = await request(f, f.riderAId, 3, 6);
+    await seatRequests.cancel(f.riderAId, a.id);
+    expect((await seatRequests.listMine(f.riderAId))[0].stage).toBe('CANCELLED');
+  });
+
+  it('POST returns the SAME shape as GET /mine — one parser, not two', async () => {
+    // الإنشاء كان يرجّع صفّ Prisma خام: بلا `stage`، بلا `corridor`، وبنقاط
+    // مسطّحة (`pickupLat`…). شكلان لنفس الشيء يعنيان مُحلِّلَين في التطبيق،
+    // وحقلاً جديداً يُضاف في أحدهما ويُنسى في الآخر بلا ما يكشفه.
+    const created = await seatRequests.create(f.riderAId, {
+      corridorId: f.corridorId,
+      windowStart: new Date(Date.now() + 3 * HOUR).toISOString(),
+      windowEnd: new Date(Date.now() + 6 * HOUR).toISOString(),
+      pickup: { lat: 32.0, lng: 44.3, label: 'نقطة الانطلاق' },
+      dropoff: { lat: 32.6, lng: 44.0, label: 'نقطة الوصول' },
+      seatCount: 1,
+    });
+    const [listed] = await seatRequests.listMine(f.riderAId);
+
+    expect(created).toEqual(listed);
+    // وما يقرأه التطبيق فعلاً موجود، لا مجرّد «متطابقان وفارغان».
+    const corridor = await prisma.corridor.findUniqueOrThrow({
+      where: { id: f.corridorId },
+    });
+    expect(created.stage).toBe('WAITING_FOR_RIDERS');
+    expect(created.corridor.originCity).toBe(corridor.originCity);
+    expect(created.corridor.destCity).toBe(corridor.destCity);
+    expect(created.pickup).toEqual({
+      lat: 32.0,
+      lng: 44.3,
+      label: 'نقطة الانطلاق',
+    });
+    expect(created.pricePerSeat).toBe(SUGGESTED);
   });
 
   // ── اللوحة ────────────────────────────────────────────────────────────
@@ -534,13 +630,16 @@ describe('pooling (real database)', () => {
 
   it('a raise INSIDE the blackout before the window is refused', async () => {
     // نافذة تبدأ بعد ١٠ دقائق — داخل منع الثلاثين دقيقة.
-    const a = await seatRequests.create(f.riderAId, {
+    const created = await seatRequests.create(f.riderAId, {
       corridorId: f.corridorId,
       windowStart: new Date(Date.now() + 10 * MIN).toISOString(),
       windowEnd: new Date(Date.now() + 2 * HOUR).toISOString(),
       pickup: { lat: 32.0, lng: 44.3, label: 'ن' },
       dropoff: { lat: 32.6, lng: 44.0, label: 'و' },
       seatCount: 1,
+    });
+    const a = await prisma.seatRequest.findUniqueOrThrow({
+      where: { id: created.id },
     });
     await seatRequests.create(f.riderBId, {
       corridorId: f.corridorId,

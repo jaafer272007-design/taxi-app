@@ -92,6 +92,7 @@ class TripEmptyView extends StatelessWidget {
     this.onRequestRoute,
     this.routeRequestStatus = RouteRequestStatus.idle,
     this.routeRequestError,
+    this.onRequestSeat,
   });
 
   final TripType? tripType;
@@ -103,6 +104,15 @@ class TripEmptyView extends StatelessWidget {
   final VoidCallback? onRequestRoute;
   final RouteRequestStatus routeRequestStatus;
   final String? routeRequestError;
+
+  /// «اطلب مقعد» — Phase 2. Null hides it entirely.
+  ///
+  /// It is the PRIMARY action here and «أبلغنا» becomes the quieter one, and
+  /// that ordering is the point: asking for a seat can actually produce a trip
+  /// on this corridor, while recording demand only tells us to go find drivers
+  /// for it later. When the app can offer the thing that helps *this* rider
+  /// today, it should lead with it.
+  final VoidCallback? onRequestSeat;
 
   bool get _filtersActive => tripType != null || driverGender != null;
 
@@ -139,12 +149,33 @@ class TripEmptyView extends StatelessWidget {
     return _CenteredMessage(
       icon: AppIcons.route,
       title: 'لا توجد رحلات متاحة على هذا المسار حالياً',
-      subtitle: 'جرّب مساراً أو تاريخاً آخر.',
-      action: onRequestRoute == null ? null : _RouteRequestAction(
-        status: routeRequestStatus,
-        error: routeRequestError,
-        onPressed: onRequestRoute!,
-      ),
+      subtitle: 'اطلب مقعداً وسنجمعك مع ركّاب آخرين، أو جرّب وقتاً آخر.',
+      action: (onRequestSeat == null && onRequestRoute == null)
+          ? null
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (onRequestSeat != null)
+                  AppButton(
+                    label: 'اطلب مقعد',
+                    icon: AppIcons.seat,
+                    expand: false,
+                    onPressed: onRequestSeat,
+                  ),
+                if (onRequestSeat != null && onRequestRoute != null)
+                  SizedBox(height: context.space.sm),
+                if (onRequestRoute != null)
+                  _RouteRequestAction(
+                    status: routeRequestStatus,
+                    error: routeRequestError,
+                    onPressed: onRequestRoute!,
+                    // Demoted to a text action once «اطلب مقعد» is present:
+                    // one screen gets one primary, and the secondary should
+                    // not compete with it.
+                    quiet: onRequestSeat != null,
+                  ),
+              ],
+            ),
     );
   }
 }
@@ -159,11 +190,16 @@ class _RouteRequestAction extends StatelessWidget {
     required this.status,
     required this.error,
     required this.onPressed,
+    this.quiet = false,
   });
 
   final RouteRequestStatus status;
   final String? error;
   final VoidCallback onPressed;
+
+  /// Render as the quieter of two actions — a ghost button rather than a
+  /// secondary one — when «اطلب مقعد» is also on screen.
+  final bool quiet;
 
   @override
   Widget build(BuildContext context) {
@@ -203,7 +239,8 @@ class _RouteRequestAction extends StatelessWidget {
       children: [
         AppButton(
           label: 'أبلغنا أنك تريد هذا المسار',
-          variant: AppButtonVariant.secondary,
+          variant:
+              quiet ? AppButtonVariant.ghost : AppButtonVariant.secondary,
           icon: AppIcons.bell,
           expand: false,
           loading: status == RouteRequestStatus.sending,

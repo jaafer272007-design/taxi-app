@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared/shared.dart';
 
+import '../pool/seat_request_route.dart';
 import 'trip_details_screen.dart';
 import 'trip_search_controller.dart';
 import 'widgets/trip_card.dart';
@@ -69,9 +70,23 @@ class ResultsScreen extends StatelessWidget {
                 onRequestRoute: c.canRequestRoute ? c.requestRoute : null,
                 routeRequestStatus: c.routeRequestStatus,
                 routeRequestError: c.routeRequestError,
+                // «اطلب مقعد» — Phase 2. Needs a corridor to attach to, and a
+                // price to state before the rider commits, so it appears only
+                // when the picked pair is actually served.
+                onRequestSeat: corridorServed
+                    ? () => openSeatRequest(context, c.matchedCorridor!)
+                    : null,
               ),
             ),
-          TripSearchStatus.results => _ResultsList(controller: c),
+          // «اطلب مقعد» rides under the results too, not only under an empty
+          // one: three trips at times that don't suit is the same dead end as
+          // no trips at all, and it is the more common one.
+          TripSearchStatus.results => _ResultsList(
+              controller: c,
+              onRequestSeat: corridorServed
+                  ? () => openSeatRequest(context, c.matchedCorridor!)
+                  : null,
+            ),
           TripSearchStatus.initial => const SizedBox.shrink(),
         },
       ),
@@ -138,22 +153,27 @@ class _Padded extends StatelessWidget {
 /// space on a 390×844 phone to solve a problem that doesn't exist. It scrolls
 /// away with the first card and is one flick back.
 class _ResultsList extends StatelessWidget {
-  const _ResultsList({required this.controller});
+  const _ResultsList({required this.controller, this.onRequestSeat});
 
   final TripSearchController controller;
+
+  /// «اطلب مقعد» at the foot of the list. Null hides it entirely.
+  final VoidCallback? onRequestSeat;
 
   @override
   Widget build(BuildContext context) {
     final space = context.space;
     final trips = controller.results;
+    final hasFooter = onRequestSeat != null;
 
     return RefreshIndicator(
       color: context.colors.primary,
       onRefresh: controller.refreshSilently,
       child: ListView.separated(
         padding: EdgeInsets.all(space.lg),
-        // One extra leading item: the sort bar.
-        itemCount: trips.length + 1,
+        // One extra leading item (the sort bar) and, when offered, one
+        // trailing item (the request-a-seat footer).
+        itemCount: trips.length + 1 + (hasFooter ? 1 : 0),
         separatorBuilder: (_, __) => SizedBox(height: space.md),
         itemBuilder: (context, i) {
           if (i == 0) {
@@ -162,6 +182,9 @@ class _ResultsList extends StatelessWidget {
               onChanged: controller.setSort,
               count: trips.length,
             );
+          }
+          if (hasFooter && i == trips.length + 1) {
+            return _RequestSeatFooter(onPressed: onRequestSeat!);
           }
           final trip = trips[i - 1];
           return TripCard(
@@ -173,6 +196,54 @@ class _ResultsList extends StatelessWidget {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+/// «لا يناسبك أي موعد؟» — the way out of a list that isn't a dead end but
+/// isn't an answer either.
+///
+/// It sits BELOW the results and is deliberately quiet: a rider who found a
+/// trip they like should book it, and a request that pools and waits is the
+/// slower path. This exists for the rider who has already read all three cards
+/// and none of them leaves at a time they can make.
+class _RequestSeatFooter extends StatelessWidget {
+  const _RequestSeatFooter({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final space = context.space;
+
+    return Container(
+      padding: EdgeInsets.all(space.lg),
+      decoration: BoxDecoration(
+        // Opaque tonal fill — an alpha tint measures differently against the
+        // page background than it does inside a card.
+        color: colors.surfaceMuted,
+        borderRadius: context.radii.cardAll,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('لا يناسبك أي موعد؟', style: context.text.bodyStrong),
+          SizedBox(height: space.xs),
+          Text(
+            'اطلب مقعداً في المدة التي تناسبك وسنجمعك مع ركّاب آخرين.',
+            style: context.text.caption.copyWith(color: colors.textSecondary),
+          ),
+          SizedBox(height: space.md),
+          AppButton(
+            label: 'اطلب مقعد',
+            variant: AppButtonVariant.secondary,
+            icon: AppIcons.seat,
+            expand: false,
+            onPressed: onPressed,
+          ),
+        ],
       ),
     );
   }
