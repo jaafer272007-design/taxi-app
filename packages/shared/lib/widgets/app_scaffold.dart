@@ -12,6 +12,7 @@ class AppScaffold extends StatelessWidget {
     this.title,
     this.actions,
     this.leading,
+    this.header,
     this.bottomBar,
     this.floatingActionButton,
     this.padded = true,
@@ -23,6 +24,13 @@ class AppScaffold extends StatelessWidget {
   final String? title;
   final List<Widget>? actions;
   final Widget? leading;
+
+  /// A bar pinned directly UNDER the app bar, outside the scroll view.
+  ///
+  /// For a control that switches what the whole screen is — a mode selector —
+  /// rather than for content. It sits outside [scrollable] on purpose: a mode
+  /// selector that scrolls away is one the user has to remember exists.
+  final Widget? header;
 
   /// Pinned bottom bar (e.g. a primary action), kept above the safe area.
   final Widget? bottomBar;
@@ -66,7 +74,22 @@ class AppScaffold extends StatelessWidget {
             ),
       body: SafeArea(
         top: title == null,
-        child: content,
+        child: header == null
+            ? content
+            : Column(
+                children: [
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      space.lg,
+                      space.md,
+                      space.lg,
+                      space.sm,
+                    ),
+                    child: header!,
+                  ),
+                  Expanded(child: content),
+                ],
+              ),
       ),
       bottomNavigationBar: switch (bottomBar) {
         null => null,

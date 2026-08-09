@@ -19,7 +19,12 @@ class AppConfirmDialog extends StatelessWidget {
   final String title;
   final String message;
   final String confirmLabel;
-  final String cancelLabel;
+
+  /// The way out. **Null renders a single-action notice** — for the case where
+  /// there is nothing to decide, only something to read (a refusal, a result).
+  /// Offering «تراجع» beside «حسناً» there would invite the user to look for a
+  /// difference between two words that do the same thing.
+  final String? cancelLabel;
   final AppButtonVariant confirmVariant;
 
   @override
@@ -33,12 +38,13 @@ class AppConfirmDialog extends StatelessWidget {
       content: Text(message,
           style: context.text.body.copyWith(color: colors.textSecondary)),
       actions: [
-        AppButton(
-          label: cancelLabel,
-          variant: AppButtonVariant.ghost,
-          expand: false,
-          onPressed: () => Navigator.of(context).pop(false),
-        ),
+        if (cancelLabel != null)
+          AppButton(
+            label: cancelLabel!,
+            variant: AppButtonVariant.ghost,
+            expand: false,
+            onPressed: () => Navigator.of(context).pop(false),
+          ),
         AppButton(
           label: confirmLabel,
           variant: confirmVariant,
@@ -57,7 +63,7 @@ Future<bool> showAppConfirmDialog(
   required String title,
   required String message,
   required String confirmLabel,
-  String cancelLabel = 'تراجع',
+  String? cancelLabel = 'تراجع',
   AppButtonVariant confirmVariant = AppButtonVariant.primary,
 }) async {
   final result = await showDialog<bool>(

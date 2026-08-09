@@ -39,6 +39,31 @@ import {
   readPoolPolicy,
 } from './pool-policy';
 
+/**
+ * أسباب رفض الاستلام — **رموز، لا نصوص**.
+ *
+ * الخاسر في السباق ينبغي أن يقرأ «استلم سائق آخر» لا رسالة عامة: هي تعني
+ * «ابحث عن تجمّع غيره»، بينما «انخفض العدد» تعني «انتظر» و«يتجاوز سعة سيارتك»
+ * تعني «هذا ليس لك أصلاً» — ثلاث نصائح متعاكسة. والتطبيق لا يجوز أن يميّزها
+ * بمطابقة نصّ عربي: أول تحسين صياغة كان سيكسر التفريع بصمت.
+ */
+export type PoolClaimRefusal =
+  | 'POOL_ALREADY_CLAIMED'
+  | 'POOL_EXPIRED'
+  | 'POOL_WINDOW_PASSED'
+  | 'POOL_NOT_VIABLE'
+  | 'POOL_EXCEEDS_CAPACITY';
+
+/** 409 يحمل رمزاً — نفس شكل `RIDER_BLOCKED_NO_SHOW` المستعمل في الحجز. */
+function poolConflict(code: PoolClaimRefusal, message: string): ConflictException {
+  return new ConflictException({
+    statusCode: 409,
+    error: 'Conflict',
+    code,
+    message,
+  });
+}
+
 /** صفّ على لوحة السائق. */
 export interface BoardPool {
   id: string;
@@ -173,18 +198,29 @@ export class PoolService {
     if (!pool) {
       throw new NotFoundException('التجمّع غير موجود.');
     }
+    // «لم يعد متاحاً» كانت تخفي حقيقتين مختلفتين تماماً: تجمّعاً استلمه سائق
+    // آخر قبل لحظة، وتجمّعاً انتهت مهلته. الأولى تعني «ابحث عن غيره الآن»
+    // والثانية «لم يعد لهذا وجود» — فتُقالان الآن كلٌّ باسمها.
     if (pool.status !== PoolStatus.FORMING) {
-      throw new ConflictException('هذا التجمّع لم يعد متاحاً.');
+      throw pool.status === PoolStatus.EXPIRED
+        ? poolConflict('POOL_EXPIRED', 'انتهت مهلة هذا التجمّع ولم يعد قائماً.')
+        : poolConflict(
+            'POOL_ALREADY_CLAIMED',
+            'استلم سائق آخر هذا التجمّع قبلك.',
+          );
     }
     if (pool.windowEnd.getTime() <= Date.now()) {
-      throw new ConflictException('انتهت نافذة هذا التجمّع.');
+      throw poolConflict('POOL_WINDOW_PASSED', 'انتهت نافذة هذا التجمّع.');
     }
 
     const departureTime = this.resolveDepartureTime(pool, departureTimeIso);
 
     const capacity = Math.min(vehicle.seats, this.policy.maxSeats);
     if (pool.totalSeats > capacity) {
-      throw new ConflictException('عدد مقاعد التجمّع يتجاوز سعة سيارتك.');
+      throw poolConflict(
+        'POOL_EXCEEDS_CAPACITY',
+        'عدد مقاعد التجمّع يتجاوز سعة سيارتك.',
+      );
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
@@ -198,7 +234,10 @@ export class PoolService {
         },
       });
       if (claimed.count !== 1) {
-        throw new ConflictException('استلم سائق آخر هذا التجمّع للتوّ.');
+        throw poolConflict(
+          'POOL_ALREADY_CLAIMED',
+          'استلم سائق آخر هذا التجمّع للتوّ.',
+        );
       }
 
       const requests = await tx.seatRequest.findMany({
@@ -209,10 +248,16 @@ export class PoolService {
       // يُعاد التحقّق **داخل** المعاملة: إلغاءٌ قد يكون هبط بالتجمّع تحت الحد
       // المجدي بين قراءتنا الأولى وحارسنا.
       if (!isViable(pooledSeats, this.policy)) {
-        throw new ConflictException('انخفض عدد المقاعد؛ لم يعد التجمّع مجدياً.');
+        throw poolConflict(
+          'POOL_NOT_VIABLE',
+          'انخفض عدد المقاعد؛ لم يعد التجمّع مجدياً.',
+        );
       }
       if (pooledSeats > capacity) {
-        throw new ConflictException('عدد مقاعد التجمّع يتجاوز سعة سيارتك.');
+        throw poolConflict(
+          'POOL_EXCEEDS_CAPACITY',
+          'عدد مقاعد التجمّع يتجاوز سعة سيارتك.',
+        );
       }
 
       const seatsTotal = capacity;
@@ -282,6 +327,131 @@ export class PoolService {
     );
 
     return { trip: result.trip, pool: result.pool };
+  }
+
+  // ── ما يراه السائق عن تجمّعه بعد الاستلام ────────────────────────────
+
+  /**
+   * حالة الرفع على رحلة استلمها هذا السائق — **محسوبة على الخادم**.
+   *
+   * `canPropose` مشتقّ من **نفس** الشروط التي سيطبّقها `proposeRaise`، وهذا
+   * هو الشرط كله: زرٌّ يعرضه التطبيق ثم يرفضه الخادم أسوأ من غياب الزر. نفس
+   * القاعدة المثبّتة في `ratable` وفي `stage`.
+   *
+   * ويُرجع `blockedReason` بالعربية حين يكون الجواب «لا»: سائق يرى زراً معطّلاً
+   * بلا سبب يفترض عطلاً، ويتصل بالدعم.
+   *
+   * أسماء الركّاب موجودة هنا عمداً — بعد الاستلام صار السائق يراها أصلاً في
+   * `GET /trips/:id/bookings`، وقائمة ردود بلا أسماء («مقعدان: بانتظار») لا
+   * يستطيع السائق أن يفعل بها شيئاً. لا أرقام هاتف: تلك تبقى في مسارها الوحيد.
+   */
+  async driverPoolForTrip(driverUserId: string, tripId: string) {
+    const profile = await this.drivers.assertApprovedDriver(driverUserId);
+
+    const pool = await this.prisma.pool.findFirst({
+      where: { tripId },
+      include: { corridor: true, raise: true },
+    });
+    // رحلة أعلنها سائق بنفسه لا تجمّع لها — وهذا ليس خطأ، بل الجواب.
+    if (!pool) return null;
+    if (pool.claimedByDriverId !== profile.id) {
+      throw new ForbiddenException('هذه ليست رحلتك.');
+    }
+
+    const trip = await this.prisma.trip.findUniqueOrThrow({ where: { id: tripId } });
+    const members = await this.prisma.seatRequest.findMany({
+      where: { poolId: pool.id },
+      orderBy: { createdAt: 'asc' },
+    });
+    const live = members.filter((m) => m.status === SeatRequestStatus.MATCHED);
+
+    // `SeatRequest` يحمل `riderId` بلا علاقة — والاسم حاجة عرضٍ لا تستحق
+    // هجرة مخطط، فيُقرأ باستعلام ثانٍ صريح. `select` ضيّق عمداً: لا رقم هاتف
+    // يمرّ من هنا، فذاك له مساره الوحيد.
+    const riders = await this.prisma.user.findMany({
+      where: { id: { in: members.map((m) => m.riderId) } },
+      select: { id: true, name: true },
+    });
+    const nameOf = new Map(riders.map((r) => [r.id, r.name]));
+
+    const now = new Date();
+    const blockedReason = this.raiseBlockedReason(pool, trip, now);
+
+    const raise = pool.raise;
+    const seatsOf = (rs: typeof live) => rs.reduce((sum, r) => sum + r.seatCount, 0);
+
+    return {
+      poolId: pool.id,
+      tripId,
+      status: pool.status,
+      corridor: {
+        id: pool.corridor.id,
+        originCity: pool.corridor.originCity,
+        destCity: pool.corridor.destCity,
+      },
+      windowStart: pool.windowStart.toISOString(),
+      windowEnd: pool.windowEnd.toISOString(),
+      pricePerSeat: pool.pricePerSeat,
+      /** سقف الممر — الحد الذي لا يتجاوزه أي اقتراح. */
+      maxPricePerSeat: pool.corridor.maxPricePerSeat,
+      seatsTaken: trip.seatsTotal - trip.seatsAvailable,
+      seatsTotal: trip.seatsTotal,
+      /** الحد الأدنى المجدي — به يفهم السائق ماذا يحدث لو رفض بعضهم. */
+      minSeats: this.policy.minSeats,
+      /** آخر لحظة يُقبل فيها اقتراح — يعرضها التطبيق بدل أن يجرّب ويُرفض. */
+      raiseDeadline: raiseDeadline(pool, this.policy).toISOString(),
+      responseMinutes: this.policy.raiseResponseMinutes,
+      canPropose: blockedReason === null,
+      blockedReason,
+      raise: raise
+        ? {
+            oldPricePerSeat: raise.oldPricePerSeat,
+            newPricePerSeat: raise.newPricePerSeat,
+            respondBy: raise.respondBy.toISOString(),
+            resolved: raise.resolvedAt !== null,
+            outcome: raise.outcome,
+            acceptedSeats: seatsOf(
+              live.filter((m) => m.raiseResponse === RaiseResponse.ACCEPTED),
+            ),
+            declinedSeats: seatsOf(
+              live.filter((m) => m.raiseResponse === RaiseResponse.DECLINED),
+            ),
+            pendingSeats: seatsOf(live.filter((m) => m.raiseResponse === null)),
+            // كل الأعضاء، بمن فيهم مَن أُطلق بعد الحسم: «أين ذهب الثالث؟» سؤال
+            // يطرحه السائق، وإخفاء الصف يجعل الجواب اختفاءً.
+            responses: members.map((m) => ({
+              riderName: nameOf.get(m.riderId) ?? null,
+              seatCount: m.seatCount,
+              response: m.raiseResponse,
+              released: m.status !== SeatRequestStatus.MATCHED,
+            })),
+          }
+        : null,
+    };
+  }
+
+  /**
+   * لماذا لا يستطيع هذا السائق اقتراح رفع الآن — أو `null` إن استطاع.
+   *
+   * كل فرع هنا يقابل رمياً في {@link proposeRaise}؛ هما يُقرآن معاً عمداً.
+   */
+  private raiseBlockedReason(
+    pool: Pool & { raise: unknown },
+    trip: Trip,
+    now: Date,
+  ): string | null {
+    if (pool.raise) return 'اقترحت رفعاً على هذا التجمّع مسبقاً. لا يُسمح بأكثر من مرة.';
+    if (pool.status !== PoolStatus.CLAIMED) {
+      return 'لا يمكن اقتراح رفع على هذا التجمّع الآن.';
+    }
+    if (trip.status !== TripStatus.OPEN) {
+      return 'لا يمكن اقتراح رفع بعد قفل الرحلة أو انطلاقها.';
+    }
+    if (trip.seatsAvailable <= 0) return 'امتلأت الرحلة؛ لا مبرّر لرفع السعر.';
+    if (!canProposeRaise(pool, this.policy, now)) {
+      return `فات وقت اقتراح رفع السعر. آخر موعد كان قبل ${this.policy.raiseBlackoutMinutes} دقيقة من بداية النافذة.`;
+    }
+    return null;
   }
 
   // ── رفع السعر ────────────────────────────────────────────────────────

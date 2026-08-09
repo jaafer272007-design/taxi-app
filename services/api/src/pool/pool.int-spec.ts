@@ -518,9 +518,14 @@ describe('pooling (real database)', () => {
     // `status = FORMING` كان يُبقي كل شيء أخضر — جُرّب فعلاً. والفرق ليس
     // شكلياً: «استلمه سائق آخر» تعني ابحث عن غيره، و«انخفض العدد» تعني
     // انتظر ربما يعود — وهما نصيحتان متعاكستان للسائق.
-    const reason = (lost[0] as PromiseRejectedResult).reason as Error;
+    const reason = (lost[0] as PromiseRejectedResult).reason as ConflictException;
     expect(reason).toBeInstanceOf(ConflictException);
-    expect(reason.message).toContain('استلم سائق آخر');
+    // **الرمز** هو ما يفرّع عليه التطبيق، لا النص: أول تحسين صياغة كان سيكسر
+    // التفريع بصمت لو طابقنا العربية. والنص يبقى مؤكَّداً أيضاً لأنه ما يقرأه
+    // السائق إن لم يعرف التطبيق الرمز.
+    const body = reason.getResponse() as { code?: string; message?: string };
+    expect(body.code).toBe('POOL_ALREADY_CLAIMED');
+    expect(body.message).toContain('استلم سائق آخر');
 
     const claimedPool = await prisma.pool.findUniqueOrThrow({ where: { id: a.poolId! } });
     expect(claimedPool.claimedByDriverId).toBe(trips[0].driverId);

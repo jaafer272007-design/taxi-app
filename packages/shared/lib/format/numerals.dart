@@ -134,6 +134,32 @@ String formatTrips(int count) => switch (count) {
       _ => '${formatCount(count)} رحلات',
     };
 
+/// A rider count as an Arabic noun phrase — `راكب واحد` / `راكبان` / `٣ ركّاب`.
+///
+/// Same dual rule as [formatSeats], and it matters more here than usual: on the
+/// driver's pool board the rider count and the seat count sit on one line, and
+/// «٢ ركّاب و٢ مقاعد» would be wrong twice in six words.
+String formatRiders(int count) => switch (count) {
+      <= 0 => 'لا ركّاب',
+      1 => 'راكب واحد',
+      2 => 'راكبان',
+      _ => '${formatCount(count)} ركّاب',
+    };
+
+/// A minute count as an Arabic noun phrase — `دقيقة واحدة` / `دقيقتان` /
+/// `١٠ دقائق`.
+///
+/// Same dual rule as [formatSeats]. Arabic switches the plural again above ten
+/// (`١١ دقيقة`, singular after 11–99), which is why this is a function and not
+/// an interpolation.
+String formatMinutes(int count) => switch (count) {
+      <= 0 => 'لا وقت',
+      1 => 'دقيقة واحدة',
+      2 => 'دقيقتان',
+      <= 10 => '${formatCount(count)} دقائق',
+      _ => '${formatCount(count)} دقيقة',
+    };
+
 /// A rating with one decimal, using the Arabic decimal separator — `4.8` → `٤٫٨`.
 String formatRating(double value) {
   final fixed = value.toStringAsFixed(1);
